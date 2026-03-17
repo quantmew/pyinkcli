@@ -1,0 +1,87 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ink-python"
+version = "0.1.0"
+description = "React-like terminal UI library for Python - a port of Ink"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    { name = "ink-python contributors" }
+]
+keywords = [
+    "cli",
+    "console",
+    "terminal",
+    "ui",
+    "react",
+    "ink",
+    "component",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Terminals",
+    "Typing :: Typed",
+]
+dependencies = [
+    "wcwidth>=0.2.0",
+    "colorama>=0.4.0",
+    "yoga-layout-python @ git+https://github.com/quantmew/yoga-layout-python.git",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "mypy>=1.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ink-python/ink-python"
+Documentation = "https://github.com/ink-python/ink-python#readme"
+Repository = "https://github.com/ink-python/ink-python"
+Issues = "https://github.com/ink-python/ink-python/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ink_python"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src/ink_python",
+    "/README.md",
+    "/LICENSE",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
