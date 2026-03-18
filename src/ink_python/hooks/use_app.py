@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from ink_python.ink import Ink
 
 
-class AppHandle:
+class _AppHandle:
     """Handle to the Ink application instance."""
 
     def __init__(self, ink_instance: Optional["Ink"] = None):
@@ -33,6 +33,12 @@ class AppHandle:
         """Wait for the application to exit."""
         if self._ink is not None:
             return self._ink.wait_until_exit()
+        return None
+
+    def wait_until_render_flush(self, timeout: Optional[float] = None) -> Any:
+        """Wait for pending render output to flush."""
+        if self._ink is not None:
+            return self._ink.wait_until_render_flush(timeout=timeout)
         return None
 
     def clear(self) -> None:
@@ -59,10 +65,10 @@ class AppHandle:
 
 
 # Global app handle
-_app_handle: Optional[AppHandle] = None
+_app_handle: Optional[_AppHandle] = None
 
 
-def useApp() -> AppHandle:
+def useApp() -> _AppHandle:
     """
     Hook to access the Ink application instance.
 
@@ -71,19 +77,14 @@ def useApp() -> AppHandle:
     """
     global _app_handle
     if _app_handle is None:
-        _app_handle = AppHandle()
+        _app_handle = _AppHandle()
     return _app_handle
-
-
-def use_app() -> AppHandle:
-    """Alias for useApp."""
-    return useApp()
 
 
 def _set_app_ink(ink_instance: "Ink") -> None:
     """Internal: Set the Ink instance on the global app handle."""
     global _app_handle
     if _app_handle is None:
-        _app_handle = AppHandle(ink_instance)
+        _app_handle = _AppHandle(ink_instance)
     else:
         _app_handle._set_ink(ink_instance)

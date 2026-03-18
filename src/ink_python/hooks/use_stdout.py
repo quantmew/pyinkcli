@@ -9,8 +9,10 @@ from __future__ import annotations
 import sys
 from typing import Any, Optional, TextIO
 
+from ink_python.sanitize_ansi import sanitizeAnsi
 
-class StdoutHandle:
+
+class _StdoutHandle:
     """Handle to stdout stream."""
 
     def __init__(self, stream: Optional[TextIO] = None):
@@ -48,7 +50,13 @@ class StdoutHandle:
         return self._stream.isatty() if hasattr(self._stream, "isatty") else False
 
     def write(self, data: str) -> None:
-        """Write to stdout."""
+        """Write sanitized user output to stdout."""
+        sanitized = sanitizeAnsi(data)
+        self._stream.write(sanitized)
+        self._stream.flush()
+
+    def raw_write(self, data: str) -> None:
+        """Write raw terminal control output to stdout."""
         self._stream.write(data)
         self._stream.flush()
 
@@ -67,10 +75,10 @@ class StdoutHandle:
 
 
 # Global stdout handle
-_stdout_handle: Optional[StdoutHandle] = None
+_stdout_handle: Optional[_StdoutHandle] = None
 
 
-def useStdout() -> StdoutHandle:
+def useStdout() -> _StdoutHandle:
     """
     Hook to access stdout.
 
@@ -79,16 +87,11 @@ def useStdout() -> StdoutHandle:
     """
     global _stdout_handle
     if _stdout_handle is None:
-        _stdout_handle = StdoutHandle()
+        _stdout_handle = _StdoutHandle()
     return _stdout_handle
-
-
-def use_stdout() -> StdoutHandle:
-    """Alias for useStdout."""
-    return useStdout()
 
 
 def _set_stdout(stream: TextIO) -> None:
     """Internal: Set the stdout stream."""
     global _stdout_handle
-    _stdout_handle = StdoutHandle(stream)
+    _stdout_handle = _StdoutHandle(stream)

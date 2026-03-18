@@ -1,75 +1,250 @@
-"""Tests for hooks."""
+"""Tests for hooks runtime behavior."""
 
-import pytest
-from ink_python.hooks.state import useState, useEffect, useRef, useMemo, useCallback
+from ink_python.hooks._runtime import (
+    _begin_component_render,
+    _clear_hook_state,
+    _end_component_render,
+    _finish_hook_state,
+    _reset_hook_state,
+    _set_rerender_callback,
+    batchUpdates,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+)
+
+
+def render_component(instance_id: str, component):
+    _reset_hook_state()
+    _begin_component_render(instance_id)
+    try:
+        result = component()
+    finally:
+        _end_component_render()
+    _finish_hook_state()
+    return result
+
+
+def render_components(*items):
+    _reset_hook_state()
+    results = []
+    for instance_id, component in items:
+        _begin_component_render(instance_id)
+        try:
+            results.append(component())
+        finally:
+            _end_component_render()
+    _finish_hook_state()
+    return results
+
+
+def teardown_function():
+    _clear_hook_state()
+    _set_rerender_callback(None)
 
 
 def test_use_state_initial_value():
-    """Test useState with initial value."""
-    value, set_value = useState(5)
+    value = render_component("counter", lambda: useState(5)[0])
     assert value == 5
 
 
 def test_use_state_with_factory():
-    """Test useState with factory function."""
-    value, set_value = useState(lambda: 10)
+    value = render_component("factory", lambda: useState(lambda: 10)[0])
     assert value == 10
 
 
-def test_use_state_setter():
-    """Test useState setter function."""
-    value, set_value = useState(0)
-    # Note: In a real component render, this would update
-    # Here we just test the setter exists
-    assert callable(set_value)
+def test_use_state_persists_per_component_instance():
+    def component():
+        value, set_value = useState(0)
+        if value == 0:
+            set_value(1)
+        return value
+
+    first = render_component("component:a", component)
+    second = render_component("component:a", component)
+    other = render_component("component:b", component)
+
+    assert first == 0
+    assert second == 1
+    assert other == 0
 
 
 def test_use_ref_initial():
-    """Test useRef with initial value."""
-    ref = useRef("hello")
+    ref = render_component("ref", lambda: useRef("hello"))
     assert ref.current == "hello"
 
 
 def test_use_ref_mutable():
-    """Test that useRef is mutable."""
-    ref = useRef(0)
+    ref = render_component("ref-mutable", lambda: useRef(0))
     ref.current = 5
     assert ref.current == 5
 
 
 def test_use_memo():
-    """Test useMemo caches value."""
     call_count = [0]
 
-    def factory():
-        call_count[0] += 1
-        return 42
+    def component():
+        def factory():
+            call_count[0] += 1
+            return 42
 
-    # First call
-    result = useMemo(factory, (1, 2))
+        return useMemo(factory, (1, 2))
+
+    result = render_component("memo", component)
+    result2 = render_component("memo", component)
     assert result == 42
-    assert call_count[0] == 1
-
-    # Same deps - should use cache (but in this simple test, it won't)
-    result2 = useMemo(factory, (1, 2))
     assert result2 == 42
+    assert call_count[0] == 1
 
 
 def test_use_callback():
-    """Test useCallback memoizes callback."""
     def my_callback():
         return "hello"
 
-    result = useCallback(my_callback, (1,))
+    result = render_component("callback", lambda: useCallback(my_callback, (1,)))
     assert result() == "hello"
 
 
-def test_use_effect():
-    """Test useEffect runs."""
-    ran = [False]
+def test_use_effect_runs_after_render_and_cleans_up():
+    calls: list[str] = []
 
-    def effect():
-        ran[0] = True
+    def component():
+        dep, _ = useState(1)
 
-    useEffect(effect, ())
-    assert ran[0]
+        def effect():
+            calls.append(f"run:{dep}")
+
+            def cleanup():
+                calls.append(f"cleanup:{dep}")
+
+            return cleanup
+
+        useEffect(effect, (dep,))
+        return dep
+
+    render_component("effect", component)
+    render_component("effect", component)
+
+    assert calls == ["run:1"]
+
+
+def test_use_effect_cleanup_runs_on_unmount():
+    calls: list[str] = []
+
+    def component():
+        def effect():
+            calls.append("run")
+
+            def cleanup():
+                calls.append("cleanup")
+
+            return cleanup
+
+        useEffect(effect, ())
+
+    render_component("effect-unmount", component)
+    _clear_hook_state()
+
+    assert calls == ["run", "cleanup"]
+
+
+def test_use_effect_cleanup_runs_before_re_running_changed_deps():
+    calls: list[str] = []
+
+    def component():
+        value, set_value = useState(0)
+
+        def effect():
+            calls.append(f"run:{value}")
+
+            def cleanup():
+                calls.append(f"cleanup:{value}")
+
+            return cleanup
+
+        useEffect(effect, (value,))
+        if value == 0:
+            set_value(1)
+        return value
+
+    first = render_component("effect-rerun", component)
+    second = render_component("effect-rerun", component)
+
+    assert first == 0
+    assert second == 1
+    assert calls == ["run:0", "cleanup:0", "run:1"]
+
+
+def test_use_state_setter_requests_rerender_each_time_it_updates() -> None:
+    rerenders: list[str] = []
+
+    def component():
+        value, set_value = useState(0)
+        if value == 0:
+            set_value(1)
+            set_value(2)
+        return value
+
+    _set_rerender_callback(lambda: rerenders.append("rerender"))
+    render_component("rerender-count", component)
+
+    assert rerenders == ["rerender", "rerender"]
+
+
+def test_batch_updates_coalesces_multiple_state_updates_into_one_rerender() -> None:
+    rerenders: list[str] = []
+
+    def component():
+        value, set_value = useState(0)
+        if value == 0:
+            batchUpdates(
+                lambda: (
+                    set_value(1),
+                    set_value(2),
+                )
+            )
+        return value
+
+    _set_rerender_callback(lambda: rerenders.append("rerender"))
+    render_component("batched-rerender-count", component)
+
+    assert rerenders == ["rerender"]
+
+
+def test_hook_state_is_isolated_between_nested_component_instance_ids() -> None:
+    def child(label: str):
+        value, set_value = useState(0)
+        if value == 0:
+            set_value(1)
+        return f"{label}:{value}"
+
+    first = render_components(
+        ("parent/child:a", lambda: child("a")),
+        ("parent/child:b", lambda: child("b")),
+    )
+    second = render_components(
+        ("parent/child:a", lambda: child("a")),
+        ("parent/child:b", lambda: child("b")),
+    )
+
+    assert first == ["a:0", "b:0"]
+    assert second == ["a:1", "b:1"]
+
+
+def test_hook_state_resets_after_component_unmount_and_remount() -> None:
+    def child():
+        value, set_value = useState(0)
+        if value == 0:
+            set_value(1)
+        return value
+
+    first = render_components(("branch/child", child))
+    second = render_components(("branch/child", child))
+    render_components()
+    remounted = render_components(("branch/child", child))
+
+    assert first == [0]
+    assert second == [1]
+    assert remounted == [0]

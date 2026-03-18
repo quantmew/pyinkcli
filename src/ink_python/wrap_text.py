@@ -9,12 +9,13 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
+from ink_python.sanitize_ansi import sanitizeAnsi
 from ink_python.styles import TextWrap
 from ink_python.utils.wrap_ansi import wrap_ansi, truncate_string
 
 
 @lru_cache(maxsize=1024)
-def wrap_text(
+def wrapText(
     text: str,
     max_width: int,
     wrap_type: TextWrap = "wrap",
@@ -33,8 +34,10 @@ def wrap_text(
     if not text:
         return ""
 
+    sanitized = sanitizeAnsi(text)
+
     if wrap_type == "wrap":
-        return wrap_ansi(text, max_width, trim=False, hard=True)
+        return wrap_ansi(sanitized, max_width, trim=False, hard=True)
 
     if wrap_type.startswith("truncate"):
         position: Literal["start", "middle", "end"] = "end"
@@ -44,6 +47,6 @@ def wrap_text(
         elif wrap_type == "truncate-start":
             position = "start"
 
-        return truncate_string(text, max_width, position)
+        return truncate_string(sanitized, max_width, position)
 
-    return text
+    return sanitized

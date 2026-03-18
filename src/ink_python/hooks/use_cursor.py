@@ -1,69 +1,92 @@
-"""
-useCursor hook for ink-python.
-
-This hook provides cursor visibility control.
-"""
+"""useCursor hook for ink-python."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Mapping, Optional, Union
 
-from ink_python.hooks.use_app import use_app
+from ink_python.components._app_context_runtime import _get_app_context
+from ink_python.hooks._runtime import Ref, useEffect, useRef
+from ink_python.hooks.use_stdout import useStdout
 from ink_python.utils.ansi_escapes import cursor_show, cursor_hide
 
 
-# Global cursor visibility state
-_cursor_visible: bool = True
-_cursor_handlers: list[Callable[[bool], None]] = []
+class _CursorHandle:
+    """Object-shaped cursor control handle."""
+
+    def __init__(self, position_ref: Ref[tuple[int, int]]):
+        self._position_ref = position_ref
+
+    def setCursorPosition(
+        self,
+        position: Optional[Union[tuple[int, int], Mapping[str, int]]],
+    ) -> None:
+        if position is None:
+            self._position_ref.current = None
+            return
+
+        if isinstance(position, Mapping):
+            self._position_ref.current = (
+                max(0, int(position.get("x", 0))),
+                max(0, int(position.get("y", 0))),
+            )
+            return
+
+        self._position_ref.current = (
+            max(0, int(position[0])),
+            max(0, int(position[1])),
+        )
 
 
-def _set_cursor_visibility(visible: bool) -> None:
-    """Set global cursor visibility."""
-    global _cursor_visible
-    _cursor_visible = visible
-
-    # Notify all registered handlers
-    for handler in _cursor_handlers:
-        try:
-            handler(visible)
-        except Exception:
-            pass
-
-
-def use_cursor(visible: bool) -> None:
+def useCursor(
+    visible: Optional[bool] = None,
+    *,
+    enabled: bool = True,
+) -> _CursorHandle:
     """
-    A React hook that controls cursor visibility.
+    A React hook that controls cursor visibility and position.
 
     Args:
-        visible: Whether the cursor should be visible.
+        visible: Whether the terminal cursor should be visible.
+            Pass `None` to only manage cursor position.
 
     Example:
-        >>> use_cursor(False)  # Hide cursor
-        >>> use_cursor(True)   # Show cursor
+        >>> useCursor(False)  # Hide cursor
+        >>> cursor = useCursor()
+        >>> cursor.setCursorPosition((3, 1))
     """
-    global _cursor_handlers
+    stdout = useStdout()
+    app_context = _get_app_context()
+    position_ref = useRef(None)
 
-    def update_cursor(is_visible: bool) -> None:
-        """Update cursor visibility."""
-        app = use_app()
-        if is_visible:
-            app.write(cursor_show())
+    def apply_cursor_visibility():
+        if visible is None or not enabled:
+            return None
+
+        writer = getattr(stdout, "raw_write", stdout.write)
+        if visible:
+            writer(cursor_show())
         else:
-            app.write(cursor_hide())
+            writer(cursor_hide())
 
-    # Register handler
-    if update_cursor not in _cursor_handlers:
-        _cursor_handlers.append(update_cursor)
+        def cleanup():
+            writer(cursor_show())
 
-    # Apply immediately
-    _set_cursor_visibility(visible)
+        return cleanup
 
+    def sync_cursor_position():
+        if app_context is None or app_context.set_cursor_position is None:
+            return None
 
-# Alias for camelCase preference
-useCursor = use_cursor
+        app_context.set_cursor_position(
+            position_ref.current if enabled else None,
+        )
 
+        def cleanup():
+            if app_context.set_cursor_position is not None:
+                app_context.set_cursor_position(None)
 
-def _clear_cursor_handlers() -> None:
-    """Clear all cursor handlers."""
-    global _cursor_handlers
-    _cursor_handlers.clear()
+        return cleanup
+
+    useEffect(apply_cursor_visibility, (visible, enabled))
+    useEffect(sync_cursor_position)
+    return _CursorHandle(position_ref)

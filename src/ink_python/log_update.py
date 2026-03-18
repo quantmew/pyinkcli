@@ -1,7 +1,7 @@
 """
 Log update functionality for ink-python.
 
-Handles updating terminal output efficiently.
+Provides standard and incremental terminal update modes.
 """
 
 from __future__ import annotations
@@ -9,12 +9,26 @@ from __future__ import annotations
 import sys
 from typing import Optional, TextIO
 
+from ink_python.cursor_helpers import (
+    CursorPosition,
+    buildCursorOnlySequence,
+    buildCursorSuffix,
+    buildReturnToBottomPrefix,
+    cursorPositionChanged,
+    hideCursorEscape,
+    showCursorEscape,
+)
+from ink_python._restore_cursor import ensureCursorRestoreRegistered
+from ink_python.utils.ansi_escapes import cursor_next_line, cursor_to, cursor_up, erase_end_line, erase_lines
+
+
+def _visible_line_count(lines: list[str], output: str) -> int:
+    return len(lines) - 1 if output.endswith("\n") else len(lines)
+
 
 class LogUpdate:
     """
     Efficiently update terminal output.
-
-    Similar to the log-update JavaScript library.
     """
 
     def __init__(
@@ -23,118 +37,249 @@ class LogUpdate:
         *,
         incremental: bool = False,
     ):
-        """
-        Initialize LogUpdate.
-
-        Args:
-            stream: The output stream (usually stdout).
-            incremental: Whether to use incremental rendering.
-        """
         self._stream = stream
         self._incremental = incremental
-        self._previous_output: Optional[str] = None
-        self._cursor_x = 0
-        self._cursor_y = 0
+        self._previous_output = ""
+        self._previous_lines: list[str] = []
+        self._cursor_position: Optional[CursorPosition] = None
+        self._cursor_dirty = False
+        self._previous_cursor_position: Optional[CursorPosition] = None
+        self._cursor_was_shown = False
+        self._has_hidden_cursor = False
 
-    def __call__(self, output: str) -> None:
-        """
-        Update the output.
+    def _is_tty(self) -> bool:
+        return self._stream.isatty() if hasattr(self._stream, "isatty") else False
 
-        Args:
-            output: The new output string.
-        """
-        if self._previous_output == output:
-            return
+    def _prepare_payload(self, payload: str) -> str:
+        is_tty = self._is_tty()
+        if not is_tty or not payload:
+            return payload
 
-        if self._previous_output is not None:
-            self._clear_previous()
+        # Do not rely on the terminal driver to translate LF into CRLF.
+        # Some environments leave the cursor in the current column on `\n`,
+        # which makes multi-line frames drift to the right.
+        return payload.replace("\r\n", "\n").replace("\n", "\r\n")
 
-        self._stream.write(output)
-        self._stream.flush()
+    def __call__(self, output: str) -> bool:
+        prefix = ""
+        if self._is_tty() and not self._has_hidden_cursor:
+            ensureCursorRestoreRegistered()
+            prefix = hideCursorEscape
+            self._has_hidden_cursor = True
+
+        active_cursor = self._get_active_cursor()
+        if not self._has_changes(output, active_cursor):
+            return False
+
+        payload = (
+            self._render_incremental(output, active_cursor)
+            if self._incremental
+            else self._render_standard(output, active_cursor)
+        )
+
+        if payload:
+            self._stream.write(self._prepare_payload(prefix + payload))
+            self._stream.flush()
+
         self._previous_output = output
-        self._cursor_x = 0
-        self._cursor_y = output.count("\n")
+        self._previous_lines = output.split("\n")
+        self._previous_cursor_position = (
+            tuple(active_cursor) if active_cursor is not None else None
+        )
+        self._cursor_was_shown = active_cursor is not None
+        return True
 
     def clear(self) -> None:
-        """Clear the current output."""
-        if self._previous_output is None:
-            return
-
-        self._clear_previous()
-        self._previous_output = None
+        prefix = buildReturnToBottomPrefix(
+            self._cursor_was_shown,
+            len(self._previous_lines),
+            self._previous_cursor_position,
+        )
+        self._stream.write(
+            self._prepare_payload(prefix + erase_lines(len(self._previous_lines)))
+        )
+        self._stream.flush()
+        self._reset_previous()
 
     def done(self) -> None:
-        """Finalize the output (keep it on screen)."""
-        if self._previous_output is not None:
-            self._stream.write("\n")
+        if self._has_hidden_cursor:
+            self._stream.write(self._prepare_payload(showCursorEscape))
             self._stream.flush()
-        self._previous_output = None
+            self._has_hidden_cursor = False
+        self._reset_previous()
+
+    def reset(self) -> None:
+        self._reset_previous()
 
     def sync(self, output: str) -> None:
-        """
-        Sync the internal state with an output string.
-
-        Args:
-            output: The output to sync with.
-        """
+        active_cursor = self._get_active_cursor()
+        lines = output.split("\n")
         self._previous_output = output
-        self._cursor_y = output.count("\n")
+        self._previous_lines = lines
+
+        if active_cursor is None and self._cursor_was_shown:
+            self._stream.write(self._prepare_payload("\x1b[?25l"))
+        elif active_cursor is not None:
+            self._stream.write(
+                self._prepare_payload(
+                    buildCursorSuffix(_visible_line_count(lines, output), active_cursor)
+                )
+            )
+
+        if active_cursor is not None or self._cursor_was_shown:
+            self._stream.flush()
+
+        self._previous_cursor_position = (
+            tuple(active_cursor) if active_cursor is not None else None
+        )
+        self._cursor_was_shown = active_cursor is not None
+
+    def set_cursor_position(self, position: Optional[CursorPosition]) -> None:
+        self._cursor_position = position
+        self._cursor_dirty = True
+
+    def is_cursor_dirty(self) -> bool:
+        return self._cursor_dirty
 
     def will_render(self, output: str) -> bool:
-        """
-        Check if the output will actually render.
+        return self._has_changes(output, self._cursor_position if self._cursor_dirty else None)
 
-        Args:
-            output: The output to check.
+    def _get_active_cursor(self) -> Optional[CursorPosition]:
+        active = self._cursor_position if self._cursor_dirty else None
+        self._cursor_dirty = False
+        return active
 
-        Returns:
-            True if the output will be rendered.
-        """
-        return output != self._previous_output
+    def _has_changes(
+        self,
+        output: str,
+        active_cursor: Optional[CursorPosition],
+    ) -> bool:
+        return output != self._previous_output or cursorPositionChanged(
+            active_cursor,
+            self._previous_cursor_position,
+        )
 
-    def set_cursor_position(self, position: Optional[tuple[int, int]]) -> None:
-        """
-        Set the cursor position for rendering.
+    def _render_standard(
+        self,
+        output: str,
+        active_cursor: Optional[CursorPosition],
+    ) -> str:
+        lines = output.split("\n")
+        visible_count = _visible_line_count(lines, output)
+        cursor_changed = cursorPositionChanged(
+            active_cursor,
+            self._previous_cursor_position,
+        )
 
-        Args:
-            position: Tuple of (x, y) position.
-        """
-        if position:
-            self._cursor_x, self._cursor_y = position
+        if output == self._previous_output and cursor_changed:
+            return buildCursorOnlySequence(
+                cursor_was_shown=self._cursor_was_shown,
+                previous_line_count=len(self._previous_lines),
+                previous_cursor_position=self._previous_cursor_position,
+                visible_line_count=visible_count,
+                cursor_position=active_cursor,
+            )
 
-    def _clear_previous(self) -> None:
-        """Clear the previous output."""
-        if self._previous_output is None:
-            return
+        return (
+            buildReturnToBottomPrefix(
+                self._cursor_was_shown,
+                len(self._previous_lines),
+                self._previous_cursor_position,
+            )
+            + erase_lines(len(self._previous_lines))
+            + output
+            + buildCursorSuffix(visible_count, active_cursor)
+        )
 
-        lines = self._previous_output.count("\n") + 1
+    def _render_incremental(
+        self,
+        output: str,
+        active_cursor: Optional[CursorPosition],
+    ) -> str:
+        next_lines = output.split("\n")
+        visible_count = _visible_line_count(next_lines, output)
+        previous_visible = _visible_line_count(self._previous_lines, self._previous_output)
+        cursor_changed = cursorPositionChanged(
+            active_cursor,
+            self._previous_cursor_position,
+        )
 
-        # Move cursor to start of previous output
-        if self._cursor_y > 0:
-            self._stream.write(f"\x1b[{self._cursor_y}A")
+        if output == self._previous_output and cursor_changed:
+            return buildCursorOnlySequence(
+                cursor_was_shown=self._cursor_was_shown,
+                previous_line_count=len(self._previous_lines),
+                previous_cursor_position=self._previous_cursor_position,
+                visible_line_count=visible_count,
+                cursor_position=active_cursor,
+            )
 
-        # Clear lines
-        for i in range(lines):
-            if i > 0:
-                self._stream.write("\x1b[1B")  # Move down
-            self._stream.write("\x1b[2K\x1b[G")  # Clear line and go to start
+        return_prefix = buildReturnToBottomPrefix(
+            self._cursor_was_shown,
+            len(self._previous_lines),
+            self._previous_cursor_position,
+        )
 
-        self._stream.flush()
+        if output == "\n" or self._previous_output == "":
+            return (
+                return_prefix
+                + erase_lines(len(self._previous_lines))
+                + output
+                + buildCursorSuffix(visible_count, active_cursor)
+            )
+
+        has_trailing_newline = output.endswith("\n")
+        buffer: list[str] = [return_prefix]
+
+        if visible_count < previous_visible:
+            previous_had_trailing_newline = self._previous_output.endswith("\n")
+            extra_slot = 1 if previous_had_trailing_newline else 0
+            buffer.append(erase_lines(previous_visible - visible_count + extra_slot))
+            if visible_count > 0:
+                buffer.append(cursor_up(visible_count))
+        elif previous_visible > 0:
+            buffer.append(cursor_up(previous_visible - 1))
+
+        for index in range(visible_count):
+            is_last_line = index == visible_count - 1
+            next_line = next_lines[index]
+            previous_line = self._previous_lines[index] if index < len(self._previous_lines) else None
+
+            if next_line == previous_line:
+                if not is_last_line or has_trailing_newline:
+                    buffer.append(cursor_next_line())
+                continue
+
+            buffer.append(
+                cursor_to(0)
+                + next_line
+                + erase_end_line()
+                + ("" if is_last_line and not has_trailing_newline else "\n")
+            )
+
+        buffer.append(buildCursorSuffix(visible_count, active_cursor))
+        return "".join(buffer)
+
+    def _reset_previous(self) -> None:
+        self._previous_output = ""
+        self._previous_lines = []
+        self._previous_cursor_position = None
+        self._cursor_was_shown = False
 
 
-def create_log_update(
+def _createLogUpdate(
     stream: Optional[TextIO] = None,
     *,
     incremental: bool = False,
 ) -> LogUpdate:
-    """
-    Create a LogUpdate instance.
-
-    Args:
-        stream: The output stream (defaults to stdout).
-        incremental: Whether to use incremental rendering.
-
-    Returns:
-        A LogUpdate instance.
-    """
     return LogUpdate(stream or sys.stdout, incremental=incremental)
+
+
+def logUpdate(
+    stream: Optional[TextIO] = None,
+    *,
+    incremental: bool = False,
+) -> LogUpdate:
+    return _createLogUpdate(stream, incremental=incremental)
+
+
+__all__ = ["LogUpdate", "logUpdate"]

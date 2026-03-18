@@ -7,16 +7,14 @@ This hook provides box layout metrics.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, TYPE_CHECKING
-
-from ink_python.hooks.use_stdout import use_stdout
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ink_python.dom import DOMElement
 
 
 @dataclass
-class BoxMetrics:
+class _BoxMetrics:
     """Metrics of a box element."""
 
     width: int = 0
@@ -26,13 +24,13 @@ class BoxMetrics:
 
 
 @dataclass
-class UseBoxMetricsResult(BoxMetrics):
+class _UseBoxMetricsResult(_BoxMetrics):
     """Result of useBoxMetrics hook."""
 
     has_measured: bool = False
 
 
-def use_box_metrics(ref: dict) -> UseBoxMetricsResult:
+def useBoxMetrics(ref: dict) -> _UseBoxMetricsResult:
     """
     A React hook that returns the current layout metrics for a tracked box element.
 
@@ -48,24 +46,22 @@ def use_box_metrics(ref: dict) -> UseBoxMetricsResult:
         ref: A ref object containing the DOM element.
 
     Returns:
-        UseBoxMetricsResult: Box metrics with has_measured flag.
+        _UseBoxMetricsResult: Box metrics with has_measured flag.
 
     Example:
         >>> ref = {"current": None}
-        >>> metrics = use_box_metrics(ref)
+        >>> metrics = useBoxMetrics(ref)
         >>> if metrics.has_measured:
         ...     print(f"{metrics.width}x{metrics.height} at {metrics.left},{metrics.top}")
     """
-    stdout = use_stdout()
-
     if ref.get("current") is None:
-        return UseBoxMetricsResult()
+        return _UseBoxMetricsResult()
 
     element: DOMElement = ref["current"]
     yoga_node = getattr(element, "yoga_node", None)
 
     if yoga_node is None:
-        return UseBoxMetricsResult()
+        return _UseBoxMetricsResult()
 
     try:
         width = int(yoga_node.get_computed_width())
@@ -73,7 +69,7 @@ def use_box_metrics(ref: dict) -> UseBoxMetricsResult:
         left = int(yoga_node.get_computed_left())
         top = int(yoga_node.get_computed_top())
 
-        return UseBoxMetricsResult(
+        return _UseBoxMetricsResult(
             width=width,
             height=height,
             left=left,
@@ -81,8 +77,4 @@ def use_box_metrics(ref: dict) -> UseBoxMetricsResult:
             has_measured=True,
         )
     except Exception:
-        return UseBoxMetricsResult()
-
-
-# Alias for camelCase preference
-useBoxMetrics = use_box_metrics
+        return _UseBoxMetricsResult()

@@ -9,7 +9,7 @@ from __future__ import annotations
 import shutil
 from typing import Optional, Tuple
 
-from ink_python.hooks.state import useState, useEffect
+from ink_python.hooks._runtime import useState, useEffect
 
 
 def useWindowSize() -> Tuple[int, int]:
@@ -38,8 +38,3 @@ def useWindowSize() -> Tuple[int, int]:
     # The actual resize handling is done by the Ink class.
 
     return state[0]
-
-
-def use_window_size() -> Tuple[int, int]:
-    """Alias for useWindowSize."""
-    return useWindowSize()

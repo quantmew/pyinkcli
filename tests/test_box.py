@@ -1,13 +1,12 @@
 """Tests for Box component."""
 
-import pytest
-from ink_python.components.box import Box
-from ink_python.component import create_vnode
+from ink_python.components.Box import Box
+from ink_python.component import createElement
 
 
 def test_box_creates_vnode():
-    """Test that Box creates a VNode."""
-    vnode = Box(create_vnode("ink-text", "Hello"))
+    """Test that Box creates a virtual node."""
+    vnode = Box(createElement("ink-text", "Hello"))
     assert vnode is not None
     assert vnode.type == "ink-box"
 
@@ -63,8 +62,8 @@ def test_box_with_background_color():
 
 def test_box_with_children():
     """Test Box with children."""
-    child1 = create_vnode("ink-text", "Child 1")
-    child2 = create_vnode("ink-text", "Child 2")
+    child1 = createElement("ink-text", "Child 1")
+    child2 = createElement("ink-text", "Child 2")
     vnode = Box(child1, child2)
     assert vnode is not None
     assert len(vnode.children) == 2

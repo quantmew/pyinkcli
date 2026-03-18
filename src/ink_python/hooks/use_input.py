@@ -12,6 +12,10 @@ from typing import Callable, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     pass
 
+from ink_python.hooks._runtime import useEffect
+from ink_python.hooks.use_stdin import useStdin
+from ink_python.parse_keypress import parseKeypress
+
 
 @dataclass
 class Key:
@@ -70,7 +74,6 @@ class Key:
 
 # Input handlers registry
 _input_handlers: list[Callable[[str, Key], None]] = []
-_is_active: bool = True
 
 
 def useInput(
@@ -98,126 +101,94 @@ def useInput(
             useInput(handle_input)
             return Text("Press keys...")
     """
-    global _input_handlers, _is_active
+    stdin = useStdin()
 
-    # Store handler with its active state
-    handler_entry = (handler, is_active)
+    def manage_raw_mode():
+        if not is_active:
+            return None
 
-    if handler_entry not in [(h, a) for h, a in _input_handlers]:
+        stdin.set_raw_mode(True)
+
+        def cleanup():
+            stdin.set_raw_mode(False)
+
+        return cleanup
+
+    useEffect(manage_raw_mode, (is_active,))
+
+    def register_handler():
+        if not is_active:
+            return None
+
         _input_handlers.append(handler)
 
+        def cleanup():
+            try:
+                _input_handlers.remove(handler)
+            except ValueError:
+                pass
 
-def use_input(
-    handler: Callable[[str, Key], None],
-    *,
-    is_active: bool = True,
-) -> None:
-    """Alias for useInput."""
-    return useInput(handler, is_active=is_active)
+        return cleanup
 
-
+    useEffect(register_handler, (is_active, handler))
 def _parse_keypress(data: str) -> tuple[str, Key]:
-    """
-    Parse raw input data into a character and Key object.
-
-    Args:
-        data: Raw input string.
-
-    Returns:
-        Tuple of (character, Key).
-    """
     key = Key()
-
     if not data:
         return ("", key)
 
-    # Handle ANSI escape sequences
-    if data.startswith("\x1b"):
-        if len(data) == 1:
-            # Lone escape
-            key.escape = True
-            return ("", key)
+    parsed = parseKeypress(data)
+    key.ctrl = parsed.ctrl
+    key.shift = parsed.shift
+    key.meta = parsed.meta or parsed.option
+    key.super_key = parsed.super
+    key.hyper = parsed.hyper
+    key.caps_lock = parsed.capsLock
+    key.num_lock = parsed.numLock
+    key.event_type = parsed.eventType
 
-        if data[1] == "[":
-            # CSI sequence
-            seq = data[2:] if len(data) > 2 else ""
+    name = parsed.name
+    if name == "up":
+        key.up_arrow = True
+    elif name == "down":
+        key.down_arrow = True
+    elif name == "left":
+        key.left_arrow = True
+    elif name == "right":
+        key.right_arrow = True
+    elif name == "pageup":
+        key.page_up = True
+    elif name == "pagedown":
+        key.page_down = True
+    elif name == "home":
+        key.home = True
+    elif name == "end":
+        key.end = True
+    elif name in {"return", "enter"}:
+        key.return_pressed = True
+    elif name == "escape":
+        key.escape = True
+    elif name == "tab":
+        key.tab = True
+    elif name == "backspace":
+        key.backspace = True
+    elif name == "delete":
+        key.delete = True
 
-            # Arrow keys
-            if seq == "A":
-                key.up_arrow = True
-                return ("", key)
-            elif seq == "B":
-                key.down_arrow = True
-                return ("", key)
-            elif seq == "C":
-                key.right_arrow = True
-                return ("", key)
-            elif seq == "D":
-                key.left_arrow = True
-                return ("", key)
+    if len(data) == 1 and not any(
+        [
+            key.return_pressed,
+            key.tab,
+            key.backspace,
+            key.escape,
+            key.delete,
+        ]
+    ):
+        return (data.lower() if key.ctrl else data, key)
 
-            # Page up/down
-            elif seq in ("5~", "5;5~"):
-                key.page_up = True
-                return ("", key)
-            elif seq in ("6~", "6;5~"):
-                key.page_down = True
-                return ("", key)
+    if parsed.name and len(parsed.name) == 1:
+        return (parsed.name, key)
 
-            # Home/End
-            elif seq in ("H", "1~", "7~"):
-                key.home = True
-                return ("", key)
-            elif seq in ("F", "4~", "8~"):
-                key.end = True
-                return ("", key)
-
-            # Delete
-            elif seq in ("3~", "3;5~"):
-                key.delete = True
-                return ("", key)
-
-            # Handle modified keys (e.g., ;5 for Ctrl)
-            if ";" in seq:
-                parts = seq.rsplit(";", 1)
-                if len(parts) == 2:
-                    modifier = parts[1][0] if parts[1] else ""
-                    if modifier == "5":
-                        key.ctrl = True
-                    elif modifier == "2":
-                        key.shift = True
-
-    # Handle control characters
-    if len(data) == 1:
-        char = data[0]
-        code = ord(char)
-
-        if code == 13 or code == 10:  # Enter
-            key.return_pressed = True
-            return ("", key)
-        elif code == 9:  # Tab
-            key.tab = True
-            return ("", key)
-        elif code == 127 or code == 8:  # Backspace
-            key.backspace = True
-            return ("", key)
-        elif code == 27:  # Escape
-            key.escape = True
-            return ("", key)
-        elif code < 32:  # Ctrl + letter
-            key.ctrl = True
-            # Map to letter (1=a, 2=b, etc.)
-            letter = chr(code + 96)
-            return (letter, key)
-
-    # Regular character
-    if len(data) == 1:
-        char = data
-        if char.isupper():
-            key.shift = True
-        return (char, key)
-
-    return (data, key)
+    return ("", key)
 
 
 def _dispatch_input(data: str) -> None:
@@ -227,11 +198,9 @@ def _dispatch_input(data: str) -> None:
     Args:
         data: Raw input data.
     """
-    global _input_handlers
-
     char, key = _parse_keypress(data)
 
-    for handler in _input_handlers:
+    for handler in list(_input_handlers):
         try:
             handler(char, key)
         except Exception:

@@ -6,26 +6,22 @@ This hook provides screen reader enabled state.
 
 from __future__ import annotations
 
+from ink_python.components._accessibility_runtime import _is_screen_reader_enabled
 
-def use_is_screen_reader_enabled() -> bool:
+
+def useIsScreenReaderEnabled() -> bool:
     """
     A React hook that returns whether a screen reader is enabled.
 
     This is useful when you want to render different output for screen readers.
 
     Returns:
-        bool: Whether a screen reader is enabled. Currently always returns False
-              as screen reader support is not yet implemented.
+        bool: Whether a screen reader is enabled for the current render tree.
 
     Example:
-        >>> is_enabled = use_is_screen_reader_enabled()
+        >>> is_enabled = useIsScreenReaderEnabled()
         >>> if is_enabled:
         ...     # Render accessible output
         ...     pass
     """
-    # TODO: Implement actual screen reader detection
-    return False
-
-
-# Alias for camelCase preference
-useIsScreenReaderEnabled = use_is_screen_reader_enabled
+    return _is_screen_reader_enabled()

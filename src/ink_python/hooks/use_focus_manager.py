@@ -1,7 +1,5 @@
 """
 useFocusManager hook for ink-python.
-
-This hook provides focus management functionality.
 """
 
 from __future__ import annotations
@@ -9,11 +7,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from ink_python.hooks.use_focus import focus_next, focus_prev, _focused_id, _focusable_ids
+from ink_python.hooks._runtime import useEffect, useState
+from ink_python.hooks.use_focus import _focus_runtime, focusNext, focusPrev
 
 
 @dataclass
-class UseFocusManagerOutput:
+class _UseFocusManagerOutput:
     """Output of useFocusManager hook."""
 
     enable_focus: Callable[[], None]
@@ -24,47 +23,26 @@ class UseFocusManagerOutput:
     active_id: Optional[str]
 
 
-def _enable_focus() -> None:
-    """Enable focus management."""
-    # Focus management is always enabled in the current implementation
-    pass
-
-
-def _disable_focus() -> None:
-    """Disable focus management."""
-    global _focused_id
-    _focused_id = None
-
-
-def _focus(id: str) -> None:
-    """Focus element with given id."""
-    global _focused_id
-    if id in _focusable_ids:
-        _focused_id = id
-
-
-def use_focus_manager() -> UseFocusManagerOutput:
+def useFocusManager() -> _UseFocusManagerOutput:
     """
-    A React hook that returns methods to enable or disable focus management
-    for all components or manually switch focus to the next or previous components.
-
-    Returns:
-        UseFocusManagerOutput: Object with focus management methods.
-
-    Example:
-        >>> focus_mgr = use_focus_manager()
-        >>> focus_mgr.focus_next()
-        >>> print(f"Focused: {focus_mgr.active_id}")
+    Hook exposing global focus controls.
     """
-    return UseFocusManagerOutput(
-        enable_focus=_enable_focus,
-        disable_focus=_disable_focus,
-        focus_next=focus_next,
-        focus_previous=focus_prev,
-        focus=_focus,
-        active_id=_focused_id,
+
+    _, set_version = useState(0)
+
+    def force_update() -> None:
+        set_version(lambda value: value + 1)
+
+    def subscribe():
+        return _focus_runtime.subscribe(force_update)
+
+    useEffect(subscribe, ())
+
+    return _UseFocusManagerOutput(
+        enable_focus=_focus_runtime.enable_focus,
+        disable_focus=_focus_runtime.disable_focus,
+        focus_next=focusNext,
+        focus_previous=focusPrev,
+        focus=_focus_runtime.focus,
+        active_id=_focus_runtime.active_id,
     )
-
-
-# Alias for camelCase preference
-useFocusManager = use_focus_manager

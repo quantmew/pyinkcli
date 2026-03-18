@@ -6,15 +6,19 @@ Converts DOM nodes to terminal output.
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Callable, Optional
 
-from ink_python import yoga_compat as yoga
+from ink_python import _yoga as yoga
+from ink_python.get_max_width import getMaxWidth
 
-from ink_python.dom import DOMElement, TextNode, DOMNode, squash_text_nodes
-from ink_python.measure_text import measure_text
-from ink_python.wrap_text import wrap_text
+from ink_python.dom import DOMElement, TextNode, DOMNode, squashTextNodes
+from ink_python.wrap_text import wrapText
+from ink_python.sanitize_ansi import sanitizeAnsi
 from ink_python.utils.string_width import widest_line
 from ink_python.output import Output
+from ink_python.render_background import renderBackground
+from ink_python.render_border import renderBorder
 
 if TYPE_CHECKING:
     pass
@@ -23,18 +27,45 @@ if TYPE_CHECKING:
 OutputTransformer = Callable[[str, int], str]
 
 
-def apply_padding_to_text(node: DOMElement, text: str) -> str:
+def _format_accessibility_output(
+    role: Optional[str],
+    state: Optional[dict[str, bool]],
+    output: str,
+    parent_role: Optional[str],
+) -> str:
+    """Format screen reader output for ARIA role/state metadata."""
+    if not role and not state:
+        return output
+
+    state_labels: list[str] = []
+    if state:
+        if role == "checkbox" and "checked" in state:
+            state_labels.append("checked" if state["checked"] else "unchecked")
+        else:
+            state_labels.extend(key for key, value in state.items() if value)
+
+    parts: list[str] = []
+    if role and role != parent_role:
+        parts.append(f"{role}:")
+    parts.extend(state_labels)
+    if output:
+        parts.append(output)
+
+    return " ".join(part for part in parts if part)
+
+
+def applyPaddingToText(node: DOMElement, text: str) -> str:
     """Apply padding offset to text."""
     if node.child_nodes:
         first_child = node.child_nodes[0]
         if hasattr(first_child, "yoga_node") and first_child.yoga_node:
             offset_x = first_child.yoga_node.get_computed_left()
             offset_y = first_child.yoga_node.get_computed_top()
-            text = "\n" * offset_y + indent_string(text, offset_x)
+            text = "\n" * offset_y + indentString(text, offset_x)
     return text
 
 
-def indent_string(text: str, count: int) -> str:
+def indentString(text: str, count: int) -> str:
     """Indent each line of text."""
     if count <= 0:
         return text
@@ -42,23 +73,21 @@ def indent_string(text: str, count: int) -> str:
     return "\n".join(indent + line for line in text.split("\n"))
 
 
-def get_max_width(yoga_node) -> int:
-    """Get the maximum content width for a node."""
-    width = yoga_node.get_computed_width()
-    padding_left = yoga_node.get_computed_padding(yoga.EDGE_LEFT)
-    padding_right = yoga_node.get_computed_padding(yoga.EDGE_RIGHT)
-    border_left = yoga_node.get_computed_border(yoga.EDGE_LEFT)
-    border_right = yoga_node.get_computed_border(yoga.EDGE_RIGHT)
-
-    return int(width - padding_left - padding_right - border_left - border_right)
+def _clamped_max_width(yoga_node) -> int:
+    """Clamp the JS-style max width helper to a non-negative integer width."""
+    result = getMaxWidth(yoga_node)
+    if not math.isfinite(result):
+        return 0
+    return max(0, int(result))
 
 
-def render_node_to_output(
+def renderNodeToOutput(
     node: DOMElement,
     output: Output,
     *,
     offset_x: int = 0,
     offset_y: int = 0,
+    inherited_background: Optional[str] = None,
     transformers: Optional[list[OutputTransformer]] = None,
     skip_static_elements: bool = False,
 ) -> None:
@@ -94,16 +123,26 @@ def render_node_to_output(
 
     # Handle text nodes
     if node.node_name == "ink-text":
-        text = squash_text_nodes(node)
+        text = squashTextNodes(node)
         if text:
+            text = sanitizeAnsi(text)
             current_width = widest_line(text)
-            max_width = get_max_width(yoga_node)
+            max_width = _clamped_max_width(yoga_node)
 
             if current_width > max_width:
                 text_wrap = node.style.get("textWrap", "wrap")
-                text = wrap_text(text, max_width, text_wrap)
+                text = wrapText(text, max_width, text_wrap)
 
-            text = apply_padding_to_text(node, text)
+            text = applyPaddingToText(node, text)
+            text_background = node.style.get("backgroundColor") or inherited_background
+            if text_background:
+                from ink_python.colorize import colorize
+
+                def bg_transform(s: str, index: int, bg: str = text_background) -> str:
+                    return colorize(s, bg, "background")
+
+                new_transformers.append(bg_transform)
+
             output.write(x, y, text, transformers=new_transformers)
         return
 
@@ -111,12 +150,15 @@ def render_node_to_output(
     clip_horizontal = False
     clip_vertical = False
 
+    next_inherited_background = inherited_background
+
     if node.node_name == "ink-box":
         # Render background
-        render_background(x, y, node, output)
+        renderBackground(x, y, node, output)
+        next_inherited_background = node.style.get("backgroundColor") or inherited_background
 
         # Render border
-        render_border(x, y, node, output)
+        renderBorder(x, y, node, output)
 
         # Handle clipping
         clip_horizontal = (
@@ -160,11 +202,12 @@ def render_node_to_output(
     if node.node_name in ("ink-root", "ink-box"):
         for child in node.child_nodes:
             if isinstance(child, DOMElement):
-                render_node_to_output(
+                renderNodeToOutput(
                     child,
                     output,
                     offset_x=x,
                     offset_y=y,
+                    inherited_background=next_inherited_background,
                     transformers=new_transformers,
                     skip_static_elements=skip_static_elements,
                 )
@@ -174,104 +217,7 @@ def render_node_to_output(
             output.unclip()
 
 
-def render_background(x: int, y: int, node: DOMElement, output: Output) -> None:
-    """Render the background color for a box."""
-    bg_color = node.style.get("backgroundColor")
-    if not bg_color:
-        return
-
-    yoga_node = node.yoga_node
-    if yoga_node is None:
-        return
-
-    width = int(yoga_node.get_computed_width())
-    height = int(yoga_node.get_computed_height())
-
-    # Create background string
-    from ink_python.colorize import colorize
-
-    def bg_transform(s: str, index: int) -> str:
-        return colorize(s, bg_color, "background")
-
-    # Fill the background area
-    for row in range(height):
-        output.write(x, y + row, " " * width, transformers=[bg_transform])
-
-
-def render_border(x: int, y: int, node: DOMElement, output: Output) -> None:
-    """Render the border for a box."""
-    border_style = node.style.get("borderStyle")
-    if not border_style:
-        return
-
-    yoga_node = node.yoga_node
-    if yoga_node is None:
-        return
-
-    from ink_python.utils.cli_boxes import get_box_style
-    from ink_python.colorize import colorize
-
-    try:
-        box = get_box_style(border_style)
-    except KeyError:
-        return
-
-    width = int(yoga_node.get_computed_width())
-    height = int(yoga_node.get_computed_height())
-
-    # Get border color
-    border_color = node.style.get(
-        "borderColor",
-        node.style.get(
-            "borderTopColor",
-            node.style.get("borderBottomColor", None),
-        ),
-    )
-
-    # Get dim setting
-    dim_border = node.style.get("borderDimColor", False)
-
-    def colorize_border(s: str) -> str:
-        result = s
-        if dim_border:
-            result = f"\x1b[2m{result}\x1b[22m"
-        if border_color:
-            result = colorize(result, border_color, "foreground")
-        return result
-
-    # Check which borders to draw
-    show_top = node.style.get("borderTop", True)
-    show_bottom = node.style.get("borderBottom", True)
-    show_left = node.style.get("borderLeft", True)
-    show_right = node.style.get("borderRight", True)
-
-    # Draw top border
-    if show_top:
-        top_line = (
-            box.top_left
-            + box.top * (width - 2)
-            + box.top_right
-        )
-        output.write(x, y, colorize_border(top_line), transformers=[])
-
-    # Draw bottom border
-    if show_bottom:
-        bottom_line = (
-            box.bottom_left
-            + box.bottom * (width - 2)
-            + box.bottom_right
-        )
-        output.write(x, y + height - 1, colorize_border(bottom_line), transformers=[])
-
-    # Draw side borders
-    for row in range(1, height - 1):
-        if show_left:
-            output.write(x, y + row, colorize_border(box.left), transformers=[])
-        if show_right:
-            output.write(x + width - 1, y + row, colorize_border(box.right), transformers=[])
-
-
-def render_node_to_screen_reader_output(
+def renderNodeToScreenReaderOutput(
     node: DOMElement,
     *,
     parent_role: Optional[str] = None,
@@ -298,7 +244,7 @@ def render_node_to_screen_reader_output(
     output = ""
 
     if node.node_name == "ink-text":
-        output = squash_text_nodes(node)
+        output = sanitizeAnsi(squashTextNodes(node))
     elif node.node_name in ("ink-box", "ink-root"):
         # Determine separator based on flex direction
         flex_direction = node.style.get("flexDirection", "row")
@@ -313,7 +259,7 @@ def render_node_to_screen_reader_output(
         parts = []
         for child in children:
             if isinstance(child, DOMElement):
-                child_output = render_node_to_screen_reader_output(
+                child_output = renderNodeToScreenReaderOutput(
                     child,
                     parent_role=node.internal_accessibility.role if node.internal_accessibility else None,
                     skip_static_elements=skip_static_elements,
@@ -325,15 +271,23 @@ def render_node_to_screen_reader_output(
 
     # Add accessibility info
     if node.internal_accessibility:
-        role = node.internal_accessibility.role
-        state = node.internal_accessibility.state
-
-        if state:
-            state_parts = [k for k, v in state.items() if v]
-            if state_parts:
-                output = f"({', '.join(state_parts)}) {output}"
-
-        if role and role != parent_role:
-            output = f"{role}: {output}"
+        output = _format_accessibility_output(
+            node.internal_accessibility.role,
+            node.internal_accessibility.state,
+            output,
+            parent_role,
+        )
 
     return output
+
+
+render_node_to_output = renderNodeToOutput
+render_node_to_screen_reader_output = renderNodeToScreenReaderOutput
+
+__all__ = [
+    "OutputTransformer",
+    "applyPaddingToText",
+    "indentString",
+    "renderNodeToOutput",
+    "renderNodeToScreenReaderOutput",
+]

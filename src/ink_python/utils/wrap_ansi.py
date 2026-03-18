@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from typing import Literal
 
+from ink_python.sanitize_ansi import sanitizeAnsi
 from ink_python.utils.string_width import string_width
 
 # ANSI escape sequence patterns
@@ -158,6 +159,8 @@ def wrap_ansi(
     Returns:
         The wrapped text.
     """
+    text = sanitizeAnsi(text)
+
     if trim and text.strip() == "":
         return ""
 
@@ -223,6 +226,11 @@ def wrap_text(
     """
     Wrap or truncate text based on the wrap mode.
 
+    This is a low-level compatibility wrapper only.
+    The higher-level parity-facing wrapper lives in `ink_python.wrap_text`,
+    which remains the canonical call site for runtime code. Keep this helper
+    policy-thin and limited to primitive dispatch.
+
     Args:
         text: The text to wrap/truncate.
         width: The maximum width.
@@ -233,14 +241,14 @@ def wrap_text(
     """
     if wrap_mode == "wrap":
         return wrap_ansi(text, width)
-    elif wrap_mode == "truncate" or wrap_mode == "truncate-end":
+    if wrap_mode == "truncate" or wrap_mode == "truncate-end":
         return truncate_string(text, width, "end")
-    elif wrap_mode == "truncate-start":
+    if wrap_mode == "truncate-start":
         return truncate_string(text, width, "start")
-    elif wrap_mode == "truncate-middle":
+    if wrap_mode == "truncate-middle":
         return truncate_string(text, width, "middle")
-    else:
-        return text
+
+    return text
 
 
 def truncate_string(
@@ -259,6 +267,8 @@ def truncate_string(
     Returns:
         The truncated text.
     """
+    text = sanitizeAnsi(text)
+
     text_width = string_width(text)
 
     if text_width <= width:

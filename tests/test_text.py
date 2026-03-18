@@ -1,12 +1,11 @@
 """Tests for Text component."""
 
-import pytest
-from ink_python.components.text import Text
-from ink_python.component import create_vnode
+from ink_python.components.Text import Text
+from ink_python.component import createElement
 
 
 def test_text_creates_vnode():
-    """Test that Text creates a VNode."""
+    """Test that Text creates a virtual node."""
     vnode = Text("Hello")
     assert vnode is not None
     assert vnode.type == "ink-text"

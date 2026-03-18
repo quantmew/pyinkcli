@@ -13,21 +13,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from ink_python.component import VNode
 from ink_python.output import Output
-from ink_python.render_node_to_output import render_node_to_output
-from ink_python.yoga_compat import Node, DIRECTION_LTR, UNDEFINED
-from ink_python.reconciler import create_reconciler
+from ink_python.render_node_to_output import renderNodeToOutput
+from ink_python._yoga import Node, DIRECTION_LTR, UNDEFINED
+from ink_python.reconciler import createReconciler
 
 if TYPE_CHECKING:
+    from ink_python.component import RenderableNode
     from ink_python.dom import DOMElement
 
 
 def create_root_node(columns: int, rows: int) -> "DOMElement":
     """Create a root DOM element for rendering."""
-    from ink_python.dom import create_node
+    from ink_python.dom import createNode
 
-    root = create_node("ink-root")
+    root = createNode("ink-root")
     root.yoga_node = Node.create()
     # Set both width and height - Yoga requires explicit dimensions
     root.yoga_node.set_width(columns)
@@ -35,8 +35,8 @@ def create_root_node(columns: int, rows: int) -> "DOMElement":
     return root
 
 
-def render_to_string(
-    vnode: VNode,
+def renderToString(
+    vnode: "RenderableNode",
     columns: Optional[int] = None,
     rows: Optional[int] = None,
 ) -> str:
@@ -59,8 +59,8 @@ def render_to_string(
         The rendered output as a string.
 
     Example:
-        >>> from ink_python import render_to_string, Box, Text
-        >>> output = render_to_string(
+        >>> from ink_python import renderToString, Box, Text
+        >>> output = renderToString(
         ...     Box(
         ...         Text("Hello World")
         ...     ),
@@ -76,7 +76,7 @@ def render_to_string(
     root_node = create_root_node(columns, rows)
 
     # Create reconciler and update container
-    reconciler = create_reconciler(root_node)
+    reconciler = createReconciler(root_node)
     container = reconciler.create_container(root_node)
     reconciler.update_container(vnode, container)
 
@@ -90,7 +90,7 @@ def render_to_string(
 
     # Render to output
     output = Output(width, height)
-    render_node_to_output(root_node, output)
+    renderNodeToOutput(root_node, output)
 
     # Free yoga node
     yoga_node.free()
@@ -104,7 +104,3 @@ def render_to_string(
         lines.pop()
 
     return '\n'.join(lines)
-
-
-# CamelCase alias for JavaScript compatibility
-renderToString = render_to_string

@@ -9,8 +9,10 @@ from __future__ import annotations
 import sys
 from typing import Optional, TextIO
 
+from ink_python.sanitize_ansi import sanitizeAnsi
 
-class StderrHandle:
+
+class _StderrHandle:
     """Handle to stderr stream."""
 
     def __init__(self, stream: Optional[TextIO] = None):
@@ -27,16 +29,22 @@ class StderrHandle:
         return self._stream.isatty() if hasattr(self._stream, "isatty") else False
 
     def write(self, data: str) -> None:
-        """Write to stderr."""
+        """Write sanitized user output to stderr."""
+        sanitized = sanitizeAnsi(data)
+        self._stream.write(sanitized)
+        self._stream.flush()
+
+    def raw_write(self, data: str) -> None:
+        """Write raw terminal control output to stderr."""
         self._stream.write(data)
         self._stream.flush()
 
 
 # Global stderr handle
-_stderr_handle: Optional[StderrHandle] = None
+_stderr_handle: Optional[_StderrHandle] = None
 
 
-def useStderr() -> StderrHandle:
+def useStderr() -> _StderrHandle:
     """
     Hook to access stderr.
 
@@ -45,16 +53,11 @@ def useStderr() -> StderrHandle:
     """
     global _stderr_handle
     if _stderr_handle is None:
-        _stderr_handle = StderrHandle()
+        _stderr_handle = _StderrHandle()
     return _stderr_handle
-
-
-def use_stderr() -> StderrHandle:
-    """Alias for useStderr."""
-    return useStderr()
 
 
 def _set_stderr(stream: TextIO) -> None:
     """Internal: Set the stderr stream."""
     global _stderr_handle
-    _stderr_handle = StderrHandle(stream)
+    _stderr_handle = _StderrHandle(stream)

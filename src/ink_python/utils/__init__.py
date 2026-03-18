@@ -1,5 +1,8 @@
 """Utility modules for ink-python."""
 
+import shutil
+from typing import TextIO
+
 from ink_python.utils.ansi_escapes import (
     cursor_to,
     cursor_move,
@@ -36,6 +39,23 @@ from ink_python.utils.ansi_escapes import (
 from ink_python.utils.string_width import string_width
 from ink_python.utils.cli_boxes import BOXES, BoxStyle, get_box_style
 
+
+def getWindowSize(stdout: TextIO) -> dict[str, int]:
+    columns = getattr(stdout, "columns", None) or 0
+    rows = getattr(stdout, "rows", None) or 0
+
+    if columns and rows:
+        return {"columns": columns, "rows": rows}
+
+    try:
+        fallback = shutil.get_terminal_size()
+        return {
+            "columns": columns or fallback.columns or 80,
+            "rows": rows or fallback.lines or 24,
+        }
+    except Exception:
+        return {"columns": columns or 80, "rows": rows or 24}
+
 __all__ = [
     # ANSI escapes
     "cursor_to",
@@ -69,6 +89,7 @@ __all__ = [
     "begin_synchronized_output",
     "end_synchronized_output",
     "beep",
+    "getWindowSize",
     # String width
     "string_width",
     # CLI boxes

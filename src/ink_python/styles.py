@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Optional, TypedDict, Union
 
-from ink_python import yoga_compat as yoga
+from ink_python import _yoga as yoga
 
 # Text wrap options
 TextWrap = Literal[
@@ -469,3 +469,6 @@ def _apply_gap_styles(yoga_node: yoga.Node, style: Styles) -> None:
 
     if "rowGap" in style:
         yoga_node.set_gap(yoga.GUTTER_ROW, float(style["rowGap"]))
+
+
+__all__ = ["Styles"]

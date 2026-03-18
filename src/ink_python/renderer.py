@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 
 from ink_python.output import Output
 from ink_python.render_node_to_output import (
-    render_node_to_output,
-    render_node_to_screen_reader_output,
+    renderNodeToOutput,
+    renderNodeToScreenReaderOutput,
 )
 
 if TYPE_CHECKING:
@@ -59,7 +59,7 @@ def _render_normal(node: DOMElement) -> RenderResult:
     )
 
     # Render main content
-    render_node_to_output(node, main_output, skip_static_elements=True)
+    renderNodeToOutput(node, main_output, skip_static_elements=True)
 
     # Render static content if present
     static_output_str = ""
@@ -68,7 +68,7 @@ def _render_normal(node: DOMElement) -> RenderResult:
             width=int(node.static_node.yoga_node.get_computed_width()),
             height=int(node.static_node.yoga_node.get_computed_height()),
         )
-        render_node_to_output(node.static_node, static_output, skip_static_elements=False)
+        renderNodeToOutput(node.static_node, static_output, skip_static_elements=False)
         static_str, _ = static_output.get()
         static_output_str = static_str + "\n" if static_str else ""
 
@@ -84,12 +84,12 @@ def _render_normal(node: DOMElement) -> RenderResult:
 
 def _render_screen_reader(node: DOMElement) -> RenderResult:
     """Render for screen reader output."""
-    output = render_node_to_screen_reader_output(node, skip_static_elements=True)
+    output = renderNodeToScreenReaderOutput(node, skip_static_elements=True)
     output_height = output.count("\n") + 1 if output else 0
 
     static_output = ""
     if node.static_node:
-        static_output = render_node_to_screen_reader_output(
+        static_output = renderNodeToScreenReaderOutput(
             node.static_node, skip_static_elements=False
         )
         if static_output:
