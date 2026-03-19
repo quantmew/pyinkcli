@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 import threading
 import traceback
 import array as array_module
@@ -61,7 +62,10 @@ from pyinkcli.packages.react_reconciler.ReactFiberReconciler import (
 from pyinkcli.packages.react_reconciler.ReactFiberRoot import ReconcilerContainer
 from pyinkcli.hooks._runtime import (
     _begin_component_render,
+    _batched_updates_runtime,
+    _consume_pending_rerender_priority,
     _delete_hook_state_path,
+    _discrete_updates_runtime,
     _end_component_render,
     _finish_hook_state,
     _get_hook_state_snapshot,
