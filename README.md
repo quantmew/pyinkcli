@@ -15,13 +15,6 @@
 	<img src="media/demo.svg" width="640" alt="Ink demo">
 </div>
 
-## Status
-
-- Import package: `pyinkcli`
-- Source package: `src/pyinkcli`
-- Upstream reference: `js_source/ink`
-- README assets and `LICENSE` are copied from the upstream Ink project
-
 ## Install
 
 ```bash
@@ -60,12 +53,6 @@ app.wait_until_exit()
 - `examples/terminal-resize/`
 - `examples/use-focus/`
 - `examples/use-input/`
-
-## Notes
-
-- The public package name is now `pyinkcli`; old `ink_python` imports should be updated.
-- The project follows Ink concepts closely, but it is not a promise of strict 1:1 parity with the upstream React implementation.
-- For the original JavaScript documentation, see [`js_source/ink/readme.md`](js_source/ink/readme.md).
 
 ## License
 

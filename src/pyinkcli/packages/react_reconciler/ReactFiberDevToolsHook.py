@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from pyinkcli.devtools import createDevtoolsBackendFacade, initializeDevtools
-from pyinkcli.devtools_window_polyfill import installDevtoolsWindowPolyfill
-
 if TYPE_CHECKING:
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
 
 
 def injectIntoDevTools(reconciler: "_Reconciler", package_info: dict[str, str]) -> bool:
     """Register the renderer with the devtools bridge."""
+    from pyinkcli.devtools import createDevtoolsBackendFacade, initializeDevtools
+    from pyinkcli.devtools_window_polyfill import installDevtoolsWindowPolyfill
+
     if not initializeDevtools():
         return False
 
@@ -78,4 +78,3 @@ def injectIntoDevTools(reconciler: "_Reconciler", package_info: dict[str, str]) 
 
 
 __all__ = ["injectIntoDevTools"]
-

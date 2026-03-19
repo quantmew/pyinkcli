@@ -14,6 +14,7 @@ import enum
 import re
 from contextlib import ExitStack
 from collections import abc as collections_abc
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Union
 
 from pyinkcli._component_runtime import (
@@ -36,7 +37,6 @@ from pyinkcli.packages.ink.dom import (
     appendChildNode,
     createNode,
     createTextNode,
-    emitLayoutListeners,
     insertBeforeNode,
     removeChildNode,
     setAttribute,
@@ -44,10 +44,19 @@ from pyinkcli.packages.ink.dom import (
     setTextNodeValue,
 )
 from pyinkcli.packages.ink.styles import Styles, apply_styles
+from pyinkcli.packages.react_reconciler.ReactFiberCommitWork import (
+    afterCommit as _after_commit_work,
+    requestHostRender as _request_host_render_impl,
+)
 from pyinkcli.packages.react_reconciler.ReactEventPriorities import UpdatePriority
 from pyinkcli.packages.react_reconciler.ReactFiberConfig import ReconcilerHostConfig
 from pyinkcli.packages.react_reconciler.ReactFiberDevToolsHook import (
     injectIntoDevTools as _inject_into_devtools,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberHostContext import (
+    HostContext,
+    getChildHostContext,
+    getRootHostContext,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberReconciler import (
     batchedUpdates,
@@ -60,6 +69,12 @@ from pyinkcli.packages.react_reconciler.ReactFiberReconciler import (
     packageInfo,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberRoot import ReconcilerContainer
+from pyinkcli.packages.react_reconciler.ReactFiberWorkLoop import (
+    dispatchCommitRender as _dispatch_commit_render,
+    drainPendingRerenders as _drain_pending_rerenders,
+    priorityRank,
+    requestRerender as _request_rerender,
+)
 from pyinkcli.hooks._runtime import (
     _begin_component_render,
     _batched_updates_runtime,
@@ -91,7 +106,7 @@ class _Reconciler:
     def __init__(self, root_node: DOMElement):
         self.root_node = root_node
         self._current_fiber: Optional[Any] = None
-        self._host_context_stack: List[Dict[str, Any]] = [{"is_inside_text": False}]
+        self._host_context_stack: List[HostContext] = [getRootHostContext()]
         self._owner_component_stack: list[dict[str, Any]] = []
         self._error_boundary_stack: List[tuple[str, type[_Component], _Component]] = []
         self._suspense_boundary_stack: list[str] = []
@@ -1830,11 +1845,7 @@ class _Reconciler:
 
     @staticmethod
     def _priority_rank(priority: UpdatePriority) -> int:
-        if priority == "render_phase":
-            return 2
-        if priority == "discrete":
-            return 1
-        return 0
+        return priorityRank(priority)
 
     def update_container(
         self,
@@ -1957,57 +1968,19 @@ class _Reconciler:
         *,
         priority: UpdatePriority,
     ) -> None:
-        host_config = self._host_config
-        if host_config is None:
-            return
-
-        with container.lock:
-            container.rerender_requested = True
-            if self._priority_rank(priority) > self._priority_rank(
-                container.pending_rerender_priority
-            ):
-                container.pending_rerender_priority = priority
-            if container.rerender_running:
-                return
-            container.rerender_running = True
-
-        try:
-            while True:
-                with container.lock:
-                    current_component = host_config.get_current_component()
-                    if not container.rerender_requested or current_component is None:
-                        container.rerender_running = False
-                        return
-                    container.rerender_requested = False
-                    container.current_render_priority = container.pending_rerender_priority
-                    container.pending_rerender_priority = "default"
-
-                host_config.perform_render(current_component)
-                if container.current_render_priority != "render_phase":
-                    host_config.wait_for_render_flush(1.0)
-        finally:
-            with container.lock:
-                container.rerender_running = False
-                container.current_render_priority = "default"
+        _request_rerender(self, container, priority=priority)
 
     def drain_pending_rerenders(
         self,
         container: ReconcilerContainer,
     ) -> None:
-        priority = _consume_pending_rerender_priority()
-        if priority is None:
-            return
-
-        self.request_rerender(
-            container,
-            priority=priority,
-        )
+        _drain_pending_rerenders(self, container)
 
     def dispatch_commit_render(
         self,
         container: ReconcilerContainer,
     ) -> None:
-        self._request_host_render(container.current_render_priority, immediate=False)
+        _dispatch_commit_render(self, container)
 
     def _commit_container_update(
         self,
@@ -2105,20 +2078,7 @@ class _Reconciler:
             callback()
 
     def _after_commit(self, container: ReconcilerContainer) -> None:
-        dom_container = container.container
-        if callable(dom_container.on_compute_layout):
-            dom_container.on_compute_layout()
-        elif dom_container.yoga_node:
-            self._calculate_layout(dom_container)
-
-        emitLayoutListeners(dom_container)
-
-        if dom_container.is_static_dirty:
-            dom_container.is_static_dirty = False
-            self._request_host_render(container.current_render_priority, immediate=True)
-            return
-
-        self._request_host_render(container.current_render_priority, immediate=False)
+        _after_commit_work(self, container)
 
     def _request_host_render(
         self,
@@ -2126,17 +2086,7 @@ class _Reconciler:
         *,
         immediate: bool,
     ) -> None:
-        if self._host_config is not None:
-            self._host_config.request_render(priority, immediate)
-            return
-
-        if immediate:
-            if self._on_immediate_commit is not None:
-                self._on_immediate_commit()
-            return
-
-        if self._on_commit is not None:
-            self._on_commit()
+        _request_host_render_impl(self, priority, immediate=immediate)
 
     def _reconcile_children(
         self,
@@ -2475,9 +2425,7 @@ class _Reconciler:
         if self._next_devtools_host_instance_ids is not None:
             self._next_devtools_host_instance_ids[id(dom_node)] = host_node_id
 
-        new_host_context = {
-            "is_inside_text": actual_type in ("ink-text", "ink-virtual-text")
-        }
+        new_host_context = getChildHostContext(self._host_context_stack[-1], actual_type)
         self._host_context_stack.append(new_host_context)
         try:
             next_child_index = self._reconcile_children(
