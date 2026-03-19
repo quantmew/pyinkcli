@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pyinkcli"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Python fork and translation of Ink for building terminal UIs"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"
 authors = [
-    { name = "pyinkcli contributors" }
+    { name = "Quantmew Contributors" }
 ]
 keywords = [
     "cli",
@@ -51,10 +51,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ink-python/ink-python"
-Documentation = "https://github.com/ink-python/ink-python#readme"
-Repository = "https://github.com/ink-python/ink-python"
-Issues = "https://github.com/ink-python/ink-python/issues"
+Homepage = "https://github.com/quantmew/pyinkcli"
+Documentation = "https://github.com/quantmew/pyinkcli#readme"
+Repository = "https://github.com/quantmew/pyinkcli"
+Issues = "https://github.com/quantmew/pyinkcli/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pyinkcli"]
@@ -68,6 +68,9 @@ include = [
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.hatch.version]
+path = "src/pyinkcli/__init__.py"
 
 [tool.ruff]
 line-length = 100

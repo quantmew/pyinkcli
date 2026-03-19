@@ -27,7 +27,12 @@ from typing import (
 from pyinkcli._component_runtime import createElement, scopeRender
 from pyinkcli.components._accessibility_runtime import _provide_accessibility
 from pyinkcli.components._app_context_runtime import Props as AppContextProps
-from pyinkcli.packages.ink.dom import DOMElement, createNode
+from pyinkcli.packages.react_dom.client import (
+    RenderResult,
+    createRootNode,
+    render as render_dom,
+)
+from pyinkcli.packages.react_dom.host import DOMElement
 from pyinkcli.hooks.use_app import _set_app_ink
 from pyinkcli.hooks.use_input import _dispatch_input, _clear_input_handlers
 from pyinkcli.hooks._runtime import (
@@ -39,9 +44,8 @@ from pyinkcli.hooks.use_stdin import _set_stdin, useStdin
 from pyinkcli.hooks.use_stdout import _emit_stdout_resize, _set_stdout
 from pyinkcli.hooks.use_stderr import _set_stderr
 from pyinkcli.input_parser import InputParser
-from pyinkcli.packages.react_reconciler.ReactFiberConfig import ReconcilerHostConfig
+from pyinkcli.packages.react_dom.host_config import ReconcilerHostConfig
 from pyinkcli.packages.react_reconciler.ReactFiberReconciler import createReconciler
-from pyinkcli.packages.ink.renderer import render as render_dom, RenderResult
 from pyinkcli.log_update import LogUpdate
 from pyinkcli.sanitize_ansi import sanitizeAnsi
 from pyinkcli.utils import getWindowSize
@@ -58,7 +62,7 @@ from pyinkcli.utils.ansi_escapes import (
 )
 from pyinkcli.instances import instances
 from pyinkcli.patch_console import patch_console
-from pyinkcli.packages.react_devtools_core.backend import initializeDevtools
+from pyinkcli.packages.react_devtools_core.backend import initializeBackend
 
 if TYPE_CHECKING:
     from pyinkcli.component import RenderableNode
@@ -227,7 +231,7 @@ class Ink:
         self._stdin_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
         # Create root node
-        self._root_node = createNode("ink-root")
+        self._root_node = createRootNode()
 
         # Set up render throttling
         render_throttle_ms = (

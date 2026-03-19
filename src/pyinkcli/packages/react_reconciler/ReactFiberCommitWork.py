@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pyinkcli.packages.ink.dom import emitLayoutListeners
+from pyinkcli.packages.react_dom.host import emitLayoutListeners
 from pyinkcli.packages.react_reconciler.ReactEventPriorities import UpdatePriority
 
 if TYPE_CHECKING:
@@ -49,4 +49,3 @@ def afterCommit(reconciler: "_Reconciler", container: "ReconcilerContainer") -> 
 
 
 __all__ = ["afterCommit", "requestHostRender"]
-

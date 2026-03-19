@@ -2,9 +2,9 @@
 
 from pyinkcli.packages.react_devtools_core.backend import (
     CURRENT_BRIDGE_PROTOCOL,
-    createDevtoolsBackendFacade,
-    initializeDevtools,
-    isDevToolsReachable,
+    createBackend,
+    initializeBackend,
+    isBackendReachable,
 )
 from pyinkcli.packages.react_devtools_core.hydration import (
     dispatch_bridge_message,
@@ -21,12 +21,12 @@ from pyinkcli.packages.react_devtools_core.window_polyfill import (
 
 __all__ = [
     "CURRENT_BRIDGE_PROTOCOL",
-    "createDevtoolsBackendFacade",
+    "createBackend",
     "dispatch_bridge_message",
     "handle_inspect_element_bridge_call",
-    "initializeDevtools",
+    "initializeBackend",
     "installDevtoolsWindowPolyfill",
-    "isDevToolsReachable",
+    "isBackendReachable",
     "make_bridge_call",
     "make_bridge_notification",
     "make_bridge_success_response",

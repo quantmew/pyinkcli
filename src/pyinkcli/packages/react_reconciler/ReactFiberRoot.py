@@ -6,7 +6,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from pyinkcli.packages.ink.dom import DOMElement
+from pyinkcli.packages.react_dom.host import DOMElement
 from pyinkcli.packages.react_reconciler.ReactEventPriorities import UpdatePriority
 
 
@@ -26,4 +26,3 @@ class ReconcilerContainer:
 
 
 __all__ = ["ReconcilerContainer"]
-

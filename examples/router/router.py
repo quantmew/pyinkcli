@@ -1,21 +1,20 @@
-"""
-Router example for pyinkcli.
+"""Strict structure port of `js_source/ink/examples/router/router.tsx`."""
 
-Simple in-memory route switching inspired by js_source/ink/examples/router/router.tsx
-"""
-
-from pyinkcli import render, Box, Text, useInput, useApp
+from pyinkcli import Box, Text, render, useApp, useInput
 from pyinkcli.component import createElement
+from pyinkcli.packages.react_router import MemoryRouter, Routes, Route, useNavigate
 
 
-def Home(*, set_route):
-    app = useApp()
+def Home():
+    exit_ = useApp().exit
+    navigate = useNavigate()
 
-    def handle_input(char, key):
-        if char == "q":
-            app.exit()
+    def handle_input(input_char, key):
+        if input_char == "q":
+            exit_()
+
         if key.return_pressed:
-            set_route("/about")
+            navigate("/about")
 
     useInput(handle_input)
 
@@ -26,14 +25,16 @@ def Home(*, set_route):
     )
 
 
-def About(*, set_route):
-    app = useApp()
+def About():
+    exit_ = useApp().exit
+    navigate = useNavigate()
 
-    def handle_input(char, key):
-        if char == "q":
-            app.exit()
+    def handle_input(input_char, key):
+        if input_char == "q":
+            exit_()
+
         if key.return_pressed:
-            set_route("/")
+            navigate("/")
 
     useInput(handle_input)
 
@@ -44,17 +45,16 @@ def About(*, set_route):
     )
 
 
-def router_example():
-    """Render a tiny two-page router demo."""
-    from pyinkcli.hooks import useState
-
-    route, set_route = useState("/")
-
-    if route == "/":
-        return createElement(Home, set_route=set_route)
-
-    return createElement(About, set_route=set_route)
+def App():
+    return createElement(
+        MemoryRouter,
+        createElement(
+            Routes,
+            createElement(Route, path="/", element=createElement(Home)),
+            createElement(Route, path="/about", element=createElement(About)),
+        ),
+    )
 
 
 if __name__ == "__main__":
-    render(router_example).wait_until_exit()
+    render(createElement(App)).wait_until_exit()

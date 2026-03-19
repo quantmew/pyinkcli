@@ -13,27 +13,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from pyinkcli.packages.ink.output import Output
-from pyinkcli.packages.ink.render_node_to_output import renderNodeToOutput
+from pyinkcli.packages.react_dom.client import Output, createRootNode, renderNodeToOutput
 from pyinkcli.packages.react_reconciler.ReactFiberReconciler import createReconciler
-from pyinkcli._yoga import Node, DIRECTION_LTR, UNDEFINED
 from pyinkcli.hooks._runtime import _clear_hook_state
 
 if TYPE_CHECKING:
     from pyinkcli.component import RenderableNode
-    from pyinkcli.packages.ink.dom import DOMElement
+    from pyinkcli.packages.react_dom.host import DOMElement
 
 
 def create_root_node(columns: int, rows: int) -> "DOMElement":
     """Create a root DOM element for rendering."""
-    from pyinkcli.packages.ink.dom import createNode
-
-    root = createNode("ink-root")
-    root.yoga_node = Node.create()
-    # Set both width and height - Yoga requires explicit dimensions
-    root.yoga_node.set_width(columns)
-    root.yoga_node.set_height(rows)
-    return root
+    return createRootNode(columns=columns, rows=rows)
 
 
 def renderToString(

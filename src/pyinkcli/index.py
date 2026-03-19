@@ -21,7 +21,7 @@ from pyinkcli.hooks.use_cursor import useCursor
 from pyinkcli.hooks.use_window_size import useWindowSize
 from pyinkcli.hooks.use_box_metrics import useBoxMetrics
 from pyinkcli.measure_element import measureElement
-from pyinkcli.packages.ink.dom import DOMElement
+from pyinkcli.packages.react_dom.host import DOMElement
 from pyinkcli.kitty_keyboard import kittyFlags, kittyModifiers
 
 __all__ = [

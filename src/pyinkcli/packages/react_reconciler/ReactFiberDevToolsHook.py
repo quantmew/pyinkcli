@@ -10,10 +10,10 @@ if TYPE_CHECKING:
 
 def injectIntoDevTools(reconciler: "_Reconciler", package_info: dict[str, str]) -> bool:
     """Register the renderer with the devtools bridge."""
-    from pyinkcli.devtools import createDevtoolsBackendFacade, initializeDevtools
-    from pyinkcli.devtools_window_polyfill import installDevtoolsWindowPolyfill
+    from pyinkcli.packages.react_devtools_core.backend import createBackend, initializeBackend
+    from pyinkcli.packages.react_devtools_core.window_polyfill import installDevtoolsWindowPolyfill
 
-    if not initializeDevtools():
+    if not initializeBackend():
         return False
 
     global_scope = installDevtoolsWindowPolyfill()
@@ -29,49 +29,50 @@ def injectIntoDevTools(reconciler: "_Reconciler", package_info: dict[str, str]) 
             "supportsCommitPhaseErrorRecovery": True,
         },
         "supportsTogglingSuspense": True,
-        "getDisplayNameForNode": reconciler.getDevtoolsDisplayName,
-        "getDisplayNameForElementID": reconciler.getDevtoolsDisplayName,
-        "getTreeSnapshot": reconciler.getDevtoolsTreeSnapshot,
+        "getDisplayNameForNode": reconciler.getDisplayNameForNode,
+        "getTreeSnapshot": reconciler.getTreeSnapshot,
         "getRootID": lambda: reconciler._devtools_tree_snapshot["rootID"],
-        "inspectElement": reconciler.inspectDevtoolsElement,
-        "inspectScreen": reconciler.inspectDevtoolsScreen,
-        "getSerializedElementValueByPath": reconciler.getSerializedDevtoolsElementValueByPath,
-        "getElementValueByPath": reconciler.getDevtoolsElementValueByPath,
-        "getElementAttributeByPath": reconciler.getDevtoolsElementAttributeByPath,
-        "getProfilingData": reconciler.getDevtoolsProfilingData,
-        "getPathForElement": reconciler.getDevtoolsPathForElement,
-        "getOwnersList": reconciler.getDevtoolsOwnersList,
-        "getElementIDForHostInstance": reconciler.getDevtoolsElementIDForHostInstance,
-        "getSuspenseNodeIDForHostInstance": reconciler.getDevtoolsSuspenseNodeIDForHostInstance,
-        "overrideError": reconciler.overrideDevtoolsError,
-        "overrideSuspense": reconciler.overrideDevtoolsSuspense,
-        "overrideSuspenseMilestone": reconciler.overrideDevtoolsSuspenseMilestone,
-        "overrideProps": reconciler.overrideDevtoolsProps,
-        "overridePropsDeletePath": reconciler.deleteDevtoolsPropsPath,
-        "overridePropsRenamePath": reconciler.renameDevtoolsPropsPath,
-        "overrideHookState": reconciler.overrideDevtoolsHookState,
-        "overrideHookStateDeletePath": reconciler.deleteDevtoolsHookStatePath,
-        "overrideHookStateRenamePath": reconciler.renameDevtoolsHookStatePath,
-        "overrideValueAtPath": reconciler.overrideDevtoolsValueAtPath,
-        "deletePath": reconciler.deleteDevtoolsPath,
-        "renamePath": reconciler.renameDevtoolsPath,
-        "scheduleUpdate": reconciler.scheduleDevtoolsUpdate,
-        "scheduleRetry": reconciler.scheduleDevtoolsRetry,
-        "clearErrorsAndWarnings": reconciler.clearDevtoolsErrorsAndWarnings,
-        "clearErrorsForElementID": reconciler.clearDevtoolsErrorsForElement,
-        "clearWarningsForElementID": reconciler.clearDevtoolsWarningsForElement,
-        "copyElementPath": reconciler.copyDevtoolsElementPath,
-        "storeAsGlobal": reconciler.storeDevtoolsValueAsGlobal,
-        "getLastCopiedValue": reconciler.getDevtoolsLastCopiedValue,
-        "getLastLoggedElement": reconciler.getDevtoolsLastLoggedElement,
-        "getTrackedPath": reconciler.getDevtoolsTrackedPath,
-        "getStoredGlobals": reconciler.getDevtoolsStoredGlobals,
-        "getBackendNotificationLog": reconciler.getDevtoolsBackendNotificationLog,
-        "logElementToConsole": reconciler.logDevtoolsElementToConsole,
-        "setTrackedPath": reconciler.setDevtoolsTrackedPath,
+        "inspectElement": reconciler.inspectElement,
+        "inspectScreen": reconciler.inspectScreen,
+        "getSerializedElementValueByPath": reconciler.getSerializedElementValueByPath,
+        "getElementValueByPath": reconciler.getElementValueByPath,
+        "getElementAttributeByPath": reconciler.getElementAttributeByPath,
+        "getProfilingData": reconciler.getProfilingData,
+        "getPathForElement": reconciler.getPathForElement,
+        "getOwnersList": reconciler.getOwnersList,
+        "getElementIDForHostInstance": reconciler.getElementIDForHostInstance,
+        "getSuspenseNodeIDForHostInstance": reconciler.getSuspenseNodeIDForHostInstance,
+        "overrideError": reconciler.overrideError,
+        "overrideSuspense": reconciler.overrideSuspense,
+        "overrideSuspenseMilestone": reconciler.overrideSuspenseMilestone,
+        "overrideProps": reconciler.overrideProps,
+        "overridePropsDeletePath": reconciler.overridePropsDeletePath,
+        "overridePropsRenamePath": reconciler.overridePropsRenamePath,
+        "overrideHookState": reconciler.overrideHookState,
+        "overrideHookStateDeletePath": reconciler.overrideHookStateDeletePath,
+        "overrideHookStateRenamePath": reconciler.overrideHookStateRenamePath,
+        "overrideValueAtPath": reconciler.overrideValueAtPath,
+        "deletePath": reconciler.deletePath,
+        "renamePath": reconciler.renamePath,
+        "scheduleUpdate": reconciler.scheduleUpdate,
+        "scheduleRetry": reconciler.scheduleRetry,
+        "clearErrorsAndWarnings": reconciler.clearErrorsAndWarnings,
+        "clearErrorsForElementID": reconciler.clearErrorsForElementID,
+        "clearWarningsForElementID": reconciler.clearWarningsForElementID,
+        "copyElementPath": reconciler.copyElementPath,
+        "storeAsGlobal": reconciler.storeAsGlobal,
+        "getLastCopiedValue": reconciler.getLastCopiedValue,
+        "getLastLoggedElement": reconciler.getLastLoggedElement,
+        "getTrackedPath": reconciler.getTrackedPath,
+        "getStoredGlobals": reconciler.getStoredGlobals,
+        "getBackendNotificationLog": reconciler.getBackendNotificationLog,
+        "logElementToConsole": reconciler.logElementToConsole,
+        "setTrackedPath": reconciler.setTrackedPath,
     }
-    renderer_interface["backendFacade"] = createDevtoolsBackendFacade(renderer_interface)
-    renderer_interface["dispatchBridgeMessage"] = renderer_interface["backendFacade"]["dispatchMessage"]
+    renderer_interface["backend"] = createBackend(renderer_interface)
+    renderer_interface["dispatchBridgeMessage"] = renderer_interface["backend"][
+        "dispatchBridgeMessage"
+    ]
     global_scope["__INK_RECONCILER_DEVTOOLS_METADATA__"] = renderer_interface
     global_scope["__INK_DEVTOOLS_RENDERERS__"][id(reconciler)] = renderer_interface
     return True

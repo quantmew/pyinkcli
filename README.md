@@ -9,7 +9,7 @@
 
 > A Python fork and translation project of [Ink](https://github.com/vadimdemedes/ink) for building terminal UIs with a React-like component model.
 
-`pyinkcli` is a Python implementation inspired by and translated from Ink. The upstream JavaScript source used for reference is vendored in [`js_source/ink`](js_source/ink). This repository is a fork, not the official Node.js package, and the API is adapted for Python where needed.
+`pyinkcli` is a Python implementation inspired by and translated from Ink. This repository is a fork, not the official Node.js package, and the API is adapted for Python where needed.
 
 <div align="center">
 	<img src="media/demo.svg" width="640" alt="Ink demo">

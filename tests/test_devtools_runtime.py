@@ -13,7 +13,10 @@ from unittest.mock import patch
 from pyinkcli import Text, render
 from pyinkcli._component_runtime import _Component
 from pyinkcli.component import createElement
-from pyinkcli.devtools_hydration import make_bridge_call, make_bridge_notification
+from pyinkcli.packages.react_devtools_core.hydration import (
+    make_bridge_call,
+    make_bridge_notification,
+)
 from pyinkcli.hooks import useState
 from pyinkcli.suspense_runtime import SuspendSignal
 
@@ -106,7 +109,7 @@ def test_inject_into_devtools_registers_renderer_metadata_and_tree_snapshot() ->
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             assert app._reconciler.injectIntoDevTools() is True
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -153,7 +156,7 @@ def test_devtools_override_props_and_schedule_update_rerenders_function_componen
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -181,7 +184,7 @@ def test_devtools_can_rename_and_delete_props_before_scheduling_update() -> None
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -213,7 +216,7 @@ def test_devtools_override_hook_state_and_schedule_update_rerenders_hooks_compon
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -241,7 +244,7 @@ def test_devtools_can_rename_and_delete_nested_hook_state_paths() -> None:
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -288,7 +291,7 @@ def test_devtools_schedule_retry_rerenders_suspense_boundary() -> None:
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -333,7 +336,7 @@ def test_devtools_inspect_element_returns_props_state_and_hooks_payloads() -> No
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -380,7 +383,7 @@ def test_devtools_can_edit_class_state_via_generic_value_path_api() -> None:
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -436,7 +439,7 @@ def test_devtools_override_suspense_uses_nearest_boundary_from_selected_child() 
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -487,7 +490,7 @@ def test_devtools_override_error_uses_nearest_boundary_from_selected_child() -> 
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -526,7 +529,7 @@ def test_devtools_inspect_element_includes_owners_source_and_stack_metadata() ->
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -563,7 +566,7 @@ def test_devtools_inspect_element_supports_no_change_and_hydrated_path_responses
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -605,7 +608,7 @@ def test_devtools_hooks_hydration_keeps_hook_shell_but_dehydrates_nested_values(
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -662,7 +665,7 @@ def test_devtools_suspended_by_hydration_preserves_meta_and_dehydrates_deep_valu
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -706,7 +709,7 @@ def test_devtools_special_number_values_use_cleaned_transport_placeholders() -> 
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -748,7 +751,7 @@ def test_devtools_date_regexp_symbol_and_iterator_preview_metadata_matches_trans
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -794,7 +797,7 @@ def test_devtools_typed_array_data_view_array_buffer_thenable_and_lazy_previews(
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -847,7 +850,7 @@ def test_devtools_tail_marker_type_and_legacy_lazy_previews_match_transport_type
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -883,15 +886,15 @@ def test_devtools_backend_facade_dispatches_inspect_and_edit_requests() -> None:
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
-        backend = renderer["backendFacade"]
+        backend = renderer["backend"]
         snapshot = renderer["getTreeSnapshot"]()
         label_node = next(node for node in snapshot["nodes"] if node["displayName"] == "EditableLabel")
 
-        inspect_element_response = backend["dispatchMessage"](
+        inspect_element_response = backend["dispatchBridgeMessage"](
             make_bridge_call(
                 "inspectElement",
                 {
@@ -907,7 +910,7 @@ def test_devtools_backend_facade_dispatches_inspect_and_edit_requests() -> None:
         assert inspect_element_response["payload"]["type"] == "full-data"
         assert inspect_element_response["payload"]["value"]["props"]["data"]["value"] == "before"
 
-        inspect_screen_response = backend["dispatchMessage"](
+        inspect_screen_response = backend["dispatchBridgeMessage"](
             make_bridge_call(
                 "inspectScreen",
                 {
@@ -920,7 +923,7 @@ def test_devtools_backend_facade_dispatches_inspect_and_edit_requests() -> None:
         assert inspect_screen_response["payload"]["ok"] is True
         assert inspect_screen_response["payload"]["id"] == "root"
 
-        override_response = backend["dispatchMessage"](
+        override_response = backend["dispatchBridgeMessage"](
             make_bridge_call(
                 "overrideValueAtPath",
                 {
@@ -935,7 +938,7 @@ def test_devtools_backend_facade_dispatches_inspect_and_edit_requests() -> None:
         assert override_response["payload"]["ok"] is True
         assert override_response["payload"]["value"] is True
 
-        update_response = backend["dispatchMessage"](
+        update_response = backend["dispatchBridgeMessage"](
             make_bridge_call(
                 "scheduleUpdate",
                 {
@@ -963,17 +966,17 @@ def test_devtools_backend_facade_dispatches_backend_notifications_to_reconciler(
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
         renderer = global_scope["__INK_RECONCILER_DEVTOOLS_METADATA__"]
-        backend = renderer["backendFacade"]
+        backend = renderer["backend"]
         snapshot = renderer["getTreeSnapshot"]()
         carrier_node = next(node for node in snapshot["nodes"] if node["displayName"] == "Carrier")
         renderer_id = id(app._reconciler)
 
-        backend["dispatchMessage"](
+        backend["dispatchBridgeMessage"](
             make_bridge_notification(
                 "copyElementPath",
                 {
@@ -986,7 +989,7 @@ def test_devtools_backend_facade_dispatches_backend_notifications_to_reconciler(
         assert renderer["getLastCopiedValue"]() == '"alpha"'
         assert global_scope["__INK_DEVTOOLS_LAST_COPIED_VALUE__"] == '"alpha"'
 
-        backend["dispatchMessage"](
+        backend["dispatchBridgeMessage"](
             make_bridge_notification(
                 "storeAsGlobal",
                 {
@@ -1000,7 +1003,7 @@ def test_devtools_backend_facade_dispatches_backend_notifications_to_reconciler(
         assert renderer["getStoredGlobals"]()["$reactTemp5"] == "alpha"
         assert global_scope["$reactTemp5"] == "alpha"
 
-        backend["dispatchMessage"](
+        backend["dispatchBridgeMessage"](
             make_bridge_notification(
                 "clearErrorsAndWarnings",
                 {
@@ -1008,7 +1011,7 @@ def test_devtools_backend_facade_dispatches_backend_notifications_to_reconciler(
                 },
             )
         )
-        backend["dispatchMessage"](
+        backend["dispatchBridgeMessage"](
             make_bridge_notification(
                 "clearWarningsForElementID",
                 {
@@ -1025,7 +1028,7 @@ def test_devtools_backend_facade_dispatches_backend_notifications_to_reconciler(
             "clearErrorsAndWarnings",
             "clearWarningsForElementID",
         ]
-        assert backend["state"]["lastNotification"]["event"] == "clearWarningsForElementID"
+        assert backend["backendState"]["lastNotification"]["event"] == "clearWarningsForElementID"
     finally:
         app.unmount()
 
@@ -1058,16 +1061,16 @@ def test_devtools_backend_facade_supports_legacy_override_message_types() -> Non
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
-        backend = renderer["backendFacade"]
+        backend = renderer["backend"]
         snapshot = renderer["getTreeSnapshot"]()
         stateful_node = next(node for node in snapshot["nodes"] if node["displayName"] == "StatefulLabel")
         counter_node = next(node for node in snapshot["nodes"] if node["displayName"] == "Counter")
 
-        props_response = backend["dispatchMessage"](
+        props_response = backend["dispatchBridgeMessage"](
             make_bridge_call(
                 "overrideProps",
                 {
@@ -1077,7 +1080,7 @@ def test_devtools_backend_facade_supports_legacy_override_message_types() -> Non
                 },
             )
         )
-        hook_response = backend["dispatchMessage"](
+        hook_response = backend["dispatchBridgeMessage"](
             make_bridge_call(
                 "overrideHookState",
                 {
@@ -1088,7 +1091,7 @@ def test_devtools_backend_facade_supports_legacy_override_message_types() -> Non
                 },
             )
         )
-        state_response = backend["dispatchMessage"](
+        state_response = backend["dispatchBridgeMessage"](
             make_bridge_call(
                 "overrideState",
                 {
@@ -1106,13 +1109,13 @@ def test_devtools_backend_facade_supports_legacy_override_message_types() -> Non
         assert state_response["payload"]["ok"] is True
         assert state_response["payload"]["value"] is True
 
-        backend["dispatchMessage"](make_bridge_call("scheduleUpdate", {"id": stateful_node["id"]}))
-        backend["dispatchMessage"](make_bridge_call("scheduleUpdate", {"id": counter_node["id"]}))
+        backend["dispatchBridgeMessage"](make_bridge_call("scheduleUpdate", {"id": stateful_node["id"]}))
+        backend["dispatchBridgeMessage"](make_bridge_call("scheduleUpdate", {"id": counter_node["id"]}))
         app.wait_until_render_flush(timeout=0.2)
 
         assert stdout.getvalue().endswith("after|omega\ncount:5")
 
-        skipped_response = backend["dispatchMessage"](
+        skipped_response = backend["dispatchBridgeMessage"](
             make_bridge_call(
                 "overrideProps",
                 {
@@ -1126,7 +1129,7 @@ def test_devtools_backend_facade_supports_legacy_override_message_types() -> Non
         assert skipped_response["payload"]["ok"] is True
         assert skipped_response["payload"]["value"] is False
 
-        backend["dispatchMessage"](make_bridge_call("scheduleUpdate", {"id": stateful_node["id"]}))
+        backend["dispatchBridgeMessage"](make_bridge_call("scheduleUpdate", {"id": stateful_node["id"]}))
         app.wait_until_render_flush(timeout=0.2)
         assert stdout.getvalue().endswith("after|omega\ncount:5")
     finally:
@@ -1161,17 +1164,17 @@ def test_devtools_backend_facade_supports_override_suspense_milestone_notificati
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
         renderer = global_scope["__INK_RECONCILER_DEVTOOLS_METADATA__"]
-        backend = renderer["backendFacade"]
+        backend = renderer["backend"]
         snapshot = renderer["getTreeSnapshot"]()
         suspense_nodes = [node for node in snapshot["nodes"] if node["displayName"] == "Suspense"]
         renderer_id = id(app._reconciler)
 
-        backend["dispatchMessage"](
+        backend["dispatchBridgeMessage"](
             make_bridge_notification(
                 "overrideSuspenseMilestone",
                 {
@@ -1183,7 +1186,7 @@ def test_devtools_backend_facade_supports_override_suspense_milestone_notificati
         app.wait_until_render_flush(timeout=0.2)
         assert stdout.getvalue().endswith("loading-a\n|\nB")
 
-        backend["dispatchMessage"](
+        backend["dispatchBridgeMessage"](
             make_bridge_notification(
                 "overrideSuspenseMilestone",
                 {
@@ -1195,7 +1198,7 @@ def test_devtools_backend_facade_supports_override_suspense_milestone_notificati
         app.wait_until_render_flush(timeout=0.2)
         assert stdout.getvalue().endswith("A\n|\nloading-b")
 
-        backend["dispatchMessage"](
+        backend["dispatchBridgeMessage"](
             make_bridge_notification(
                 "overrideSuspenseMilestone",
                 {
@@ -1210,7 +1213,7 @@ def test_devtools_backend_facade_supports_override_suspense_milestone_notificati
         log = renderer["getBackendNotificationLog"]()
         assert log[-1]["event"] == "overrideSuspenseMilestone"
         assert log[-1]["suspendedSet"] == []
-        assert backend["state"]["lastNotification"]["event"] == "overrideSuspenseMilestone"
+        assert backend["backendState"]["lastNotification"]["event"] == "overrideSuspenseMilestone"
     finally:
         app.unmount()
 
@@ -1253,20 +1256,20 @@ def test_devtools_backend_facade_inspect_screen_merges_roots_across_renderers() 
         app_a.wait_until_render_flush(timeout=0.2)
         app_b.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app_a._reconciler.injectIntoDevTools()
             app_b._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
         renderer_a = global_scope["__INK_RECONCILER_DEVTOOLS_METADATA__"]
-        backend = renderer_a["backendFacade"]
+        backend = renderer_a["backend"]
         original_renderers = dict(global_scope["__INK_DEVTOOLS_RENDERERS__"])
         global_scope["__INK_DEVTOOLS_RENDERERS__"] = {
             id(app_a._reconciler): original_renderers[id(app_a._reconciler)],
             id(app_b._reconciler): original_renderers[id(app_b._reconciler)],
         }
         try:
-            response = backend["dispatchMessage"](
+            response = backend["dispatchBridgeMessage"](
                 make_bridge_call(
                     "inspectScreen",
                     {
@@ -1281,7 +1284,7 @@ def test_devtools_backend_facade_inspect_screen_merges_roots_across_renderers() 
             suspended_by = response["payload"]["value"]["suspendedBy"]
             assert len(suspended_by["data"]) == 2
 
-            hydrated = backend["dispatchMessage"](
+            hydrated = backend["dispatchBridgeMessage"](
                 make_bridge_call(
                     "inspectScreen",
                     {
@@ -1312,12 +1315,12 @@ def test_devtools_backend_facade_exposes_agent_style_methods() -> None:
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
         renderer = global_scope["__INK_RECONCILER_DEVTOOLS_METADATA__"]
-        backend = renderer["backendFacade"]
+        backend = renderer["backend"]
         snapshot = renderer["getTreeSnapshot"]()
         label_node = next(node for node in snapshot["nodes"] if node["displayName"] == "EditableLabel")
         renderer_id = id(app._reconciler)
@@ -1360,7 +1363,7 @@ def test_devtools_backend_facade_exposes_agent_style_methods() -> None:
         )
         assert notification_result is None
         assert renderer["getLastCopiedValue"]() == '"after"'
-        assert backend["state"]["lastNotification"]["event"] == "copyElementPath"
+        assert backend["backendState"]["lastNotification"]["event"] == "copyElementPath"
     finally:
         app.unmount()
 
@@ -1379,12 +1382,12 @@ def test_devtools_backend_facade_exposes_agent_metadata_and_logging_methods() ->
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
         renderer = global_scope["__INK_RECONCILER_DEVTOOLS_METADATA__"]
-        backend = renderer["backendFacade"]
+        backend = renderer["backend"]
         snapshot = renderer["getTreeSnapshot"]()
         child_node = next(node for node in snapshot["nodes"] if node["displayName"] == "Child")
         text_node = next(node for node in snapshot["nodes"] if node["displayName"] == "ink-text")
@@ -1424,7 +1427,7 @@ def test_devtools_backend_facade_exposes_agent_metadata_and_logging_methods() ->
         assert notification_result is None
         assert renderer["getLastLoggedElement"]()["id"] == child_node["id"]
         assert global_scope["__INK_DEVTOOLS_LAST_LOGGED_ELEMENT__"]["id"] == child_node["id"]
-        assert backend["state"]["lastNotification"]["event"] == "logElementToConsole"
+        assert backend["backendState"]["lastNotification"]["event"] == "logElementToConsole"
     finally:
         app.unmount()
 
@@ -1448,12 +1451,12 @@ def test_devtools_backend_facade_exposes_host_instance_and_profiling_methods() -
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
         renderer = global_scope["__INK_RECONCILER_DEVTOOLS_METADATA__"]
-        backend = renderer["backendFacade"]
+        backend = renderer["backend"]
         snapshot = renderer["getTreeSnapshot"]()
         suspense_node = next(node for node in snapshot["nodes"] if node["displayName"] == "Suspense")
         text_node = next(node for node in snapshot["nodes"] if node["displayName"] == "ink-text")
@@ -1496,12 +1499,12 @@ def test_devtools_backend_facade_exposes_profiling_and_selection_methods() -> No
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
         renderer = global_scope["__INK_RECONCILER_DEVTOOLS_METADATA__"]
-        backend = renderer["backendFacade"]
+        backend = renderer["backend"]
         snapshot = renderer["getTreeSnapshot"]()
         child_node = next(node for node in snapshot["nodes"] if node["displayName"] == "Child")
 
@@ -1523,7 +1526,7 @@ def test_devtools_backend_facade_exposes_profiling_and_selection_methods() -> No
         assert renderer["getTrackedPath"]() is None
 
         backend["stopInspectingNative"](True)
-        assert backend["state"]["lastStopInspectingHostSelected"] is True
+        assert backend["backendState"]["lastStopInspectingHostSelected"] is True
         assert global_scope["__INK_DEVTOOLS_STOP_INSPECTING_HOST__"] is True
     finally:
         app.unmount()
@@ -1543,12 +1546,12 @@ def test_devtools_backend_facade_tracks_and_clears_persisted_selection_on_manual
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
         renderer = global_scope["__INK_RECONCILER_DEVTOOLS_METADATA__"]
-        backend = renderer["backendFacade"]
+        backend = renderer["backend"]
         snapshot = renderer["getTreeSnapshot"]()
         child_node = next(node for node in snapshot["nodes"] if node["displayName"] == "Child")
         renderer_id = id(app._reconciler)
@@ -1594,8 +1597,8 @@ def test_devtools_backend_facade_tracks_and_clears_persisted_selection_on_manual
         assert backend["getPersistedSelection"]() is None
         assert backend["getPersistedSelectionMatch"]() is None
         assert renderer["getTrackedPath"]() is None
-        assert backend["state"]["lastSelectedElementID"] == child_node["id"]
-        assert backend["state"]["lastSelectedRendererID"] == renderer_id
+        assert backend["backendState"]["lastSelectedElementID"] == child_node["id"]
+        assert backend["backendState"]["lastSelectedRendererID"] == renderer_id
 
         backend["setPersistedSelection"]({"rendererID": renderer_id, "path": path})
         backend["clearPersistedSelection"]()

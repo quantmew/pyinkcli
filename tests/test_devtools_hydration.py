@@ -14,7 +14,7 @@ import pytest
 
 from pyinkcli import Text, render
 from pyinkcli.component import createElement
-from pyinkcli.devtools_hydration import (
+from pyinkcli.packages.react_devtools_core.hydration import (
     DEVTOOLS_UNDEFINED,
     HydratedDict,
     HydratedList,
@@ -265,7 +265,7 @@ def test_devtools_hydration_helper_upgrades_unserializable_transport_metadata() 
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -338,7 +338,7 @@ def test_devtools_class_instance_transport_matches_hydration_shape() -> None:
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -400,7 +400,7 @@ def test_devtools_hydration_helper_upgrades_cleaned_date_regexp_and_symbol_metad
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -444,7 +444,7 @@ def test_devtools_iterator_transport_matches_set_and_map_like_shapes() -> None:
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -504,7 +504,7 @@ def test_devtools_typed_array_array_buffer_and_data_view_transport_shapes() -> N
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -556,7 +556,7 @@ def test_devtools_thenable_and_react_lazy_transport_shapes() -> None:
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -741,7 +741,7 @@ def test_devtools_tail_marker_types_and_legacy_lazy_payload_transport_shapes() -
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -787,7 +787,7 @@ def test_devtools_hydration_helper_can_fill_in_hydrated_paths() -> None:
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.packages.react_devtools_core.backend.initializeBackend", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]

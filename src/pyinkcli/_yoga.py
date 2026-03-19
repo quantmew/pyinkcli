@@ -7,11 +7,16 @@ Provides a consistent API matching the project's original yoga implementation.
 from __future__ import annotations
 
 import math
+import importlib
 from typing import TYPE_CHECKING, Callable, Optional
 
 import yoga
 from yoga import Config as YogaConfig
 from yoga import Node as YogaNode
+
+_yoga_style_module = importlib.import_module("yoga.style.Style")
+if not hasattr(_yoga_style_module, "maxOrDefined") and hasattr(_yoga_style_module, "maxOrDefinedFloat"):
+    _yoga_style_module.maxOrDefined = _yoga_style_module.maxOrDefinedFloat
 
 if TYPE_CHECKING:
     pass

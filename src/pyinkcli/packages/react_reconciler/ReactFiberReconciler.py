@@ -11,7 +11,7 @@ from pyinkcli.hooks._runtime import (
     _consume_pending_rerender_priority,
     _discrete_updates_runtime,
 )
-from pyinkcli.packages.ink.dom import DOMElement
+from pyinkcli.packages.react_dom.host import DOMElement
 from pyinkcli.packages.react_reconciler.ReactEventPriorities import UpdatePriority
 
 if TYPE_CHECKING:
@@ -106,4 +106,3 @@ __all__ = [
     "loadPackageJson",
     "packageInfo",
 ]
-
