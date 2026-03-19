@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pyinkcli.dom import DOMElement
+    from pyinkcli.packages.ink.dom import DOMElement
 
 
 @dataclass

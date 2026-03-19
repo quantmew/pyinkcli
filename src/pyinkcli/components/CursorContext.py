@@ -27,4 +27,4 @@ def _provide_cursor_context(value: Any) -> Generator[None, None, None]:
         CursorContext.reset(token)
 
 
-__all__ = ["CursorContext", "Props"]
+__all__ = ["CursorContext"]

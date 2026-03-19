@@ -10,7 +10,7 @@ from functools import lru_cache
 from typing import Literal
 
 from pyinkcli.sanitize_ansi import sanitizeAnsi
-from pyinkcli.styles import TextWrap
+from pyinkcli.packages.ink.styles import TextWrap
 from pyinkcli.utils.wrap_ansi import wrap_ansi, truncate_string
 
 

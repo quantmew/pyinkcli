@@ -37,4 +37,4 @@ def _provide_focus_context(value: Any) -> Generator[None, None, None]:
         FocusContext.reset(token)
 
 
-__all__ = ["FocusContext", "Props"]
+__all__ = ["FocusContext"]

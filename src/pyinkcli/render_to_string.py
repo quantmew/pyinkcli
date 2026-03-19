@@ -13,20 +13,20 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from pyinkcli.output import Output
-from pyinkcli.render_node_to_output import renderNodeToOutput
+from pyinkcli.packages.ink.output import Output
+from pyinkcli.packages.ink.render_node_to_output import renderNodeToOutput
+from pyinkcli.packages.react_reconciler.ReactFiberReconciler import createReconciler
 from pyinkcli._yoga import Node, DIRECTION_LTR, UNDEFINED
 from pyinkcli.hooks._runtime import _clear_hook_state
-from pyinkcli.reconciler import createReconciler
 
 if TYPE_CHECKING:
     from pyinkcli.component import RenderableNode
-    from pyinkcli.dom import DOMElement
+    from pyinkcli.packages.ink.dom import DOMElement
 
 
 def create_root_node(columns: int, rows: int) -> "DOMElement":
     """Create a root DOM element for rendering."""
-    from pyinkcli.dom import createNode
+    from pyinkcli.packages.ink.dom import createNode
 
     root = createNode("ink-root")
     root.yoga_node = Node.create()

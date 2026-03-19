@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Callable, Optional
 
 from pyinkcli.hooks._runtime import useEffect
-from pyinkcli.reconciler import discreteUpdates
+from pyinkcli.packages.react_reconciler.ReactFiberReconciler import discreteUpdates
 from pyinkcli.hooks.use_stdin import useStdin
 
 

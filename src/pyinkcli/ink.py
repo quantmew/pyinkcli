@@ -27,7 +27,7 @@ from typing import (
 from pyinkcli._component_runtime import createElement, scopeRender
 from pyinkcli.components._accessibility_runtime import _provide_accessibility
 from pyinkcli.components._app_context_runtime import Props as AppContextProps
-from pyinkcli.dom import DOMElement, createNode
+from pyinkcli.packages.ink.dom import DOMElement, createNode
 from pyinkcli.hooks.use_app import _set_app_ink
 from pyinkcli.hooks.use_input import _dispatch_input, _clear_input_handlers
 from pyinkcli.hooks._runtime import (
@@ -39,8 +39,9 @@ from pyinkcli.hooks.use_stdin import _set_stdin, useStdin
 from pyinkcli.hooks.use_stdout import _emit_stdout_resize, _set_stdout
 from pyinkcli.hooks.use_stderr import _set_stderr
 from pyinkcli.input_parser import InputParser
-from pyinkcli.reconciler import ReconcilerHostConfig, createReconciler
-from pyinkcli.renderer import render as render_dom, RenderResult
+from pyinkcli.packages.react_reconciler.ReactFiberConfig import ReconcilerHostConfig
+from pyinkcli.packages.react_reconciler.ReactFiberReconciler import createReconciler
+from pyinkcli.packages.ink.renderer import render as render_dom, RenderResult
 from pyinkcli.log_update import LogUpdate
 from pyinkcli.sanitize_ansi import sanitizeAnsi
 from pyinkcli.utils import getWindowSize
@@ -57,10 +58,12 @@ from pyinkcli.utils.ansi_escapes import (
 )
 from pyinkcli.instances import instances
 from pyinkcli.patch_console import patch_console
-from pyinkcli.devtools import initializeDevtools
+from pyinkcli.packages.react_devtools_core.backend import initializeDevtools
 
 if TYPE_CHECKING:
     from pyinkcli.component import RenderableNode
+
+
 @dataclass
 class RenderMetrics:
     """Performance metrics for a render operation."""
