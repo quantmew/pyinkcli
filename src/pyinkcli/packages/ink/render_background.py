@@ -37,5 +37,5 @@ def renderBackground(x: int, y: int, node: DOMElement, output: Output) -> None:
             x + left_border_width,
             y + top_border_height + row,
             background_line,
-            transformers=[],
+            {"transformers": []},
         )

@@ -15,20 +15,20 @@ def test_slice_ansi_columns_preserves_escape_sequences():
 
 
 def test_output_clips_ansi_text_by_visible_columns():
-    output = Output(width=3, height=1)
-    output.clip(x1=0, x2=3)
-    output.write(0, 0, "\x1b[31mhello\x1b[39m")
+    output = Output({"width": 3, "height": 1})
+    output.clip({"x1": 0, "x2": 3})
+    output.write(0, 0, "\x1b[31mhello\x1b[39m", {"transformers": []})
 
-    rendered, _ = output.get()
+    rendered = output.get().output
     assert "hel" in rendered
     assert "\x1b[31m" in rendered
 
 
 def test_output_handles_wide_characters_without_extra_gaps():
-    output = Output(width=4, height=1)
-    output.write(0, 0, "你a")
+    output = Output({"width": 4, "height": 1})
+    output.write(0, 0, "你a", {"transformers": []})
 
-    rendered, _ = output.get()
+    rendered = output.get().output
     assert rendered.startswith("你a")
 
 
@@ -49,11 +49,11 @@ def test_styled_cells_preserve_zero_width_suffixes():
 
 
 def test_output_overwrite_keeps_new_styles_stable():
-    output = Output(width=5, height=1)
-    output.write(0, 0, "\x1b[31mabc\x1b[0m")
-    output.write(1, 0, "\x1b[44mZ\x1b[0m")
+    output = Output({"width": 5, "height": 1})
+    output.write(0, 0, "\x1b[31mabc\x1b[0m", {"transformers": []})
+    output.write(1, 0, "\x1b[44mZ\x1b[0m", {"transformers": []})
 
-    rendered, _ = output.get()
+    rendered = output.get().output
     assert rendered.startswith("\x1b[31ma")
     assert "\x1b[44mZ" in rendered
     assert "\x1b[49m" in rendered
@@ -90,18 +90,23 @@ def test_styled_cells_to_string_preserves_extended_color_sequences():
 
 
 def test_output_write_strips_layout_affecting_control_sequences():
-    output = Output(width=10, height=1)
-    output.write(0, 0, "A\x1b[2JB")
+    output = Output({"width": 10, "height": 1})
+    output.write(0, 0, "A\x1b[2JB", {"transformers": []})
 
-    rendered, _ = output.get()
+    rendered = output.get().output
     assert "\x1b[2J" not in rendered
     assert rendered == "AB"
 
 
 def test_output_sanitizes_transformer_output():
-    output = Output(width=10, height=1)
-    output.write(0, 0, "AB", transformers=[lambda s, index: "A\x1b[2JB"])
+    output = Output({"width": 10, "height": 1})
+    output.write(
+        0,
+        0,
+        "AB",
+        {"transformers": [lambda s, index: "A\x1b[2JB"]},
+    )
 
-    rendered, _ = output.get()
+    rendered = output.get().output
     assert "\x1b[2J" not in rendered
     assert rendered == "AB"

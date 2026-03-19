@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional, TypedDict
 
 from pyinkcli import _yoga as yoga
 from pyinkcli.get_max_width import getMaxWidth
@@ -20,6 +20,18 @@ if TYPE_CHECKING:
 
 # Output transformer type
 OutputTransformer = Callable[[str, int], str]
+
+
+class RenderNodeToOutputOptions(TypedDict, total=False):
+    offsetX: int
+    offsetY: int
+    transformers: list[OutputTransformer]
+    skipStaticElements: bool
+
+
+class RenderNodeToScreenReaderOutputOptions(TypedDict, total=False):
+    parentRole: Optional[str]
+    skipStaticElements: bool
 
 
 def _format_accessibility_output(
@@ -49,8 +61,8 @@ def applyPaddingToText(node: DOMElement, text: str) -> str:
     if node.childNodes:
         firstChild = node.childNodes[0]
         if hasattr(firstChild, "yogaNode") and firstChild.yogaNode:
-            offsetX = firstChild.yogaNode.get_computed_left()
-            offsetY = firstChild.yogaNode.get_computed_top()
+            offsetX = int(firstChild.yogaNode.get_computed_left())
+            offsetY = int(firstChild.yogaNode.get_computed_top())
             text = "\n" * offsetY + indentString(text, offsetX)
     return text
 
@@ -63,7 +75,7 @@ def indentString(text: str, count: int) -> str:
     return "\n".join(indent + line for line in text.split("\n"))
 
 
-def _clamped_max_width(yoga_node) -> int:
+def _clamped_max_width(yoga_node: yoga.LayoutNode) -> int:
     """Clamp the JS-style max width helper to a non-negative integer width."""
     result = getMaxWidth(yoga_node)
     if not math.isfinite(result):
@@ -74,7 +86,7 @@ def _clamped_max_width(yoga_node) -> int:
 def renderNodeToOutput(
     node: DOMElement,
     output: Output,
-    options: Optional[dict[str, object]] = None,
+    options: Optional[RenderNodeToOutputOptions] = None,
 ) -> None:
     """
     Render a DOM node to the output buffer.
@@ -85,9 +97,9 @@ def renderNodeToOutput(
         options: Render options aligned with Ink's renderer surface.
     """
     options = options or {}
-    offsetX = int(options.get("offsetX", 0))
-    offsetY = int(options.get("offsetY", 0))
-    transformers = list(options.get("transformers", []) or [])
+    offsetX = options.get("offsetX", 0)
+    offsetY = options.get("offsetY", 0)
+    transformers = list(options.get("transformers", []))
     skipStaticElements = bool(options.get("skipStaticElements", False))
 
     if skipStaticElements and node.internal_static:
@@ -118,7 +130,7 @@ def renderNodeToOutput(
                 text = wrapText(text, maxWidth, textWrap)
 
             text = applyPaddingToText(node, text)
-            output.write(x, y, text, transformers=newTransformers)
+            output.write(x, y, text, {"transformers": newTransformers})
         return
 
     clipped = False
@@ -138,31 +150,35 @@ def renderNodeToOutput(
 
         if clipHorizontally or clipVertically:
             x1 = (
-                x + yogaNode.get_computed_border(yoga.EDGE_LEFT)
+                int(x + yogaNode.get_computed_border(yoga.EDGE_LEFT))
                 if clipHorizontally
                 else None
             )
             x2 = (
-                x
-                + yogaNode.get_computed_width()
-                - yogaNode.get_computed_border(yoga.EDGE_RIGHT)
+                int(
+                    x
+                    + yogaNode.get_computed_width()
+                    - yogaNode.get_computed_border(yoga.EDGE_RIGHT)
+                )
                 if clipHorizontally
                 else None
             )
             y1 = (
-                y + yogaNode.get_computed_border(yoga.EDGE_TOP)
+                int(y + yogaNode.get_computed_border(yoga.EDGE_TOP))
                 if clipVertically
                 else None
             )
             y2 = (
-                y
-                + yogaNode.get_computed_height()
-                - yogaNode.get_computed_border(yoga.EDGE_BOTTOM)
+                int(
+                    y
+                    + yogaNode.get_computed_height()
+                    - yogaNode.get_computed_border(yoga.EDGE_BOTTOM)
+                )
                 if clipVertically
                 else None
             )
 
-            output.clip(x1=x1, x2=x2, y1=y1, y2=y2)
+            output.clip({"x1": x1, "x2": x2, "y1": y1, "y2": y2})
             clipped = True
 
     if node.nodeName in ("ink-root", "ink-box"):
@@ -185,7 +201,7 @@ def renderNodeToOutput(
 
 def renderNodeToScreenReaderOutput(
     node: DOMElement,
-    options: Optional[dict[str, object]] = None,
+    options: Optional[RenderNodeToScreenReaderOutputOptions] = None,
 ) -> str:
     """
     Render a DOM node for screen reader output.

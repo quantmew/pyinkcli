@@ -75,13 +75,18 @@ def renderBorder(x: int, y: int, node: DOMElement, output: Output) -> None:
     offset_y = 1 if show_top_border else 0
 
     if top_border:
-        output.write(x, y, top_border, transformers=[])
+        output.write(x, y, top_border, {"transformers": []})
 
     for row in range(vertical_height):
         if show_left_border:
-            output.write(x, y + offset_y + row, left_border, transformers=[])
+            output.write(x, y + offset_y + row, left_border, {"transformers": []})
         if show_right_border:
-            output.write(x + width - 1, y + offset_y + row, right_border, transformers=[])
+            output.write(
+                x + width - 1,
+                y + offset_y + row,
+                right_border,
+                {"transformers": []},
+            )
 
     if bottom_border:
-        output.write(x, y + height - 1, bottom_border, transformers=[])
+        output.write(x, y + height - 1, bottom_border, {"transformers": []})

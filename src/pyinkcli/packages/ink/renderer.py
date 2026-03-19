@@ -39,29 +39,37 @@ def render(node: DOMElement, isScreenReaderEnabled: bool = False) -> RenderResul
                 staticOutput=f"{staticOutput}\n" if staticOutput else "",
             )
 
-        output = Output(
-            width=int(node.yogaNode.get_computed_width()),
-            height=int(node.yogaNode.get_computed_height()),
+        mainOutput = Output(
+            {
+                "width": int(node.yogaNode.get_computed_width()),
+                "height": int(node.yogaNode.get_computed_height()),
+            }
         )
 
-        renderNodeToOutput(node, output, {"skipStaticElements": True})
+        renderNodeToOutput(node, mainOutput, {"skipStaticElements": True})
 
-        staticOutput = None
+        staticOutputBuffer: Output | None = None
         if node.staticNode and node.staticNode.yogaNode:
-            staticOutput = Output(
-                width=int(node.staticNode.yogaNode.get_computed_width()),
-                height=int(node.staticNode.yogaNode.get_computed_height()),
+            staticOutputBuffer = Output(
+                {
+                    "width": int(node.staticNode.yogaNode.get_computed_width()),
+                    "height": int(node.staticNode.yogaNode.get_computed_height()),
+                }
             )
             renderNodeToOutput(
-                node.staticNode, staticOutput, {"skipStaticElements": False}
+                node.staticNode, staticOutputBuffer, {"skipStaticElements": False}
             )
 
-        generatedOutput, outputHeight = output.get()
+        outputResult = mainOutput.get()
+
+        static_output = ""
+        if staticOutputBuffer:
+            static_output = f"{staticOutputBuffer.get().output}\n"
 
         return RenderResult(
-            output=generatedOutput,
-            outputHeight=outputHeight,
-            staticOutput=f"{staticOutput.get()[0]}\n" if staticOutput else "",
+            output=outputResult.output,
+            outputHeight=outputResult.height,
+            staticOutput=static_output,
         )
 
     return RenderResult(output="", outputHeight=0, staticOutput="")

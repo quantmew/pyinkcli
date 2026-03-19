@@ -7,8 +7,8 @@ which keeps ANSI styling, clipping, and full-width character handling stable.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, Optional, Union
+from dataclasses import dataclass, field
+from typing import Callable, Literal, Optional, TypedDict, Union
 
 from pyinkcli.ansi_tokenizer import tokenizeAnsi
 from pyinkcli.sanitize_ansi import sanitizeAnsi
@@ -19,7 +19,29 @@ __all__ = ["Output"]
 
 class _StyledChar:
     __slots__ = ("value", "width", "styles", "prefix", "suffix", "placeholder")
-    pass
+
+    value: str
+    width: int
+    styles: tuple[str, ...]
+    prefix: str
+    suffix: str
+    placeholder: bool
+
+    def __init__(
+        self,
+        value: str,
+        width: int = 1,
+        styles: tuple[str, ...] = (),
+        prefix: str = "",
+        suffix: str = "",
+        placeholder: bool = False,
+    ) -> None:
+        self.value = value
+        self.width = width
+        self.styles = styles
+        self.prefix = prefix
+        self.suffix = suffix
+        self.placeholder = placeholder
 
 def _styled_char(
     value: str,
@@ -29,14 +51,14 @@ def _styled_char(
     suffix: str = "",
     placeholder: bool = False,
 ) -> "_StyledChar":
-    cell = object.__new__(_StyledChar)
-    cell.value = value
-    cell.width = width
-    cell.styles = styles
-    cell.prefix = prefix
-    cell.suffix = suffix
-    cell.placeholder = placeholder
-    return cell
+    return _StyledChar(
+        value=value,
+        width=width,
+        styles=styles,
+        prefix=prefix,
+        suffix=suffix,
+        placeholder=placeholder,
+    )
 
 
 def _placeholder_char() -> "_StyledChar":
@@ -95,7 +117,7 @@ def _append_zero_width(
         _append_suffix_payload(output[-1], payload)
         return
     if allow_leading_output:
-        output.append(_clone_styled_char(cell))
+        output.append(cell)
         return
     if cells:
         _append_suffix_payload(cells[-1], payload)
@@ -103,6 +125,28 @@ def _append_zero_width(
 
 _StyledLine = list["_StyledChar"]
 _StyledCharCache = dict[str, _StyledLine]
+
+
+class OutputOptions(TypedDict):
+    width: int
+    height: int
+
+
+class OutputWriteOptions(TypedDict):
+    transformers: list[Callable[[str, int], str]]
+
+
+class OutputClip(TypedDict, total=False):
+    x1: Optional[int]
+    x2: Optional[int]
+    y1: Optional[int]
+    y2: Optional[int]
+
+
+class OutputResult:
+    def __init__(self, output: str, height: int) -> None:
+        self.output = output
+        self.height = height
 
 
 class Output:
@@ -121,14 +165,16 @@ class Output:
         y: int
         text: str
         transformers: list[Callable[[str, int], str]]
+        type: Literal["write"] = field(default="write", init=False)
 
     @dataclass
     class _ClipOperation:
         clip: "Output._ClipRegion"
+        type: Literal["clip"] = field(default="clip", init=False)
 
     @dataclass
     class _UnclipOperation:
-        pass
+        type: Literal["unclip"] = field(default="unclip", init=False)
 
     @staticmethod
     def _blank_cell() -> "_StyledChar":
@@ -143,9 +189,8 @@ class Output:
             cached = styled_cell_cache.get(line)
             if cached is None:
                 cached = Output._styled_cells_uncached(line)
-                styled_cell_cache[line] = _clone_styled_chars(cached)
-                return cached
-            return _clone_styled_chars(cached)
+                styled_cell_cache[line] = cached
+            return cached
         return Output._styled_cells_uncached(line)
 
     @staticmethod
@@ -224,7 +269,7 @@ class Output:
                 if visible >= end:
                     break
 
-                output.append(_clone_styled_char(cell))
+                output.append(cell)
                 visible = next_visible
                 if visible >= end:
                     break
@@ -460,9 +505,9 @@ class Output:
                 index += 1
             return grouped
 
-    def __init__(self, width: int, height: int):
-        self.width = width
-        self.height = height
+    def __init__(self, options: OutputOptions):
+        self.width = options["width"]
+        self.height = options["height"]
         self._operations: list[
             Union[Output._WriteOperation, Output._ClipOperation, Output._UnclipOperation]
         ] = []
@@ -489,8 +534,9 @@ class Output:
         x: int,
         y: int,
         text: str,
-        transformers: Optional[list[Callable[[str, int], str]]] = None,
+        options: OutputWriteOptions,
     ) -> None:
+        transformers = options["transformers"]
         text = sanitizeAnsi(text)
         if not text:
             return
@@ -500,51 +546,50 @@ class Output:
                 x=x,
                 y=y,
                 text=text,
-                transformers=transformers or [],
+                transformers=transformers,
             )
         )
 
-    def clip(
-        self,
-        x1: Optional[int] = None,
-        x2: Optional[int] = None,
-        y1: Optional[int] = None,
-        y2: Optional[int] = None,
-    ) -> None:
+    def clip(self, clip: OutputClip) -> None:
         self._operations.append(
             Output._ClipOperation(
-                clip=Output._ClipRegion(x1=x1, x2=x2, y1=y1, y2=y2)
+                clip=Output._ClipRegion(
+                    x1=clip.get("x1"),
+                    x2=clip.get("x2"),
+                    y1=clip.get("y1"),
+                    y2=clip.get("y2"),
+                )
             )
         )
 
     def unclip(self) -> None:
         self._operations.append(Output._UnclipOperation())
 
-    def get(self) -> tuple[str, int]:
-        rows = [[Output._blank_cell() for _ in range(self.width)] for _ in range(self.height)]
+    def get(self) -> OutputResult:
+        output = [[Output._blank_cell() for _ in range(self.width)] for _ in range(self.height)]
         clips: list[Output._ClipRegion] = []
 
         for operation in self._operations:
-            if isinstance(operation, Output._ClipOperation):
+            if operation.type == "clip":
                 clips.append(operation.clip)
                 continue
 
-            if isinstance(operation, Output._UnclipOperation):
+            if operation.type == "unclip":
                 if clips:
                     clips.pop()
                 continue
 
-            self._apply_write(rows, operation, clips[-1] if clips else None)
+            self._apply_write(output, operation, clips[-1] if clips else None)
 
-        lines = [
-            Output._styled_cells_to_string([cell for cell in row if not cell.placeholder]).rstrip()
-            for row in rows
-        ]
-        return ("\n".join(lines), len(rows))
+        generatedOutput = "\n".join(
+            Output._styled_cells_to_string(line).rstrip()
+            for line in output
+        )
+        return OutputResult(output=generatedOutput, height=len(output))
 
     def _apply_write(
         self,
-        rows: list[_StyledLine],
+        output: list[_StyledLine],
         operation: "Output._WriteOperation",
         clip: Optional["Output._ClipRegion"],
     ) -> None:
@@ -553,54 +598,72 @@ class Output:
         lines = operation.text.split("\n")
 
         if clip is not None:
-            if clip.x1 is not None and clip.x2 is not None:
+            clipHorizontally = clip.x1 is not None and clip.x2 is not None
+            clipVertically = clip.y1 is not None and clip.y2 is not None
+
+            if clipHorizontally:
+                clipX1 = clip.x1
+                clipX2 = clip.x2
+                assert clipX1 is not None and clipX2 is not None
                 width = self._get_widest_line(operation.text)
-                if x + width < clip.x1 or x > clip.x2:
+                if x + width < clipX1 or x > clipX2:
                     return
 
-            if clip.y1 is not None and clip.y2 is not None:
+            if clipVertically:
+                clipY1 = clip.y1
+                clipY2 = clip.y2
+                assert clipY1 is not None and clipY2 is not None
                 height = len(lines)
-                if y + height < clip.y1 or y > clip.y2:
+                if y + height < clipY1 or y > clipY2:
                     return
 
-            if clip.x1 is not None and clip.x2 is not None:
+            if clipHorizontally:
+                clipX1 = clip.x1
+                clipX2 = clip.x2
+                assert clipX1 is not None and clipX2 is not None
                 clipped_lines: list[str] = []
                 for line in lines:
-                    start = clip.x1 - x if x < clip.x1 else 0
+                    from_x = clipX1 - x if x < clipX1 else 0
                     width = self._get_string_width(line)
-                    end = clip.x2 - x if x + width > clip.x2 else width
+                    to_x = clipX2 - x if x + width > clipX2 else width
                     clipped_lines.append(
                         Output._slice_ansi_columns(
                             line,
-                            start,
-                            end,
+                            from_x,
+                            to_x,
                             styled_cell_cache=self._styled_cell_cache,
                         )
                     )
                 lines = clipped_lines
-                if x < clip.x1:
-                    x = clip.x1
+                if x < clipX1:
+                    x = clipX1
 
-            if clip.y1 is not None and clip.y2 is not None:
-                start = clip.y1 - y if y < clip.y1 else 0
+            if clipVertically:
+                clipY1 = clip.y1
+                clipY2 = clip.y2
+                assert clipY1 is not None and clipY2 is not None
+                from_y = clipY1 - y if y < clipY1 else 0
                 height = len(lines)
-                end = clip.y2 - y if y + height > clip.y2 else height
-                lines = lines[start:end]
-                if y < clip.y1:
-                    y = clip.y1
+                to_y = clipY2 - y if y + height > clipY2 else height
+                lines = lines[from_y:to_y]
+                if y < clipY1:
+                    y = clipY1
 
-        for row_offset, line in enumerate(lines):
-            row_index = y + row_offset
-            if row_index < 0 or row_index >= len(rows):
+        offsetY = 0
+        for index, line in enumerate(lines):
+            currentLine = output[y + offsetY] if 0 <= y + offsetY < len(output) else None
+            if currentLine is None:
+                offsetY += 1
                 continue
 
             for transformer in operation.transformers:
-                line = transformer(line, row_offset)
+                line = transformer(line, index)
 
             line = sanitizeAnsi(line)
             Output._write_ansi_line(
-                rows[row_index],
+                currentLine,
                 x,
                 line,
                 styled_cell_cache=self._styled_cell_cache,
             )
+            offsetY += 1

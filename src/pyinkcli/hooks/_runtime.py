@@ -5,6 +5,8 @@ Public compatibility imports remain in `hooks/state.py`.
 """
 
 from __future__ import annotations
+import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Generic, Literal, Optional, TypeVar, Union
 
@@ -49,6 +51,7 @@ class RuntimeState:
     current_update_priority: UpdatePriority = "default"
     pending_update_priority: Optional[UpdatePriority] = None
     after_batch_callbacks: list[Callable[[], None]] = field(default_factory=list)
+    scheduled_rerender: bool = False
 
 
 @dataclass
@@ -59,6 +62,59 @@ class Ref(Generic[T]):
 _runtime = RuntimeState()
 _rerender_callback: Optional[Callable[[], None]] = None
 _UNSET = object()
+_scheduler_lock = threading.Lock()
+_scheduler_event = threading.Event()
+_scheduler_thread: Optional[threading.Thread] = None
+
+
+def _ensure_scheduler_thread() -> None:
+    global _scheduler_thread
+
+    with _scheduler_lock:
+        if _scheduler_thread is not None and _scheduler_thread.is_alive():
+            return
+
+        thread = threading.Thread(
+            target=_scheduled_rerender_loop,
+            name="pyinkcli-hooks-rerender",
+            daemon=True,
+        )
+        thread.start()
+        _scheduler_thread = thread
+
+
+def _scheduled_rerender_loop() -> None:
+    while True:
+        _scheduler_event.wait()
+        _scheduler_event.clear()
+        # Match JS-style end-of-tick batching: defer dispatch until the current
+        # Python thread yields so adjacent setter calls collapse into one render.
+        time.sleep(0)
+        _flush_scheduled_rerender()
+
+
+def _schedule_scheduled_rerender() -> None:
+    _ensure_scheduler_thread()
+    with _scheduler_lock:
+        if _runtime.scheduled_rerender:
+            return
+        _runtime.scheduled_rerender = True
+        _scheduler_event.set()
+
+
+def _flush_scheduled_rerender() -> bool:
+    callback: Optional[Callable[[], None]]
+    with _scheduler_lock:
+        if not _runtime.scheduled_rerender:
+            return False
+        _runtime.scheduled_rerender = False
+        callback = _rerender_callback
+
+    if callback is None:
+        return False
+
+    callback()
+    return True
 
 
 def _has_initialized_state_slot(state: HookState, hook_index: int) -> bool:
@@ -273,11 +329,17 @@ def _clear_hook_state() -> None:
     _runtime.current_update_priority = "default"
     _runtime.pending_update_priority = None
     _runtime.after_batch_callbacks.clear()
+    _runtime.scheduled_rerender = False
+    _scheduler_event.clear()
 
 
 def _set_rerender_callback(callback: Optional[Callable[[], None]]) -> None:
     global _rerender_callback
     _rerender_callback = callback
+    if callback is None:
+        with _scheduler_lock:
+            _runtime.scheduled_rerender = False
+        _scheduler_event.clear()
 
 
 def _priority_rank(priority: UpdatePriority) -> int:
@@ -422,7 +484,7 @@ def _request_rerender() -> None:
         return
 
     if _rerender_callback is not None:
-        _rerender_callback()
+        _schedule_scheduled_rerender()
 
 
 def _flush_batched_rerender() -> None:

@@ -87,11 +87,11 @@ def renderToString(
         height = int(yoga_node.get_computed_height())
 
         # Render to output
-        output = Output(width, height)
+        output = Output({"width": width, "height": height})
         renderNodeToOutput(root_node, output)
 
         # Get string from output and trim trailing empty lines
-        result, _ = output.get()
+        result = output.get().output
 
         # Trim trailing empty lines
         lines = result.split('\n')

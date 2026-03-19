@@ -34,6 +34,7 @@ from pyinkcli.hooks.use_app import _set_app_ink
 from pyinkcli.hooks.use_input import _dispatch_input, _clear_input_handlers
 from pyinkcli.hooks._runtime import (
     _clear_hook_state,
+    _flush_scheduled_rerender,
     _reset_hook_state,
     _set_rerender_callback,
 )
@@ -416,6 +417,7 @@ class Ink:
         if self._is_unmounted or self._is_unmounting:
             return
 
+        _flush_scheduled_rerender()
         self._wait_for_render_flush(timeout=timeout)
         self._wait_for_transition_idle(timeout=timeout)
 
@@ -473,14 +475,17 @@ class Ink:
         if self._is_unmounted:
             return
 
-        start_time = time.time()
-        result = self._sanitize_render_result(
-            render_dom(self._root_node, self._is_screen_reader_enabled)
-        )
-
         if self._on_render:
-            metrics = RenderMetrics(render_time=time.time() - start_time)
+            start_time = time.perf_counter()
+            result = self._sanitize_render_result(
+                render_dom(self._root_node, self._is_screen_reader_enabled)
+            )
+            metrics = RenderMetrics(render_time=time.perf_counter() - start_time)
             self._on_render(metrics)
+        else:
+            result = self._sanitize_render_result(
+                render_dom(self._root_node, self._is_screen_reader_enabled)
+            )
 
         static_output_delta = self._get_static_output_delta(result.staticOutput)
         has_static_output = static_output_delta != ""

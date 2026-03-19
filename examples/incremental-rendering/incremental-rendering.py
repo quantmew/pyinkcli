@@ -304,4 +304,5 @@ if __name__ == "__main__":
     render(
         incremental_rendering_example,
         incremental_rendering=True,
+        interactive=True,
     ).wait_until_exit()

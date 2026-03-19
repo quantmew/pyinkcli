@@ -1,5 +1,7 @@
 """Tests for hooks runtime behavior."""
 
+import threading
+
 from pyinkcli.components.CursorContext import _provide_cursor_context
 from pyinkcli.hooks._runtime import (
     _batched_updates_runtime,
@@ -226,6 +228,32 @@ def test_use_state_setter_requests_rerender_each_time_it_updates() -> None:
     render_component("rerender-count", component)
 
     assert rerenders == ["rerender", "rerender"]
+
+
+def test_use_state_setter_auto_batches_same_tick_updates_outside_render() -> None:
+    rerenders: list[str] = []
+    setter_holder: list[object] = []
+    rerendered = threading.Event()
+
+    def component():
+        value, set_value = useState(0)
+        setter_holder[:] = [set_value]
+        return value
+
+    def on_rerender() -> None:
+        rerenders.append("rerender")
+        rerendered.set()
+
+    _set_rerender_callback(on_rerender)
+    render_component("auto-batched-rerender-count", component)
+
+    set_value = setter_holder[0]
+    set_value(1)
+    set_value(2)
+
+    assert rerendered.wait(0.2)
+    assert rerenders == ["rerender"]
+    assert render_component("auto-batched-rerender-count", component) == 2
 
 
 def test_batch_updates_coalesces_multiple_state_updates_into_one_rerender() -> None:
