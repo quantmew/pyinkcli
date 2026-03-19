@@ -1,7 +1,7 @@
 """Tests for CLI boxes utility."""
 
 import pytest
-from ink_python.utils.cli_boxes import BOXES, BoxStyle, get_box_style
+from pyinkcli.utils.cli_boxes import BOXES, BoxStyle, get_box_style
 
 
 def test_box_styles_exist():

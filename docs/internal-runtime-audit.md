@@ -2,10 +2,10 @@
 
 本轮只审计这 4 个内部实现层：
 
-- [\_component_runtime.py](/mnt/hdd1/ink-python/src/ink_python/_component_runtime.py)
-- [hooks/\_runtime.py](/mnt/hdd1/ink-python/src/ink_python/hooks/_runtime.py)
-- [\_suspense_runtime.py](/mnt/hdd1/ink-python/src/ink_python/_suspense_runtime.py)
-- [\_yoga.py](/mnt/hdd1/ink-python/src/ink_python/_yoga.py)
+- [\_component_runtime.py](/mnt/hdd1/ink-python/src/pyinkcli/_component_runtime.py)
+- [hooks/\_runtime.py](/mnt/hdd1/ink-python/src/pyinkcli/hooks/_runtime.py)
+- [\_suspense_runtime.py](/mnt/hdd1/ink-python/src/pyinkcli/_suspense_runtime.py)
+- [\_yoga.py](/mnt/hdd1/ink-python/src/pyinkcli/_yoga.py)
 
 目标不是看 facade，而是看这些内部层本身还承担了哪些和 `js_source/ink/src` 不一比一的职责。
 
@@ -48,7 +48,7 @@
 
 原因：
 
-- facade [component.py](/mnt/hdd1/ink-python/src/ink_python/component.py) 已经只保留最小兼容面。
+- facade [component.py](/mnt/hdd1/ink-python/src/pyinkcli/component.py) 已经只保留最小兼容面。
 - `_component_runtime.py` 现在主要是内部实现，不再是公开 API 污染点。
 
 ### 还能继续往 parity 靠的点
@@ -99,7 +99,7 @@
 
 原因：
 
-- facade [hooks/state.py](/mnt/hdd1/ink-python/src/ink_python/hooks/state.py) 已是薄壳。
+- facade [hooks/state.py](/mnt/hdd1/ink-python/src/pyinkcli/hooks/state.py) 已是薄壳。
 - 真正的问题不再是导出，而是这套内部 runtime 永远不可能和 JS React 实现一比一。
 
 ### 还能继续往 parity 靠的点
@@ -142,7 +142,7 @@
 
 ### 当前是否还需要继续缩面
 
-结论：facade [suspense_runtime.py](/mnt/hdd1/ink-python/src/ink_python/suspense_runtime.py) 已经是终点。
+结论：facade [suspense_runtime.py](/mnt/hdd1/ink-python/src/pyinkcli/suspense_runtime.py) 已经是终点。
 
 接下来不该继续缩文件，而应该：
 
@@ -199,7 +199,7 @@
 
 - 这层是整个布局系统兼容 `yoga-layout-python` 的桥。
 - 继续压缩只会让内部代码更难读，不会提升和 JS `ink/src` 的同构度。
-- 本轮已经把 facade [yoga_compat.py](/mnt/hdd1/ink-python/src/ink_python/yoga_compat.py) 收成显式最小导出。
+- 本轮已经把 facade [yoga_compat.py](/mnt/hdd1/ink-python/src/pyinkcli/yoga_compat.py) 收成显式最小导出。
 
 ### 还能继续往 parity 靠的点
 

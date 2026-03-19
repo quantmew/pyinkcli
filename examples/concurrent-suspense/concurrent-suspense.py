@@ -1,14 +1,14 @@
-"""concurrent-suspense example for ink-python."""
+"""concurrent-suspense example for pyinkcli."""
 
 from __future__ import annotations
 
 import threading
 import time
 
-from ink_python import Box, Text, render
-from ink_python.component import createElement
-from ink_python.hooks import useEffect, useState
-from ink_python.suspense_runtime import readResource, resetAllResources
+from pyinkcli import Box, Text, render
+from pyinkcli.component import createElement
+from pyinkcli.hooks import useEffect, useState
+from pyinkcli.suspense_runtime import readResource, resetAllResources
 
 
 def _fetch_data(name: str, delay: float) -> str:

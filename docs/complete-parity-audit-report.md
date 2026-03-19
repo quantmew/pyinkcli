@@ -1,7 +1,7 @@
 # Ink Python 完整 Parity 审计报告
 
 **审计日期**: 2026-03-19
-**对比基准**: js_source/ink (TypeScript) vs src/ink_python (Python)
+**对比基准**: js_source/ink (TypeScript) vs src/pyinkcli (Python)
 **审计范围**: 文件结构、命名规范、API 导出、组件、Hooks、Examples
 
 ---
@@ -64,9 +64,9 @@ src/
 └── write-synchronized.ts
 ```
 
-#### Python 源文件 (src/ink_python/)
+#### Python 源文件 (src/pyinkcli/)
 ```
-src/ink_python/
+src/pyinkcli/
 ├── ansi_tokenizer.py
 ├── colorize.py
 ├── cursor_helpers.py
@@ -418,7 +418,7 @@ const [count, setCount] = useState(0);
 
 **Python**:
 ```python
-from ink_python.hooks.state import useState
+from pyinkcli.hooks.state import useState
 count, set_count = useState(0)
 ```
 

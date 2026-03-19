@@ -1,11 +1,11 @@
 """
-Select Input example for ink-python.
+Select Input example for pyinkcli.
 
 Demonstrates a selectable list with keyboard navigation.
 Port of js_source/ink/examples/select-input/select-input.tsx
 """
 
-from ink_python import render, Box, Text, useInput, useIsScreenReaderEnabled
+from pyinkcli import render, Box, Text, useInput, useIsScreenReaderEnabled
 
 
 ITEMS = ["Red", "Green", "Blue", "Yellow", "Magenta", "Cyan"]
@@ -13,7 +13,7 @@ ITEMS = ["Red", "Green", "Blue", "Yellow", "Magenta", "Cyan"]
 
 def select_input_example():
     """Render a selectable list."""
-    from ink_python.hooks import useState
+    from pyinkcli.hooks import useState
 
     selected_index, set_selected_index = useState(0)
     is_screen_reader_enabled = useIsScreenReaderEnabled()

@@ -10,12 +10,12 @@ import re
 from collections import OrderedDict
 from unittest.mock import patch
 
-from ink_python import Text, render
-from ink_python._component_runtime import _Component
-from ink_python.component import createElement
-from ink_python.devtools_hydration import make_bridge_call, make_bridge_notification
-from ink_python.hooks import useState
-from ink_python.suspense_runtime import SuspendSignal
+from pyinkcli import Text, render
+from pyinkcli._component_runtime import _Component
+from pyinkcli.component import createElement
+from pyinkcli.devtools_hydration import make_bridge_call, make_bridge_notification
+from pyinkcli.hooks import useState
+from pyinkcli.suspense_runtime import SuspendSignal
 
 
 class FakeStdout(StringIO):
@@ -106,7 +106,7 @@ def test_inject_into_devtools_registers_renderer_metadata_and_tree_snapshot() ->
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             assert app._reconciler.injectIntoDevTools() is True
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -117,7 +117,7 @@ def test_inject_into_devtools_registers_renderer_metadata_and_tree_snapshot() ->
             nodes_by_name.setdefault(node["displayName"], []).append(node)
 
         assert renderer["bundleType"] == 1
-        assert renderer["rendererPackageName"] == "ink-python"
+        assert renderer["rendererPackageName"] == "pyinkcli"
         assert renderer["version"] == renderer["reconcilerVersion"]
         assert renderer["rendererConfig"]["supportsClassComponents"] is True
         assert renderer["rendererConfig"]["supportsErrorBoundaries"] is True
@@ -153,7 +153,7 @@ def test_devtools_override_props_and_schedule_update_rerenders_function_componen
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -181,7 +181,7 @@ def test_devtools_can_rename_and_delete_props_before_scheduling_update() -> None
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -213,7 +213,7 @@ def test_devtools_override_hook_state_and_schedule_update_rerenders_hooks_compon
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -241,7 +241,7 @@ def test_devtools_can_rename_and_delete_nested_hook_state_paths() -> None:
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -288,7 +288,7 @@ def test_devtools_schedule_retry_rerenders_suspense_boundary() -> None:
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -333,7 +333,7 @@ def test_devtools_inspect_element_returns_props_state_and_hooks_payloads() -> No
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -380,7 +380,7 @@ def test_devtools_can_edit_class_state_via_generic_value_path_api() -> None:
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -436,7 +436,7 @@ def test_devtools_override_suspense_uses_nearest_boundary_from_selected_child() 
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -487,7 +487,7 @@ def test_devtools_override_error_uses_nearest_boundary_from_selected_child() -> 
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -526,7 +526,7 @@ def test_devtools_inspect_element_includes_owners_source_and_stack_metadata() ->
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -563,7 +563,7 @@ def test_devtools_inspect_element_supports_no_change_and_hydrated_path_responses
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -605,7 +605,7 @@ def test_devtools_hooks_hydration_keeps_hook_shell_but_dehydrates_nested_values(
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -662,7 +662,7 @@ def test_devtools_suspended_by_hydration_preserves_meta_and_dehydrates_deep_valu
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -706,7 +706,7 @@ def test_devtools_special_number_values_use_cleaned_transport_placeholders() -> 
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -748,7 +748,7 @@ def test_devtools_date_regexp_symbol_and_iterator_preview_metadata_matches_trans
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -794,7 +794,7 @@ def test_devtools_typed_array_data_view_array_buffer_thenable_and_lazy_previews(
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -847,7 +847,7 @@ def test_devtools_tail_marker_type_and_legacy_lazy_previews_match_transport_type
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -883,7 +883,7 @@ def test_devtools_backend_facade_dispatches_inspect_and_edit_requests() -> None:
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -963,7 +963,7 @@ def test_devtools_backend_facade_dispatches_backend_notifications_to_reconciler(
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -1058,7 +1058,7 @@ def test_devtools_backend_facade_supports_legacy_override_message_types() -> Non
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         renderer = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]["__INK_RECONCILER_DEVTOOLS_METADATA__"]
@@ -1161,7 +1161,7 @@ def test_devtools_backend_facade_supports_override_suspense_milestone_notificati
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -1253,7 +1253,7 @@ def test_devtools_backend_facade_inspect_screen_merges_roots_across_renderers() 
         app_a.wait_until_render_flush(timeout=0.2)
         app_b.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app_a._reconciler.injectIntoDevTools()
             app_b._reconciler.injectIntoDevTools()
 
@@ -1312,7 +1312,7 @@ def test_devtools_backend_facade_exposes_agent_style_methods() -> None:
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -1379,7 +1379,7 @@ def test_devtools_backend_facade_exposes_agent_metadata_and_logging_methods() ->
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -1448,7 +1448,7 @@ def test_devtools_backend_facade_exposes_host_instance_and_profiling_methods() -
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -1496,7 +1496,7 @@ def test_devtools_backend_facade_exposes_profiling_and_selection_methods() -> No
     try:
         app.wait_until_render_flush(timeout=0.2)
 
-        with patch("ink_python.devtools.initializeDevtools", return_value=True):
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
             app._reconciler.injectIntoDevTools()
 
         global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
@@ -1525,5 +1525,82 @@ def test_devtools_backend_facade_exposes_profiling_and_selection_methods() -> No
         backend["stopInspectingNative"](True)
         assert backend["state"]["lastStopInspectingHostSelected"] is True
         assert global_scope["__INK_DEVTOOLS_STOP_INSPECTING_HOST__"] is True
+    finally:
+        app.unmount()
+
+
+def test_devtools_backend_facade_tracks_and_clears_persisted_selection_on_manual_inspect() -> None:
+    class Parent(_Component):
+        def render(self):
+            return createElement(Child)
+
+    def Child():
+        return Text("leaf")
+
+    stdout = FakeStdout()
+    stdin = FakeStdin()
+    app = render(createElement(Parent), stdout=stdout, stdin=stdin, debug=True)
+    try:
+        app.wait_until_render_flush(timeout=0.2)
+
+        with patch("pyinkcli.devtools.initializeDevtools", return_value=True):
+            app._reconciler.injectIntoDevTools()
+
+        global_scope = builtins.__dict__["__INK_DEVTOOLS_GLOBAL__"]
+        renderer = global_scope["__INK_RECONCILER_DEVTOOLS_METADATA__"]
+        backend = renderer["backendFacade"]
+        snapshot = renderer["getTreeSnapshot"]()
+        child_node = next(node for node in snapshot["nodes"] if node["displayName"] == "Child")
+        renderer_id = id(app._reconciler)
+        path = backend["getPathForElement"](child_node["id"])
+        assert path is not None
+
+        backend["setPersistedSelection"]({"rendererID": renderer_id, "path": path})
+        assert backend["getPersistedSelection"]() == {
+            "rendererID": renderer_id,
+            "path": path,
+        }
+        assert renderer["getTrackedPath"]() == path
+
+        backend["setPersistedSelectionMatch"]({"id": child_node["id"], "isFullMatch": False})
+        assert backend["getPersistedSelectionMatch"]() == {
+            "id": child_node["id"],
+            "isFullMatch": False,
+        }
+        backend["inspectElement"](
+            {
+                "id": child_node["id"],
+                "rendererID": renderer_id,
+                "requestID": 81,
+                "forceFullData": True,
+            }
+        )
+        assert backend["getPersistedSelection"]() == {
+            "rendererID": renderer_id,
+            "path": path,
+        }
+        assert renderer["getTrackedPath"]() == path
+
+        backend["setPersistedSelectionMatch"]({"id": "stale-node", "isFullMatch": False})
+        inspect_response = backend["inspectElement"](
+            {
+                "id": child_node["id"],
+                "rendererID": renderer_id,
+                "requestID": 82,
+                "forceFullData": True,
+            }
+        )
+        assert inspect_response["event"] == "inspectedElement"
+        assert backend["getPersistedSelection"]() is None
+        assert backend["getPersistedSelectionMatch"]() is None
+        assert renderer["getTrackedPath"]() is None
+        assert backend["state"]["lastSelectedElementID"] == child_node["id"]
+        assert backend["state"]["lastSelectedRendererID"] == renderer_id
+
+        backend["setPersistedSelection"]({"rendererID": renderer_id, "path": path})
+        backend["clearPersistedSelection"]()
+        assert backend["getPersistedSelection"]() is None
+        assert backend["getPersistedSelectionMatch"]() is None
+        assert renderer["getTrackedPath"]() is None
     finally:
         app.unmount()

@@ -6,11 +6,11 @@ import time
 from threading import Event
 from io import StringIO
 
-from ink_python import Text, render, renderToString
-from ink_python.component import createElement
-from ink_python.hooks import useEffect, useState
-from ink_python.hooks.state import _consume_pending_rerender_priority
-from ink_python.suspense_runtime import (
+from pyinkcli import Text, render, renderToString
+from pyinkcli.component import createElement
+from pyinkcli.hooks import useEffect, useState
+from pyinkcli.hooks.state import _consume_pending_rerender_priority
+from pyinkcli.suspense_runtime import (
     SuspendSignal,
     peekResource,
     readResource,

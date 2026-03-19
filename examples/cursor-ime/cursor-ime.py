@@ -1,10 +1,10 @@
-"""cursor-ime example for ink-python."""
+"""cursor-ime example for pyinkcli."""
 
 from __future__ import annotations
 
-from ink_python import Box, Text, render, useCursor, useInput
-from ink_python.hooks import useState
-from ink_python.utils.string_width import string_width
+from pyinkcli import Box, Text, render, useCursor, useInput
+from pyinkcli.hooks import useState
+from pyinkcli.utils.string_width import string_width
 
 
 def cursor_ime_example():

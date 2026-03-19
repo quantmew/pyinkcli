@@ -1,12 +1,12 @@
 """
-Use focus example for ink-python.
+Use focus example for pyinkcli.
 
 Demonstrates the useFocus hook for keyboard navigation.
 Press Tab to focus next element, Shift+Tab to focus previous, Esc to reset.
 """
 
-from ink_python import render, Box, Text, useFocus
-from ink_python.component import createElement
+from pyinkcli import render, Box, Text, useFocus
+from pyinkcli.component import createElement
 
 
 def focus_example():

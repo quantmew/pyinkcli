@@ -1,4 +1,4 @@
-"""jest example for ink-python."""
+"""jest example for pyinkcli."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ import random
 import threading
 import time
 
-from ink_python import Box, Static, render
-from ink_python.component import createElement
-from ink_python.hooks import useEffect, useState
+from pyinkcli import Box, Static, render
+from pyinkcli.component import createElement
+from pyinkcli.hooks import useEffect, useState
 
 from summary import Summary
 from test import Test

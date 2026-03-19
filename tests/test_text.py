@@ -1,8 +1,8 @@
 """Tests for Text component."""
 
-from ink_python import renderToString
-from ink_python.components.Text import Text
-from ink_python.component import createElement
+from pyinkcli import renderToString
+from pyinkcli.components.Text import Text
+from pyinkcli.component import createElement
 
 
 def test_text_creates_vnode():

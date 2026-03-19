@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from io import StringIO
 
-from ink_python import Text, render
+from pyinkcli import Text, render
 
 
 class FakeStdout(StringIO):

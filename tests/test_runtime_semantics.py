@@ -6,18 +6,18 @@ import time
 from io import StringIO
 from unittest.mock import Mock
 
-from ink_python import Box, Text, render
-from ink_python.component import createElement
-from ink_python.dom import addLayoutListener
-from ink_python.components._accessibility_runtime import _provide_accessibility
-from ink_python.ink import Ink, Options
-from ink_python.hooks.use_cursor import useCursor
-from ink_python.hooks import useState
-from ink_python.render_node_to_output import render_node_to_screen_reader_output
-from ink_python.render_to_string import create_root_node
-from ink_python.reconciler import createReconciler
-from ink_python.utils.string_width import string_width
-from ink_python.suspense_runtime import (
+from pyinkcli import Box, Text, render
+from pyinkcli.component import createElement
+from pyinkcli.dom import addLayoutListener
+from pyinkcli.components._accessibility_runtime import _provide_accessibility
+from pyinkcli.ink import Ink, Options
+from pyinkcli.hooks.use_cursor import useCursor
+from pyinkcli.hooks import useState
+from pyinkcli.render_node_to_output import render_node_to_screen_reader_output
+from pyinkcli.render_to_string import create_root_node
+from pyinkcli.reconciler import createReconciler
+from pyinkcli.utils.string_width import string_width
+from pyinkcli.suspense_runtime import (
     invalidateResource,
     peekResource,
     preloadResource,

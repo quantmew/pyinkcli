@@ -1,7 +1,7 @@
 """Tests for focus hooks runtime."""
 
-from ink_python.components.FocusContext import _provide_focus_context
-from ink_python.hooks.state import (
+from pyinkcli.components.FocusContext import _provide_focus_context
+from pyinkcli.hooks.state import (
     _begin_component_render,
     _clear_hook_state,
     _end_component_render,
@@ -9,8 +9,8 @@ from ink_python.hooks.state import (
     _reset_hook_state,
     _set_rerender_callback,
 )
-from ink_python.hooks.use_focus import _focus_runtime, useFocus
-from ink_python.hooks.use_focus_manager import useFocusManager
+from pyinkcli.hooks.use_focus import _focus_runtime, useFocus
+from pyinkcli.hooks.use_focus_manager import useFocusManager
 
 
 def render_component(instance_id: str, component):

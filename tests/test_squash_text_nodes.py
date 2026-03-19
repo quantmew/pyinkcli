@@ -1,6 +1,6 @@
 """Tests for squashTextNodes parity behavior."""
 
-from ink_python.dom import appendChildNode, createNode, createTextNode, squashTextNodes
+from pyinkcli.dom import appendChildNode, createNode, createTextNode, squashTextNodes
 
 
 def test_squashTextNodes_applies_child_transform_before_joining():

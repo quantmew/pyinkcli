@@ -1,7 +1,7 @@
 """Tests for sanitizeAnsi behavior."""
 
-from ink_python.ansi_tokenizer import tokenizeAnsi
-from ink_python.sanitize_ansi import sanitizeAnsi
+from pyinkcli.ansi_tokenizer import tokenizeAnsi
+from pyinkcli.sanitize_ansi import sanitizeAnsi
 
 
 def strip_ansi(text: str) -> str:

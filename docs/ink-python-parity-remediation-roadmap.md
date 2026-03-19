@@ -37,7 +37,7 @@
 
 ### 当前问题
 
-- 当前 `useState/useEffect/useRef/useMemo/useCallback` 建立在一个全局 `_current_state` 上。[state.py](/mnt/hdd1/ink-python/src/ink_python/hooks/state.py#L27)
+- 当前 `useState/useEffect/useRef/useMemo/useCallback` 建立在一个全局 `_current_state` 上。[state.py](/mnt/hdd1/ink-python/src/pyinkcli/hooks/state.py#L27)
 - 这和 React/Ink 的组件级 hooks 语义不一致。
 - 在当前模型下，复杂组件树、嵌套组件、重渲染顺序变化时，很难保证状态正确性。
 
@@ -69,7 +69,7 @@
 
 ### 当前问题
 
-- 当前 `update_container()` 会先移除所有 children，再重建整个树。[reconciler.py](/mnt/hdd1/ink-python/src/ink_python/reconciler.py#L75)
+- 当前 `update_container()` 会先移除所有 children，再重建整个树。[reconciler.py](/mnt/hdd1/ink-python/src/pyinkcli/reconciler.py#L75)
 - 这和 JS 版基于 `react-reconciler` 的 `commitUpdate`、`insertBefore`、`removeChild` 等机制不是一个层级。[reconciler.ts](/mnt/hdd1/ink-python/js_source/ink/src/reconciler.ts#L298)
 - `<Static>`、layout listener、focus、cursor、输入副作用等都很容易在整树重建中被破坏。
 
@@ -103,7 +103,7 @@ reconciler 是所有行为一致性的基础。如果仍然整树重建，那么
 ### 当前问题
 
 - JS `render()` 返回 `Instance`，有 `rerender`、`unmount`、`waitUntilExit`、`waitUntilRenderFlush`、`cleanup`、`clear`。[render.ts](/mnt/hdd1/ink-python/js_source/ink/src/render.ts#L138)
-- Python `render()` 直接返回 `Ink` 实例，缺 `waitUntilRenderFlush`、`cleanup` 等能力。[ink.py](/mnt/hdd1/ink-python/src/ink_python/ink.py#L683)
+- Python `render()` 直接返回 `Ink` 实例，缺 `waitUntilRenderFlush`、`cleanup` 等能力。[ink.py](/mnt/hdd1/ink-python/src/pyinkcli/ink.py#L683)
 
 ### 为什么是 P0
 
@@ -134,9 +134,9 @@ reconciler 是所有行为一致性的基础。如果仍然整树重建，那么
 
 ### 当前问题
 
-- Python 目前只有简化 `_parse_keypress()`。[use_input.py](/mnt/hdd1/ink-python/src/ink_python/hooks/use_input.py#L119)
+- Python 目前只有简化 `_parse_keypress()`。[use_input.py](/mnt/hdd1/ink-python/src/pyinkcli/hooks/use_input.py#L119)
 - 没有 JS `input-parser` 那种处理 chunk 边界、ESC 前缀、delete repeat、paste 边界的层。[input-parser.ts](/mnt/hdd1/ink-python/js_source/ink/src/input-parser.ts#L200)
-- `usePaste()` 所依赖的 bracketed paste 机制没有打通。[use_paste.py](/mnt/hdd1/ink-python/src/ink_python/hooks/use_paste.py#L43)
+- `usePaste()` 所依赖的 bracketed paste 机制没有打通。[use_paste.py](/mnt/hdd1/ink-python/src/pyinkcli/hooks/use_paste.py#L43)
 
 ### 为什么是 P0
 
@@ -197,7 +197,7 @@ reconciler 是所有行为一致性的基础。如果仍然整树重建，那么
 
 ### 当前问题
 
-- Python `LogUpdate` 有 `incremental` 参数，但没有体现出 JS 那种两套行为模型。[log_update.py](/mnt/hdd1/ink-python/src/ink_python/log_update.py#L20)
+- Python `LogUpdate` 有 `incremental` 参数，但没有体现出 JS 那种两套行为模型。[log_update.py](/mnt/hdd1/ink-python/src/pyinkcli/log_update.py#L20)
 - 缺少 cursor position、line diff、局部更新等能力。
 
 ### 建议交付
@@ -224,7 +224,7 @@ reconciler 是所有行为一致性的基础。如果仍然整树重建，那么
 
 ### 当前问题
 
-- Python `Output` 是二维字符串网格，对 ANSI 处理明显简化。[output.py](/mnt/hdd1/ink-python/src/ink_python/output.py#L181)
+- Python `Output` 是二维字符串网格，对 ANSI 处理明显简化。[output.py](/mnt/hdd1/ink-python/src/pyinkcli/output.py#L181)
 - JS 则有更完整的 styled chars、ANSI tokenizer、slice-ansi 处理链。
 
 ### 建议交付
@@ -251,7 +251,7 @@ reconciler 是所有行为一致性的基础。如果仍然整树重建，那么
 ### 当前问题
 
 - JS `App` 负责 raw mode、cursor、stdin/stdout/stderr context、focus、paste、cleanup 等核心职责。[App.tsx](/mnt/hdd1/ink-python/js_source/ink/src/components/App.tsx#L26)
-- Python `App` 目前能力明显简化。[app.py](/mnt/hdd1/ink-python/src/ink_python/components/app.py#L20)
+- Python `App` 目前能力明显简化。[app.py](/mnt/hdd1/ink-python/src/pyinkcli/components/app.py#L20)
 
 ### 建议交付
 
@@ -300,7 +300,7 @@ reconciler 是所有行为一致性的基础。如果仍然整树重建，那么
 
 ### 当前问题
 
-- Python renderer 虽有 screen reader 分支，但 `use_is_screen_reader_enabled()` 直接返回 `False`。[use_is_screen_reader_enabled.py](/mnt/hdd1/ink-python/src/ink_python/hooks/use_is_screen_reader_enabled.py#L10)
+- Python renderer 虽有 screen reader 分支，但 `use_is_screen_reader_enabled()` 直接返回 `False`。[use_is_screen_reader_enabled.py](/mnt/hdd1/ink-python/src/pyinkcli/hooks/use_is_screen_reader_enabled.py#L10)
 
 ### 建议交付
 
@@ -320,7 +320,7 @@ reconciler 是所有行为一致性的基础。如果仍然整树重建，那么
 
 ### 当前问题
 
-- Python 只有 `Options.kitty_keyboard` 字段，没有探测、启用、解析链路。[ink.py](/mnt/hdd1/ink-python/src/ink_python/ink.py#L69)
+- Python 只有 `Options.kitty_keyboard` 字段，没有探测、启用、解析链路。[ink.py](/mnt/hdd1/ink-python/src/pyinkcli/ink.py#L69)
 
 ### 建议交付
 

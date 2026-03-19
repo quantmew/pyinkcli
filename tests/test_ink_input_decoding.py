@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from io import BytesIO, StringIO
 
-from ink_python.ink import Ink, Options
+from pyinkcli.ink import Ink, Options
 
 
 class _StdinWithBuffer:

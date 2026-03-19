@@ -4,7 +4,7 @@ Basic layout tests for the Python Yoga port.
 These tests verify core Yoga layout functionality.
 """
 
-from ink_python.yoga_compat import (
+from pyinkcli.yoga_compat import (
     Node,
     FLEX_DIRECTION_ROW,
     FLEX_DIRECTION_COLUMN,

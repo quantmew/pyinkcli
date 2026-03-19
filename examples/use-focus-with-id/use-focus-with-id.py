@@ -1,7 +1,7 @@
-"""use-focus-with-id example for ink-python."""
+"""use-focus-with-id example for pyinkcli."""
 
-from ink_python import render, Box, Text, useApp, useFocus, useFocusManager, useInput
-from ink_python.component import createElement
+from pyinkcli import render, Box, Text, useApp, useFocus, useFocusManager, useInput
+from pyinkcli.component import createElement
 
 
 def Item(*, label: str, element_id: str):

@@ -2,8 +2,8 @@
 
 import io
 
-from ink_python import Box, Text, renderToString
-from ink_python import render
+from pyinkcli import Box, Text, renderToString
+from pyinkcli import render
 
 
 BG_RED = "\x1b[41m"

@@ -1,7 +1,7 @@
 """Tests for Box component."""
 
-from ink_python.components.Box import Box
-from ink_python.component import createElement
+from pyinkcli.components.Box import Box
+from pyinkcli.component import createElement
 
 
 def test_box_creates_vnode():

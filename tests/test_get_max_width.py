@@ -1,6 +1,6 @@
 """Tests for JS-parity `getMaxWidth()` helper."""
 
-from ink_python.get_max_width import getMaxWidth
+from pyinkcli.get_max_width import getMaxWidth
 
 
 class _FakeYogaNode:

@@ -1,10 +1,10 @@
 """
-Terminal resize example for ink-python.
+Terminal resize example for pyinkcli.
 
 Demonstrates the useWindowSize hook to track terminal dimensions.
 """
 
-from ink_python import render, Box, Text, useWindowSize
+from pyinkcli import render, Box, Text, useWindowSize
 
 
 def terminal_resize_example():

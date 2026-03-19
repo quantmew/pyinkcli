@@ -4,8 +4,8 @@ import random
 import threading
 import time
 
-from ink_python import Box, Text, render, useApp, useInput, useWindowSize
-from ink_python.hooks import useEffect, useRef, useState
+from pyinkcli import Box, Text, render, useApp, useInput, useWindowSize
+from pyinkcli.hooks import useEffect, useRef, useState
 
 
 HEAD = "🦄"

@@ -97,7 +97,7 @@ def test_patch_console_print_and_stderr_are_routed_in_real_pty() -> None:
     source = textwrap.dedent(
         """
         import sys
-        from ink_python import Text, render
+        from pyinkcli import Text, render
 
         app = render(Text("frame"), patch_console=True, interactive=True)
         print("hello from print")
@@ -115,7 +115,7 @@ def test_patch_console_print_and_stderr_are_routed_in_real_pty() -> None:
 def test_ctrl_c_exits_interactive_app_in_real_pty() -> None:
     source = textwrap.dedent(
         """
-        from ink_python import Text, render
+        from pyinkcli import Text, render
 
         app = render(Text("frame"), patch_console=False, interactive=True)
         app.wait_until_exit()
@@ -129,7 +129,7 @@ def test_ctrl_c_exits_interactive_app_in_real_pty() -> None:
 def test_interactive_frame_uses_synchronized_output_in_real_pty() -> None:
     source = textwrap.dedent(
         """
-        from ink_python import Text, render
+        from pyinkcli import Text, render
 
         app = render(Text("frame"), patch_console=False, interactive=True)
         app.unmount()
@@ -149,7 +149,7 @@ def test_interactive_frame_uses_synchronized_output_in_real_pty() -> None:
 def test_rerender_wraps_each_real_interactive_frame_in_synchronized_output() -> None:
     source = textwrap.dedent(
         """
-        from ink_python import Text, render
+        from pyinkcli import Text, render
 
         app = render(Text("one"), patch_console=False, interactive=True)
         app.rerender(Text("two"))
@@ -171,9 +171,9 @@ def test_rerender_wraps_each_real_interactive_frame_in_synchronized_output() -> 
 def test_cursor_only_update_uses_synchronized_output_for_each_committed_frame() -> None:
     source = textwrap.dedent(
         """
-        from ink_python import Text, render
-        from ink_python.component import component
-        from ink_python.hooks.use_cursor import useCursor
+        from pyinkcli import Text, render
+        from pyinkcli.component import component
+        from pyinkcli.hooks.use_cursor import useCursor
 
         POS = {"x": 0, "y": 0}
 
@@ -205,8 +205,8 @@ def test_overlay_restore_last_output_keeps_synchronized_output_boundaries() -> N
     source = textwrap.dedent(
         """
         import sys
-        from ink_python.ink import Ink, Options
-        from ink_python import Text
+        from pyinkcli.ink import Ink, Options
+        from pyinkcli import Text
 
         ink = Ink(
             Options(
@@ -236,7 +236,7 @@ def test_overlay_restore_last_output_keeps_synchronized_output_boundaries() -> N
 def test_incremental_rendering_wraps_each_real_update_in_synchronized_output() -> None:
     source = textwrap.dedent(
         """
-        from ink_python import Text, render
+        from pyinkcli import Text, render
 
         app = render(
             Text("one"),
@@ -264,7 +264,7 @@ def test_fullscreen_to_normal_clear_path_keeps_synchronized_output_boundaries() 
     lines = ", ".join([f'Text(\"L{i:02d}\")' for i in range(12)])
     source = textwrap.dedent(
         f"""
-        from ink_python import Text, Box, render
+        from pyinkcli import Text, Box, render
 
         app = render(
             Box({lines}, flexDirection="column"),
@@ -289,8 +289,8 @@ def test_fullscreen_to_normal_clear_path_keeps_synchronized_output_boundaries() 
 def test_static_output_preserves_clear_static_main_frame_order() -> None:
     source = textwrap.dedent(
         """
-        from ink_python import Text, Box, Static, render
-        from ink_python.component import component
+        from pyinkcli import Text, Box, Static, render
+        from pyinkcli.component import component
 
         ITEMS = ["A"]
         LABEL = "frame-1"
@@ -327,8 +327,8 @@ def test_static_output_preserves_clear_static_main_frame_order() -> None:
 def test_incremental_rendering_with_static_matches_static_frame_boundaries() -> None:
     source = textwrap.dedent(
         """
-        from ink_python import Text, Box, Static, render
-        from ink_python.component import component
+        from pyinkcli import Text, Box, Static, render
+        from pyinkcli.component import component
 
         ITEMS = ["A"]
         LABEL = "frame-1"
@@ -364,8 +364,8 @@ def test_incremental_rendering_with_static_matches_static_frame_boundaries() -> 
 def test_patch_console_with_static_preserves_overlay_restore_order() -> None:
     source = textwrap.dedent(
         """
-        from ink_python import Text, Box, Static, render
-        from ink_python.component import component
+        from pyinkcli import Text, Box, Static, render
+        from pyinkcli.component import component
 
         ITEMS = ["A"]
 
@@ -397,8 +397,8 @@ def test_patch_console_with_static_preserves_overlay_restore_order() -> None:
 def test_alternate_screen_with_static_matches_expected_raw_order() -> None:
     source = textwrap.dedent(
         """
-        from ink_python import Text, Box, Static, render
-        from ink_python.component import component
+        from pyinkcli import Text, Box, Static, render
+        from pyinkcli.component import component
 
         ITEMS = ["A"]
 
@@ -432,8 +432,8 @@ def test_alternate_screen_with_static_matches_expected_raw_order() -> None:
 def test_resize_clear_then_rebuild_keeps_synchronized_output_boundaries() -> None:
     source = textwrap.dedent(
         """
-        from ink_python import Text
-        from ink_python.ink import Ink, Options
+        from pyinkcli import Text
+        from pyinkcli.ink import Ink, Options
         import sys
 
         ink = Ink(
@@ -474,9 +474,9 @@ def test_alternate_screen_teardown_console_output_uses_native_stream_after_resto
     source = textwrap.dedent(
         """
         import sys
-        from ink_python import Text, render
-        from ink_python.component import component
-        from ink_python.hooks import useEffect
+        from pyinkcli import Text, render
+        from pyinkcli.component import component
+        from pyinkcli.hooks import useEffect
 
         @component
         def Example():
@@ -504,9 +504,9 @@ def test_ctrl_c_with_patch_console_and_alternate_screen_runs_teardown_sequence()
     source = textwrap.dedent(
         """
         import sys
-        from ink_python import Text, render
-        from ink_python.component import component
-        from ink_python.hooks import useEffect
+        from pyinkcli import Text, render
+        from pyinkcli.component import component
+        from pyinkcli.hooks import useEffect
 
         @component
         def Example():
@@ -543,9 +543,9 @@ def test_q_exit_with_patch_console_and_alternate_screen_runs_teardown_sequence()
     source = textwrap.dedent(
         """
         import sys
-        from ink_python import Text, render, useInput, useApp
-        from ink_python.component import component
-        from ink_python.hooks import useEffect
+        from pyinkcli import Text, render, useInput, useApp
+        from pyinkcli.component import component
+        from pyinkcli.hooks import useEffect
 
         @component
         def Example():
@@ -589,9 +589,9 @@ def test_q_exit_with_patch_console_and_alternate_screen_runs_teardown_sequence()
 def test_utf8_input_is_not_mojibake_in_real_pty() -> None:
     source = textwrap.dedent(
         """
-        from ink_python import Text, render, useInput, useApp
-        from ink_python.component import component
-        from ink_python.hooks import useState
+        from pyinkcli import Text, render, useInput, useApp
+        from pyinkcli.component import component
+        from pyinkcli.hooks import useState
 
         @component
         def Example():
@@ -626,10 +626,10 @@ def test_utf8_input_is_not_mojibake_in_real_pty() -> None:
 def test_bracketed_paste_with_cjk_text_is_delivered_as_one_paste_event() -> None:
     source = textwrap.dedent(
         """
-        from ink_python import Text, render, useApp
-        from ink_python.component import component
-        from ink_python.hooks import useState
-        from ink_python.hooks.use_paste import usePaste
+        from pyinkcli import Text, render, useApp
+        from pyinkcli.component import component
+        from pyinkcli.hooks import useState
+        from pyinkcli.hooks.use_paste import usePaste
 
         @component
         def Example():
@@ -663,7 +663,7 @@ def test_bracketed_paste_with_cjk_text_is_delivered_as_one_paste_event() -> None
 def test_alternate_screen_cursor_lifecycle_matches_js_ownership_boundaries() -> None:
     source = textwrap.dedent(
         """
-        from ink_python import Text, render
+        from pyinkcli import Text, render
 
         app = render(Text("frame"), patch_console=False, interactive=True, alternate_screen=True)
         app.unmount()
@@ -710,8 +710,8 @@ def test_incremental_rendering_example_preserves_selected_label_and_service_copy
 def test_use_input_discrete_updates_bypass_normal_throttle_in_real_pty() -> None:
     source = textwrap.dedent(
         """
-        from ink_python import Text, render, useApp, useInput
-        from ink_python.hooks import useEffect, useState
+        from pyinkcli import Text, render, useApp, useInput
+        from pyinkcli.hooks import useEffect, useState
 
         def Example():
             app = useApp()
@@ -749,8 +749,8 @@ def test_use_input_discrete_updates_bypass_normal_throttle_in_real_pty() -> None
 def test_use_paste_discrete_updates_bypass_normal_throttle_in_real_pty() -> None:
     source = textwrap.dedent(
         """
-        from ink_python import Text, render, useApp, usePaste
-        from ink_python.hooks import useEffect, useState
+        from pyinkcli import Text, render, useApp, usePaste
+        from pyinkcli.hooks import useEffect, useState
 
         def Example():
             app = useApp()

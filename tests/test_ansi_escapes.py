@@ -1,7 +1,7 @@
 """Tests for ANSI escapes utility."""
 
 import pytest
-from ink_python.utils.ansi_escapes import (
+from pyinkcli.utils.ansi_escapes import (
     cursor_to,
     cursor_move,
     cursor_up,

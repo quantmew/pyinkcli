@@ -1,6 +1,6 @@
-"""box-backgrounds example for ink-python."""
+"""box-backgrounds example for pyinkcli."""
 
-from ink_python import render, Box, Text, useApp, useInput
+from pyinkcli import render, Box, Text, useApp, useInput
 
 
 def box_backgrounds_example():

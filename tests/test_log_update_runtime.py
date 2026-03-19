@@ -1,7 +1,7 @@
 """Tests for log update runtime behavior."""
 
-from ink_python.log_update import LogUpdate
-from ink_python.utils.ansi_escapes import (
+from pyinkcli.log_update import LogUpdate
+from pyinkcli.utils.ansi_escapes import (
     cursor_down,
     cursor_next_line,
     cursor_to,

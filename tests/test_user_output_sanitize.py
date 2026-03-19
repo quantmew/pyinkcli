@@ -2,10 +2,10 @@
 
 from io import StringIO
 
-from ink_python import Text, render
-from ink_python import ink as ink_module
-from ink_python.hooks.use_stderr import _StderrHandle
-from ink_python.hooks.use_stdout import _StdoutHandle
+from pyinkcli import Text, render
+from pyinkcli import ink as ink_module
+from pyinkcli.hooks.use_stderr import _StderrHandle
+from pyinkcli.hooks.use_stdout import _StdoutHandle
 
 
 class FakeStdout(StringIO):

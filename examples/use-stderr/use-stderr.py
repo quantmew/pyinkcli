@@ -1,5 +1,5 @@
 """
-Use stderr example for ink-python.
+Use stderr example for pyinkcli.
 
 Port of js_source/ink/examples/use-stderr/use-stderr.tsx.
 Writes to stderr periodically while rendering normal UI.
@@ -8,8 +8,8 @@ Writes to stderr periodically while rendering normal UI.
 import threading
 import time
 
-from ink_python import render, Text, useStderr
-from ink_python.hooks import useEffect
+from pyinkcli import render, Text, useStderr
+from pyinkcli.hooks import useEffect
 
 
 def use_stderr_example():

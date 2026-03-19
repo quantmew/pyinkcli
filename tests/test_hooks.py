@@ -1,7 +1,7 @@
 """Tests for hooks runtime behavior."""
 
-from ink_python.components.CursorContext import _provide_cursor_context
-from ink_python.hooks._runtime import (
+from pyinkcli.components.CursorContext import _provide_cursor_context
+from pyinkcli.hooks._runtime import (
     _batched_updates_runtime,
     _discrete_updates_runtime,
     _begin_component_render,
@@ -17,7 +17,7 @@ from ink_python.hooks._runtime import (
     useRef,
     useState,
 )
-from ink_python.hooks.use_cursor import useCursor
+from pyinkcli.hooks.use_cursor import useCursor
 
 
 def render_component(instance_id: str, component):

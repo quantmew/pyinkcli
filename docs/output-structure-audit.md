@@ -3,7 +3,7 @@
 This document tracks structural parity between:
 
 - `js_source/ink/src/output.ts`
-- `src/ink_python/output.py`
+- `src/pyinkcli/output.py`
 
 The goal is not only behavior parity, but also clear ownership boundaries for:
 
@@ -17,8 +17,8 @@ The goal is not only behavior parity, but also clear ownership boundaries for:
 
 | JS output.ts responsibility | Python status | Python location |
 |---|---|---|
-| queue `write/clip/unclip` operations | Matched | `Output.write/clip/unclip` in `src/ink_python/output.py` |
-| initialize full output surface eagerly | Matched | `Output.get()` in `src/ink_python/output.py` |
+| queue `write/clip/unclip` operations | Matched | `Output.write/clip/unclip` in `src/pyinkcli/output.py` |
+| initialize full output surface eagerly | Matched | `Output.get()` in `src/pyinkcli/output.py` |
 | apply nested clip stack during replay | Matched | `Output._apply_write()` |
 | convert line text into styled units | Partially matched | `styled_cells()` |
 | use visible width for placement | Matched | `string_width()` driven placement in `write_ansi_line()` |

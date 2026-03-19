@@ -1,5 +1,5 @@
 """
-Static example for ink-python.
+Static example for pyinkcli.
 
 Closer to js_source/ink/examples/static/static.tsx.
 Appends completed tests to Static output and keeps a live counter below.
@@ -8,8 +8,8 @@ Appends completed tests to Static output and keeps a live counter below.
 import threading
 import time
 
-from ink_python import render, Box, Text, Static
-from ink_python.hooks import useState, useEffect
+from pyinkcli import render, Box, Text, Static
+from pyinkcli.hooks import useState, useEffect
 
 
 def static_example():

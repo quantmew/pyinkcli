@@ -1,6 +1,6 @@
 """Test row component for jest example."""
 
-from ink_python import Box, Text
+from pyinkcli import Box, Text
 
 
 def get_background_for_status(status: str):

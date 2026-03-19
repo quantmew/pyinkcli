@@ -8,8 +8,8 @@ import threading
 import time
 from datetime import datetime
 
-from ink_python import Box, Text, render, useApp, useInput, useWindowSize
-from ink_python.hooks import useEffect, useState
+from pyinkcli import Box, Text, render, useApp, useInput, useWindowSize
+from pyinkcli.hooks import useEffect, useState
 
 
 ROWS = [

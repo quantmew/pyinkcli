@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from ink_python import Box, Text, renderToString
+from pyinkcli import Box, Text, renderToString
 
 
 ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")

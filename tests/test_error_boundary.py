@@ -4,9 +4,9 @@ from io import StringIO
 
 import pytest
 
-from ink_python import Text, render
-from ink_python._component_runtime import _Component
-from ink_python.component import createElement
+from pyinkcli import Text, render
+from pyinkcli._component_runtime import _Component
+from pyinkcli.component import createElement
 
 
 class FakeStdout(StringIO):

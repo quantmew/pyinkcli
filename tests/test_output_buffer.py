@@ -1,6 +1,6 @@
 """Tests for ANSI-aware output buffer behavior."""
 
-from ink_python.output import (
+from pyinkcli.output import (
     Output,
 )
 

@@ -1,13 +1,13 @@
 """Tests for cursor helper escape sequence builders."""
 
-from ink_python.cursor_helpers import (
+from pyinkcli.cursor_helpers import (
     buildCursorOnlySequence,
     buildCursorSuffix,
     buildReturnToBottom,
     buildReturnToBottomPrefix,
     cursorPositionChanged,
 )
-from ink_python.utils.ansi_escapes import cursor_down, cursor_left, cursor_to, cursor_up, hide_cursor_escape, show_cursor_escape
+from pyinkcli.utils.ansi_escapes import cursor_down, cursor_left, cursor_to, cursor_up, hide_cursor_escape, show_cursor_escape
 
 
 def test_cursor_position_changed():

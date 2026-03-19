@@ -1,11 +1,11 @@
 """
-Table example for ink-python.
+Table example for pyinkcli.
 
 Demonstrates a table layout with user data.
 Port of js_source/ink/examples/table/table.tsx
 """
 
-from ink_python import render, Box, Text
+from pyinkcli import render, Box, Text
 
 
 USERS = [

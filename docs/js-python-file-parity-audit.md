@@ -2,7 +2,7 @@
 
 ## 1. 源文件目录结构对比
 
-### 1.1 主目录文件对比 (js_source/ink/src/ vs src/ink_python/)
+### 1.1 主目录文件对比 (js_source/ink/src/ vs src/pyinkcli/)
 
 | JS 文件 | Python 文件 | 状态 | 备注 |
 |---------|-------------|------|------|

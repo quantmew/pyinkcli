@@ -1,10 +1,10 @@
 """
-Justify content example for ink-python.
+Justify content example for pyinkcli.
 
 Demonstrates different justifyContent values in flexbox layout.
 """
 
-from ink_python import render, Box, Text, useApp, useInput
+from pyinkcli import render, Box, Text, useApp, useInput
 
 
 def justify_content_example():

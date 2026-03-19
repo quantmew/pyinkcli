@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ink-python"
+name = "pyinkcli"
 version = "0.1.0"
-description = "React-like terminal UI library for Python - a port of Ink"
+description = "Python fork and translation of Ink for building terminal UIs"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"
 authors = [
-    { name = "ink-python contributors" }
+    { name = "pyinkcli contributors" }
 ]
 keywords = [
     "cli",
@@ -57,11 +57,11 @@ Repository = "https://github.com/ink-python/ink-python"
 Issues = "https://github.com/ink-python/ink-python/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ink_python"]
+packages = ["src/pyinkcli"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "/src/ink_python",
+    "/src/pyinkcli",
     "/README.md",
     "/LICENSE",
 ]

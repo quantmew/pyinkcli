@@ -1,7 +1,7 @@
-"""aria example for ink-python."""
+"""aria example for pyinkcli."""
 
-from ink_python import render, Box, Text, useInput
-from ink_python.hooks import useState
+from pyinkcli import render, Box, Text, useInput
+from pyinkcli.hooks import useState
 
 
 def aria_example():

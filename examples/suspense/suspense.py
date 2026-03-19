@@ -1,12 +1,12 @@
-"""suspense example for ink-python."""
+"""suspense example for pyinkcli."""
 
 from __future__ import annotations
 
 import time
 
-from ink_python import Text, render
-from ink_python.component import createElement
-from ink_python.suspense_runtime import readResource, resetResource
+from pyinkcli import Text, render
+from pyinkcli.component import createElement
+from pyinkcli.suspense_runtime import readResource, resetResource
 
 
 def _read_message() -> str:

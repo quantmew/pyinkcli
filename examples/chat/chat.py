@@ -1,11 +1,11 @@
 """
-Chat example for ink-python.
+Chat example for pyinkcli.
 
 Demonstrates a simple chat interface with message input and display.
 Port of js_source/ink/examples/chat/chat.tsx
 """
 
-from ink_python import render, Box, Text, useInput
+from pyinkcli import render, Box, Text, useInput
 
 
 message_id = 0
@@ -13,7 +13,7 @@ message_id = 0
 
 def chat_app():
     """A simple chat application."""
-    from ink_python.hooks import useState
+    from pyinkcli.hooks import useState
 
     global message_id
     input_text, set_input = useState("")

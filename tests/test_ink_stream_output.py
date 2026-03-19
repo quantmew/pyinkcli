@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from io import StringIO
 
-from ink_python import Text, render, useWindowSize
-from ink_python.ink import Ink, Options
+from pyinkcli import Text, render, useWindowSize
+from pyinkcli.ink import Ink, Options
 
 
 class FakeTTY(StringIO):

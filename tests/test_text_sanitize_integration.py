@@ -1,11 +1,11 @@
 """Tests for sanitizeAnsi integration in layout/render paths."""
 
-from ink_python import Box, Text, renderToString
-from ink_python.components._accessibility_runtime import _provide_accessibility
-from ink_python.measure_text import measureText
-from ink_python.render_node_to_output import render_node_to_screen_reader_output
-from ink_python.utils.wrap_ansi import truncate_string, wrap_ansi
-from ink_python.wrap_text import wrapText
+from pyinkcli import Box, Text, renderToString
+from pyinkcli.components._accessibility_runtime import _provide_accessibility
+from pyinkcli.measure_text import measureText
+from pyinkcli.render_node_to_output import render_node_to_screen_reader_output
+from pyinkcli.utils.wrap_ansi import truncate_string, wrap_ansi
+from pyinkcli.wrap_text import wrapText
 
 
 def test_measure_text_ignores_layout_affecting_control_sequences():
@@ -38,8 +38,8 @@ def test_render_to_string_sanitizes_text_before_layout():
 
 def test_screen_reader_output_sanitizes_control_sequences():
     vnode = Box(Text("Hello\x1b[2JWorld"))
-    from ink_python.render_to_string import create_root_node
-    from ink_python.reconciler import createReconciler
+    from pyinkcli.render_to_string import create_root_node
+    from pyinkcli.reconciler import createReconciler
 
     root_node = create_root_node(40, 5)
     reconciler = createReconciler(root_node)

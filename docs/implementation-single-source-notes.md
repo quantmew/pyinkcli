@@ -11,11 +11,11 @@ multiple implementations existed and could diverge silently.
 
 Canonical implementation:
 
-- `src/ink_python/dom.py` -> `squash_text_nodes()`
+- `src/pyinkcli/dom.py` -> `squash_text_nodes()`
 
 Compatibility wrapper only:
 
-- `src/ink_python/squash_text_nodes.py`
+- `src/pyinkcli/squash_text_nodes.py`
 
 Rule:
 
@@ -26,7 +26,7 @@ Rule:
 
 Canonical implementation:
 
-- `src/ink_python/ansi_tokenizer.py`
+- `src/pyinkcli/ansi_tokenizer.py`
 
 Rule:
 
@@ -37,7 +37,7 @@ Rule:
 
 Canonical implementation:
 
-- `src/ink_python/sanitize_ansi.py`
+- `src/pyinkcli/sanitize_ansi.py`
 
 Rule:
 
@@ -48,15 +48,15 @@ Rule:
 
 Canonical runtime-facing wrapper:
 
-- `src/ink_python/wrap_text.py`
+- `src/pyinkcli/wrap_text.py`
 
 Low-level convenience module:
 
-- `src/ink_python/utils/wrap_ansi.py`
+- `src/pyinkcli/utils/wrap_ansi.py`
 
 Rule:
 
-- runtime code should prefer `ink_python.wrap_text.wrap_text()`
+- runtime code should prefer `pyinkcli.wrap_text.wrap_text()`
 - `utils.wrap_ansi.wrap_text()` is a compatibility wrapper only
 - `utils.wrap_ansi` remains the low-level primitive layer and should not grow separate runtime policy
 
@@ -64,7 +64,7 @@ Rule:
 
 Canonical implementation:
 
-- `src/ink_python/output.py`
+- `src/pyinkcli/output.py`
 
 Rule:
 

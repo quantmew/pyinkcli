@@ -1,6 +1,6 @@
 """Summary component for jest example."""
 
-from ink_python import Box, Text
+from pyinkcli import Box, Text
 
 
 def Summary(*, is_finished: bool, passed: int, failed: int, time_text: str):

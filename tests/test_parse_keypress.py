@@ -1,4 +1,4 @@
-from ink_python.parse_keypress import (
+from pyinkcli.parse_keypress import (
     parseKeypress,
     parseKittyKeypress,
     parseKittySpecialKey,

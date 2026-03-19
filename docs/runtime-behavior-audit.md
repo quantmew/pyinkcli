@@ -2,8 +2,8 @@
 
 本轮从“结构收缩”切到“行为差异审计”，重点看：
 
-- [hooks/\_runtime.py](/mnt/hdd1/ink-python/src/ink_python/hooks/_runtime.py)
-- [\_suspense_runtime.py](/mnt/hdd1/ink-python/src/ink_python/_suspense_runtime.py)
+- [hooks/\_runtime.py](/mnt/hdd1/ink-python/src/pyinkcli/hooks/_runtime.py)
+- [\_suspense_runtime.py](/mnt/hdd1/ink-python/src/pyinkcli/_suspense_runtime.py)
 
 对照基准：
 

@@ -1,12 +1,12 @@
-"""use-transition example for ink-python."""
+"""use-transition example for pyinkcli."""
 
 from __future__ import annotations
 
 import time
 
-from ink_python import Box, Text, render, useInput
-from ink_python.components._app_context_runtime import _get_app_context
-from ink_python.hooks import useMemo, useState
+from pyinkcli import Box, Text, render, useInput
+from pyinkcli.components._app_context_runtime import _get_app_context
+from pyinkcli.hooks import useMemo, useState
 
 
 def _generate_items(filter_text: str) -> list[str]:

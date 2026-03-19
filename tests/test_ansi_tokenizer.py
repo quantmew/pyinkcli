@@ -1,6 +1,6 @@
 """Tests for ANSI tokenizer behavior."""
 
-from ink_python.ansi_tokenizer import hasAnsiControlCharacters, tokenizeAnsi
+from pyinkcli.ansi_tokenizer import hasAnsiControlCharacters, tokenizeAnsi
 
 
 def test_tokenize_plain_text():

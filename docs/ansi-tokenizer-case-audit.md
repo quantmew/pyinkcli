@@ -4,7 +4,7 @@ This document tracks parity between:
 
 - `js_source/ink/src/ansi-tokenizer.ts`
 - `js_source/ink/test/ansi-tokenizer.ts`
-- `src/ink_python/ansi_tokenizer.py`
+- `src/pyinkcli/ansi_tokenizer.py`
 - `tests/test_ansi_tokenizer.py`
 
 ## Status

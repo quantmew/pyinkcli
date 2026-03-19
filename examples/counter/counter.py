@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Counter example for ink-python.
+Counter example for pyinkcli.
 
 Port of js_source/ink/examples/counter/counter.tsx.
 Displays an auto-incrementing counter.
@@ -9,8 +9,8 @@ Displays an auto-incrementing counter.
 import threading
 import time
 
-from ink_python import render, Text
-from ink_python.hooks import useState, useEffect
+from pyinkcli import render, Text
+from pyinkcli.hooks import useState, useEffect
 
 
 def counter_example():

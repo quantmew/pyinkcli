@@ -2,10 +2,10 @@
 
 import time
 
-from ink_python.component import createElement
-from ink_python.dom import createNode
-from ink_python.hooks._runtime import useState
-from ink_python.reconciler import (
+from pyinkcli.component import createElement
+from pyinkcli.dom import createNode
+from pyinkcli.hooks._runtime import useState
+from pyinkcli.reconciler import (
     batchedUpdates,
     consumePendingRerenderPriority,
     createReconciler,

@@ -14,11 +14,11 @@ Purpose: prevent raw user text from polluting measurement and wrapping.
 
 Entry points:
 
-- `src/ink_python/measure_text.py`
-- `src/ink_python/wrap_text.py`
-- `src/ink_python/render_node_to_output.py`
-- screen-reader output in `src/ink_python/render_node_to_output.py`
-- public `wrap_ansi()` / `truncate_string()` in `src/ink_python/utils/wrap_ansi.py`
+- `src/pyinkcli/measure_text.py`
+- `src/pyinkcli/wrap_text.py`
+- `src/pyinkcli/render_node_to_output.py`
+- screen-reader output in `src/pyinkcli/render_node_to_output.py`
+- public `wrap_ansi()` / `truncate_string()` in `src/pyinkcli/utils/wrap_ansi.py`
 
 Rule:
 
@@ -34,7 +34,7 @@ Purpose: catch anything that slips through text-level sanitization, including tr
 
 Entry points:
 
-- `src/ink_python/output.py`
+- `src/pyinkcli/output.py`
 
 Rule:
 
@@ -51,9 +51,9 @@ Purpose: protect user-facing imperative write APIs.
 
 Entry points:
 
-- `src/ink_python/hooks/use_stdout.py`
-- `src/ink_python/hooks/use_stderr.py`
-- `src/ink_python/ink.py` via `_write_to_stdout()` / `_write_to_stderr()`
+- `src/pyinkcli/hooks/use_stdout.py`
+- `src/pyinkcli/hooks/use_stderr.py`
+- `src/pyinkcli/ink.py` via `_write_to_stdout()` / `_write_to_stderr()`
 
 Rule:
 
@@ -70,7 +70,7 @@ Purpose: protect debug/static-output composition even if an upstream layer regre
 
 Entry points:
 
-- `src/ink_python/ink.py` `_on_render_callback()`
+- `src/pyinkcli/ink.py` `_on_render_callback()`
 
 Rule:
 

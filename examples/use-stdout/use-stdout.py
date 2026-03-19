@@ -1,5 +1,5 @@
 """
-Use Stdout example for ink-python.
+Use Stdout example for pyinkcli.
 
 Demonstrates the useStdout hook to inspect stdout dimensions.
 Based on js_source/ink/examples/use-stdout/use-stdout.tsx
@@ -8,8 +8,8 @@ Based on js_source/ink/examples/use-stdout/use-stdout.tsx
 import threading
 import time
 
-from ink_python import render, Box, Text, useStdout
-from ink_python.hooks import useEffect
+from pyinkcli import render, Box, Text, useStdout
+from pyinkcli.hooks import useEffect
 
 
 def use_stdout_example():

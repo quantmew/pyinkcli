@@ -1,10 +1,10 @@
 """
-Borders example for ink-python.
+Borders example for pyinkcli.
 
-Demonstrates different border styles available in ink-python.
+Demonstrates different border styles available in pyinkcli.
 """
 
-from ink_python import render, Box, Text, useApp, useInput
+from pyinkcli import render, Box, Text, useApp, useInput
 
 
 def borders_example():

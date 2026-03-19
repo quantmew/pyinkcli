@@ -1,10 +1,10 @@
-"""render-throttle example for ink-python."""
+"""render-throttle example for pyinkcli."""
 
 import threading
 import time
 
-from ink_python import render, Box, Text
-from ink_python.hooks import useEffect, useState
+from pyinkcli import render, Box, Text
+from pyinkcli.hooks import useEffect, useState
 
 
 def app():

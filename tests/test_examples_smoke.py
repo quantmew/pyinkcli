@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from ink_python.ansi_tokenizer import tokenizeAnsi
+from pyinkcli.ansi_tokenizer import tokenizeAnsi
 
 
 ROOT = Path(__file__).resolve().parents[1]

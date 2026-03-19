@@ -1,4 +1,4 @@
-"""subprocess-output example for ink-python."""
+"""subprocess-output example for pyinkcli."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ import subprocess
 import threading
 from pathlib import Path
 
-from ink_python import render, Box, Text
-from ink_python.ansi_tokenizer import tokenizeAnsi
-from ink_python.hooks import useEffect, useState
+from pyinkcli import render, Box, Text
+from pyinkcli.ansi_tokenizer import tokenizeAnsi
+from pyinkcli.hooks import useEffect, useState
 
 
 def strip_ansi(text: str) -> str:

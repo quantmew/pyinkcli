@@ -1,6 +1,6 @@
 """Tests for the streaming input parser."""
 
-from ink_python.input_parser import (
+from pyinkcli.input_parser import (
     InputParser,
     parseCsiSequence,
     parseEscapeSequence,

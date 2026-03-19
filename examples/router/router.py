@@ -1,11 +1,11 @@
 """
-Router example for ink-python.
+Router example for pyinkcli.
 
 Simple in-memory route switching inspired by js_source/ink/examples/router/router.tsx
 """
 
-from ink_python import render, Box, Text, useInput, useApp
-from ink_python.component import createElement
+from pyinkcli import render, Box, Text, useInput, useApp
+from pyinkcli.component import createElement
 
 
 def Home(*, set_route):
@@ -46,7 +46,7 @@ def About(*, set_route):
 
 def router_example():
     """Render a tiny two-page router demo."""
-    from ink_python.hooks import useState
+    from pyinkcli.hooks import useState
 
     route, set_route = useState("/")
 

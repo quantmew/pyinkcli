@@ -1,16 +1,16 @@
 """
-Use Input example for ink-python.
+Use Input example for pyinkcli.
 
 Demonstrates keyboard input handling with arrow keys.
 Port of js_source/ink/examples/use-input/use-input.tsx
 """
 
-from ink_python import render, Box, Text, useInput, useApp
+from pyinkcli import render, Box, Text, useInput, useApp
 
 
 def robot_example():
     """A robot face that moves with arrow keys."""
-    from ink_python.hooks import useState
+    from pyinkcli.hooks import useState
 
     app = useApp()
     x, set_x = useState(1)

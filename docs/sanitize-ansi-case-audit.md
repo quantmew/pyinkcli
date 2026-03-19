@@ -4,7 +4,7 @@ This document tracks parity between:
 
 - `js_source/ink/src/sanitize-ansi.ts`
 - `js_source/ink/test/sanitize-ansi.ts`
-- `src/ink_python/sanitize_ansi.py`
+- `src/pyinkcli/sanitize_ansi.py`
 - `tests/test_sanitize_ansi.py`
 
 ## Status
@@ -61,12 +61,12 @@ These are not direct JS title mirrors, but they close parity-adjacent gaps:
 
 The most important current Python-side sanitize call sites are:
 
-- `src/ink_python/dom.py` `squash_text_nodes()`
-- `src/ink_python/measure_text.py`
-- `src/ink_python/wrap_text.py`
-- `src/ink_python/utils/wrap_ansi.py`
-- `src/ink_python/output.py`
-- `src/ink_python/ink.py`
+- `src/pyinkcli/dom.py` `squash_text_nodes()`
+- `src/pyinkcli/measure_text.py`
+- `src/pyinkcli/wrap_text.py`
+- `src/pyinkcli/utils/wrap_ansi.py`
+- `src/pyinkcli/output.py`
+- `src/pyinkcli/ink.py`
 
 This is intentionally broader than the immediate JS call-site shape because Python now uses layered defense for runtime safety.
 

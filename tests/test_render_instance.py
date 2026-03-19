@@ -2,7 +2,7 @@
 
 from io import StringIO
 
-from ink_python import Text, render, useApp
+from pyinkcli import Text, render, useApp
 
 
 class FakeStdout(StringIO):

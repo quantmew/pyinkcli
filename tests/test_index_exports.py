@@ -1,17 +1,17 @@
 """Parity checks for the JS-like public surfaces."""
 
-import ink_python
-from ink_python import cursor_helpers
-from ink_python import dom
-from ink_python import index as ink_index
-from ink_python import log_update
-from ink_python import render_node_to_output
-from ink_python import suspense_runtime
-from ink_python import styles
-from ink_python import yoga_compat
-from ink_python import component
-from ink_python.hooks import state as hooks_state
-from ink_python.components import (
+import pyinkcli
+from pyinkcli import cursor_helpers
+from pyinkcli import dom
+from pyinkcli import index as ink_index
+from pyinkcli import log_update
+from pyinkcli import render_node_to_output
+from pyinkcli import suspense_runtime
+from pyinkcli import styles
+from pyinkcli import yoga_compat
+from pyinkcli import component
+from pyinkcli.hooks import state as hooks_state
+from pyinkcli.components import (
     AccessibilityContext,
     AppContext,
     BackgroundContext,
@@ -54,7 +54,7 @@ def test_index_exports_match_js_surface() -> None:
 
 
 def test_root_package_all_matches_js_surface() -> None:
-    assert ink_python.__all__ == ink_index.__all__
+    assert pyinkcli.__all__ == ink_index.__all__
 
 
 def test_root_package_no_longer_exposes_trimmed_compat_exports() -> None:
@@ -75,10 +75,10 @@ def test_root_package_no_longer_exposes_trimmed_compat_exports() -> None:
         "useTransition",
     ):
         try:
-            getattr(ink_python, name)
+            getattr(pyinkcli, name)
         except AttributeError:
             continue
-        raise AssertionError(f"{name} should not be exposed from ink_python root package")
+        raise AssertionError(f"{name} should not be exposed from pyinkcli root package")
 
 
 def test_cursor_helpers_export_camel_case_names() -> None:
