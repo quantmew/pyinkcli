@@ -1,19 +1,23 @@
 """Tests for hooks runtime behavior."""
 
+from ink_python.components.CursorContext import _provide_cursor_context
 from ink_python.hooks._runtime import (
+    _batched_updates_runtime,
+    _discrete_updates_runtime,
     _begin_component_render,
     _clear_hook_state,
+    _consume_pending_rerender_priority,
     _end_component_render,
     _finish_hook_state,
     _reset_hook_state,
     _set_rerender_callback,
-    batchUpdates,
     useCallback,
     useEffect,
     useMemo,
     useRef,
     useState,
 )
+from ink_python.hooks.use_cursor import useCursor
 
 
 def render_component(instance_id: str, component):
@@ -199,7 +203,7 @@ def test_batch_updates_coalesces_multiple_state_updates_into_one_rerender() -> N
     def component():
         value, set_value = useState(0)
         if value == 0:
-            batchUpdates(
+            _batched_updates_runtime(
                 lambda: (
                     set_value(1),
                     set_value(2),
@@ -213,6 +217,38 @@ def test_batch_updates_coalesces_multiple_state_updates_into_one_rerender() -> N
     assert rerenders == ["rerender"]
 
 
+def test_discrete_updates_coalesce_multiple_state_updates_into_one_rerender() -> None:
+    rerenders: list[str] = []
+
+    def component():
+        value, set_value = useState(0)
+        if value == 0:
+            _discrete_updates_runtime(
+                lambda: (
+                    set_value(1),
+                    set_value(2),
+                )
+            )
+        return value
+
+    _set_rerender_callback(lambda: rerenders.append("rerender"))
+    render_component("discrete-rerender-count", component)
+
+    assert rerenders == ["rerender"]
+
+
+def test_render_phase_update_is_recorded_with_render_phase_priority() -> None:
+    def component():
+        value, set_value = useState(0)
+        if value == 0:
+            set_value(1)
+        return value
+
+    render_component("render-phase-priority", component)
+
+    assert _consume_pending_rerender_priority() == "render_phase"
+
+
 def test_hook_state_is_isolated_between_nested_component_instance_ids() -> None:
     def child(label: str):
         value, set_value = useState(0)
@@ -224,6 +260,7 @@ def test_hook_state_is_isolated_between_nested_component_instance_ids() -> None:
         ("parent/child:a", lambda: child("a")),
         ("parent/child:b", lambda: child("b")),
     )
+
     second = render_components(
         ("parent/child:a", lambda: child("a")),
         ("parent/child:b", lambda: child("b")),
@@ -231,6 +268,24 @@ def test_hook_state_is_isolated_between_nested_component_instance_ids() -> None:
 
     assert first == ["a:0", "b:0"]
     assert second == ["a:1", "b:1"]
+
+
+def test_use_cursor_prefers_cursor_context_when_available() -> None:
+    positions: list[object] = []
+
+    class CursorContextValue:
+        def setCursorPosition(self, position):
+            positions.append(position)
+
+    def component():
+        cursor = useCursor()
+        cursor.setCursorPosition({"x": 3, "y": 1})
+        return None
+
+    with _provide_cursor_context(CursorContextValue()):
+        render_component("cursor-context", component)
+
+    assert positions == [(3, 1)]
 
 
 def test_hook_state_resets_after_component_unmount_and_remount() -> None:

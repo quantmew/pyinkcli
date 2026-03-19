@@ -9,6 +9,7 @@ def installDevtoolsWindowPolyfill() -> dict[str, object]:
     global_scope = builtins.__dict__.setdefault("__INK_DEVTOOLS_GLOBAL__", {})
     global_scope.setdefault("window", global_scope)
     global_scope.setdefault("self", global_scope)
+    global_scope.setdefault("__INK_DEVTOOLS_RENDERERS__", {})
     global_scope.setdefault(
         "__REACT_DEVTOOLS_COMPONENT_FILTERS__",
         [

@@ -1,5 +1,6 @@
 """Tests for Text component."""
 
+from ink_python import renderToString
 from ink_python.components.Text import Text
 from ink_python.component import createElement
 
@@ -48,3 +49,15 @@ def test_text_wrap_prop():
     assert vnode is not None
     style = vnode.props.get("style", {})
     assert style.get("textWrap") == "truncate"
+
+
+def test_text_accepts_camel_case_background_color():
+    """Test Text with JS-style backgroundColor prop."""
+    output = renderToString(Text("Hello", backgroundColor="red"))
+    assert "\x1b[41mHello\x1b[49m" == output
+
+
+def test_text_accepts_camel_case_dim_color():
+    """Test Text with JS-style dimColor prop."""
+    output = renderToString(Text("Hello", dimColor=True))
+    assert output == "\x1b[2mHello\x1b[22m"

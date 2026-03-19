@@ -24,15 +24,9 @@ from typing import (
     Union,
 )
 
-from ink_python._component_runtime import createElement
+from ink_python._component_runtime import createElement, scopeRender
 from ink_python.components._accessibility_runtime import _provide_accessibility
-from ink_python.components._app_context_runtime import (
-    Props as AppContextProps,
-    _provide_app_context,
-)
-from ink_python.components.StdinContext import _provide_stdin
-from ink_python.components.StdoutContext import _provide_stdout
-from ink_python.components.StderrContext import _provide_stderr
+from ink_python.components._app_context_runtime import Props as AppContextProps
 from ink_python.dom import DOMElement, createNode
 from ink_python.hooks.use_app import _set_app_ink
 from ink_python.hooks.use_input import _dispatch_input, _clear_input_handlers
@@ -42,10 +36,10 @@ from ink_python.hooks._runtime import (
     _set_rerender_callback,
 )
 from ink_python.hooks.use_stdin import _set_stdin, useStdin
-from ink_python.hooks.use_stdout import _set_stdout
+from ink_python.hooks.use_stdout import _emit_stdout_resize, _set_stdout
 from ink_python.hooks.use_stderr import _set_stderr
 from ink_python.input_parser import InputParser
-from ink_python.reconciler import createReconciler
+from ink_python.reconciler import ReconcilerHostConfig, createReconciler
 from ink_python.renderer import render as render_dom, RenderResult
 from ink_python.log_update import LogUpdate
 from ink_python.sanitize_ansi import sanitizeAnsi
@@ -63,6 +57,7 @@ from ink_python.utils.ansi_escapes import (
 )
 from ink_python.instances import instances
 from ink_python.patch_console import patch_console
+from ink_python.devtools import initializeDevtools
 
 if TYPE_CHECKING:
     from ink_python.component import RenderableNode
@@ -211,6 +206,7 @@ class Ink:
         self._current_component: Optional["RenderableNode | Callable"] = None
         self._full_static_output = ""
         self._has_pending_throttled_render = False
+        self._pending_commit_priority = "default"
 
         # Exit handling
         self._exit_promise: threading.Event = threading.Event()
@@ -229,25 +225,16 @@ class Ink:
 
         # Create root node
         self._root_node = createNode("ink-root")
-        self._root_node.on_compute_layout = self._calculate_layout
 
         # Set up render throttling
         render_throttle_ms = (
             max(1, int(1000 / self._max_fps)) if self._max_fps > 0 else 0
         )
-        if self._debug or self._is_screen_reader_enabled:
-            self._root_node.on_render = self._on_render_callback
-        else:
+        if not (self._debug or self._is_screen_reader_enabled):
             self._throttled_render = self._throttle(
                 self._on_render_callback,
                 render_throttle_ms,
             )
-            self._root_node.on_render = lambda: (
-                setattr(self, "_has_pending_throttled_render", True),
-                self._throttled_render(),
-            )
-
-        self._root_node.on_immediate_render = self._on_render_callback
 
         # Create log update
         self._log = LogUpdate(
@@ -257,7 +244,23 @@ class Ink:
 
         # Create reconciler
         self._reconciler = createReconciler(self._root_node)
-        self._container = self._reconciler.create_container(self._root_node)
+        self._reconciler.configure_host(
+            ReconcilerHostConfig(
+                get_current_component=lambda: (
+                    None if self._is_unmounted else self._current_component
+                ),
+                perform_render=self.render,
+                wait_for_render_flush=self._wait_for_render_flush,
+                request_render=self._request_commit_render,
+            )
+        )
+        self._container = self._reconciler.create_container(
+            self._root_node,
+            tag=1 if self._concurrent else 0,
+        )
+        self._root_node.on_compute_layout = self._calculate_layout
+        self._root_node.on_render = self._handle_root_render
+        self._root_node.on_immediate_render = self._handle_root_immediate_render
 
         # Set up app context
         self._app_context = AppContextProps(self)
@@ -284,6 +287,9 @@ class Ink:
 
         # Set up alternate screen
         self._set_alternate_screen(self._requested_alternate_screen)
+
+        if os.environ.get("DEV", "").lower() == "true":
+            self._reconciler.injectIntoDevTools()
 
         if options.patch_console and not self._debug:
             self._patch_console()
@@ -317,17 +323,14 @@ class Ink:
         wrapped = self._create_wrapped_app(vnode)
 
         # Set context
-        with _provide_app_context(self._app_context):
-            with _provide_accessibility(self._is_screen_reader_enabled):
-                with _provide_stdin(self._stdin):
-                    with _provide_stdout(self._stdout):
-                        with _provide_stderr(self._stderr):
-                            _reset_hook_state()
-                            # Update container
-                            self._reconciler.update_container(
-                                wrapped,
-                                self._container,
-                            )
+        _reset_hook_state()
+        self._reconciler.submit_container(
+            wrapped,
+            self._container,
+        )
+
+        if not self._container.rerender_running:
+            self._drain_pending_hook_rerenders()
 
     def _normalize_render_node(
         self,
@@ -342,18 +345,23 @@ class Ink:
     def _create_wrapped_app(self, vnode: "RenderableNode") -> "RenderableNode":
         from ink_python.components.App import App
 
-        return createElement(
-            App,
-            vnode,
-            stdin=self._stdin,
-            stdout=self._stdout,
-            stderr=self._stderr,
-            exit_on_ctrl_c=self._exit_on_ctrl_c,
-            interactive=self._interactive,
-            debug=self._debug,
-            write_to_stdout=self._write_to_stdout,
-            write_to_stderr=self._write_to_stderr,
-            on_exit=self._handle_app_exit,
+        return scopeRender(
+            createElement(
+                App,
+                vnode,
+                app_context=self._app_context,
+                stdin=self._stdin,
+                stdout=self._stdout,
+                stderr=self._stderr,
+                exit_on_ctrl_c=self._exit_on_ctrl_c,
+                interactive=self._interactive,
+                debug=self._debug,
+                write_to_stdout=self._write_to_stdout,
+                write_to_stderr=self._write_to_stderr,
+                set_cursor_position=self.set_cursor_position,
+                on_exit=self._handle_app_exit,
+            ),
+            lambda: _provide_accessibility(self._is_screen_reader_enabled),
         )
 
     def unmount(self, error: Optional[Exception] = None) -> None:
@@ -425,8 +433,14 @@ class Ink:
     def _perform_final_render(self) -> None:
         if not self._should_perform_final_render():
             return
-        self._calculate_layout()
-        self._on_render_callback()
+        try:
+            self._calculate_layout()
+            self._on_render_callback()
+        except AssertionError:
+            # Yoga can transiently assert during signal-driven teardown if background
+            # updates race with final unmount. JS Ink exits without a final frame in
+            # that case; skipping the final render keeps teardown robust.
+            return
 
     def _finalize_exit_state(self, error: Optional[Exception]) -> None:
         if error:
@@ -501,7 +515,13 @@ class Ink:
         self._log.set_cursor_position(position)
 
     def _should_perform_final_render(self) -> bool:
-        return not self._is_stdout_closed()
+        if self._is_stdout_closed():
+            return False
+
+        if not self._interactive and self._last_output:
+            return False
+
+        return True
 
     def _render_frame(
         self,
@@ -687,10 +707,57 @@ class Ink:
 
     def _rerender(self) -> None:
         """Re-render the current component tree."""
-        if self._is_unmounted or self._current_component is None:
+        self._drain_pending_hook_rerenders()
+
+    def _drain_pending_hook_rerenders(self) -> None:
+        self._reconciler.drain_pending_rerenders(self._container)
+
+    def _request_commit_render(
+        self,
+        priority: str,
+        immediate: bool,
+    ) -> None:
+        self._pending_commit_priority = priority
+        if immediate and callable(self._root_node.on_immediate_render):
+            self._root_node.on_immediate_render()
             return
 
-        self.render(self._current_component)
+        if callable(self._root_node.on_render):
+            self._root_node.on_render()
+            return
+
+        self._flush_requested_root_render(immediate=immediate)
+
+    def _handle_root_render(self) -> None:
+        self._flush_requested_root_render(immediate=False)
+
+    def _handle_root_immediate_render(self) -> None:
+        self._flush_requested_root_render(immediate=True)
+
+    def _flush_requested_root_render(self, *, immediate: bool) -> None:
+        priority = self._pending_commit_priority
+
+        # Keep the first committed frame synchronous. Deferring the initial paint
+        # makes PTY-driven apps appear blank until a later event loop turn.
+        if (
+            immediate
+            or self._debug
+            or self._is_screen_reader_enabled
+            or not self._interactive
+            or self._last_output_height == 0
+        ):
+            self._on_render_callback()
+            return
+
+        if priority == "discrete":
+            self._on_render_callback()
+            return
+
+        self._schedule_throttled_render()
+
+    def _schedule_throttled_render(self) -> None:
+        self._has_pending_throttled_render = True
+        self._throttled_render()
 
     def _schedule_transition(
         self,
@@ -868,9 +935,15 @@ class Ink:
         if current_width < self._last_terminal_width:
             self._reset_rendered_frame()
 
+        self._last_terminal_width = current_width
+        _emit_stdout_resize()
+
+        if self._current_component is not None:
+            self.render(self._current_component)
+            return
+
         self._calculate_layout()
         self._on_render_callback()
-        self._last_terminal_width = current_width
 
     def _reset_rendered_frame(self) -> None:
         self._log.clear()
@@ -921,7 +994,10 @@ class Ink:
     def _dispatch_parser_events(self, events: Any, stdin_handle: Any) -> None:
         for event in events:
             if event.kind == "paste":
-                stdin_handle.emit("paste", event.data)
+                if stdin_handle.listener_count("paste") == 0:
+                    _dispatch_input(event.data)
+                else:
+                    stdin_handle.emit("paste", event.data)
             else:
                 _dispatch_input(event.data)
 
@@ -989,6 +1065,7 @@ class Ink:
         self._run_unmount_callbacks()
 
         _set_rerender_callback(None)
+        self._reconciler.cleanup_class_component_instances()
         _clear_hook_state()
         _clear_input_handlers()
         self._restore_terminal_state()

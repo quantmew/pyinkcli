@@ -9,6 +9,7 @@ from io import StringIO
 from ink_python import Text, render, renderToString
 from ink_python.component import createElement
 from ink_python.hooks import useEffect, useState
+from ink_python.hooks.state import _consume_pending_rerender_priority
 from ink_python.suspense_runtime import (
     SuspendSignal,
     peekResource,
@@ -121,6 +122,24 @@ def test_suspense_resource_rejection_is_cached_until_reset() -> None:
             raise AssertionError("expected cached rejection to be re-thrown")
 
     resetResource(key)
+
+
+def test_suspense_resolution_without_active_renderer_does_not_leak_rerender() -> None:
+    key = "tests:audit:no-renderer-rerender"
+
+    resetResource(key)
+
+    try:
+        readResource(key, lambda: "value")
+    except SuspendSignal:
+        pass
+    else:  # pragma: no cover
+        raise AssertionError("expected initial readResource call to suspend")
+
+    time.sleep(0.05)
+
+    assert peekResource(key) == "value"
+    assert _consume_pending_rerender_priority() is None
 
 
 def test_suspense_reveals_each_boundary_as_its_resource_resolves() -> None:

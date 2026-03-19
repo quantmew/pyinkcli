@@ -1,5 +1,6 @@
 """Tests for focus hooks runtime."""
 
+from ink_python.components.FocusContext import _provide_focus_context
 from ink_python.hooks.state import (
     _begin_component_render,
     _clear_hook_state,
@@ -83,3 +84,33 @@ def test_focus_manager_can_disable_focus():
     manager.disable_focus()
     assert _focus_runtime.enabled is False
     assert _focus_runtime.active_id is None
+
+
+def test_use_focus_manager_prefers_focus_context_when_available():
+    class FocusContextValue:
+        active_id = "ctx-id"
+
+        def enableFocus(self):
+            return "enable"
+
+        def disableFocus(self):
+            return "disable"
+
+        def focusNext(self):
+            return "next"
+
+        def focusPrevious(self):
+            return "previous"
+
+        def focus(self, _id: str):
+            return _id
+
+    with _provide_focus_context(FocusContextValue()):
+        manager = useFocusManager()
+
+    assert manager.active_id == "ctx-id"
+    assert manager.enable_focus() == "enable"
+    assert manager.disable_focus() == "disable"
+    assert manager.focus_next() == "next"
+    assert manager.focus_previous() == "previous"
+    assert manager.focus("x") == "x"

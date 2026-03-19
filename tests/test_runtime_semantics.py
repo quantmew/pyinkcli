@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import time
 from io import StringIO
+from unittest.mock import Mock
 
 from ink_python import Box, Text, render
 from ink_python.component import createElement
+from ink_python.dom import addLayoutListener
 from ink_python.components._accessibility_runtime import _provide_accessibility
 from ink_python.ink import Ink, Options
 from ink_python.hooks.use_cursor import useCursor
@@ -61,6 +63,78 @@ def test_screen_reader_checkbox_output_mentions_role_and_state() -> None:
     assert "checkbox:" in output
     assert "checked" in output
     assert "Hidden" not in output
+
+
+def test_screen_reader_output_matches_js_role_and_state_format() -> None:
+    with _provide_accessibility(True):
+        vnode = Box(
+            Text("Select a color:"),
+            Box(
+                Text("Green"),
+                aria_label="2. Green",
+                aria_role="listitem",
+                aria_state={"selected": True},
+            ),
+            aria_role="list",
+            flexDirection="column",
+        )
+
+    root_node = create_root_node(40, 5)
+    reconciler = createReconciler(root_node)
+    container = reconciler.create_container(root_node)
+    reconciler.update_container(vnode, container)
+
+    output = render_node_to_screen_reader_output(root_node)
+
+    assert output == "list: Select a color:\nlistitem: (selected) 2. Green"
+
+
+def test_reconciler_runs_layout_callback_before_emitting_layout_listeners() -> None:
+    root_node = create_root_node(40, 5)
+    events: list[str] = []
+
+    def on_compute_layout() -> None:
+        events.append("layout")
+
+    root_node.on_compute_layout = on_compute_layout
+    addLayoutListener(root_node, lambda: events.append("listener"))
+
+    reconciler = createReconciler(root_node)
+    container = reconciler.create_container(root_node)
+    reconciler.update_container(Box(Text("Hello")), container)
+
+    assert events == ["layout", "listener"]
+
+
+def test_ink_wires_root_callbacks_for_commit_flow() -> None:
+    stdout = FakeStdout()
+    stdin = FakeStdin()
+    app = Ink(Options(stdout=stdout, stdin=stdin, stderr=stdout, debug=True))
+    try:
+        assert callable(app._root_node.on_compute_layout)
+        assert callable(app._root_node.on_render)
+        assert callable(app._root_node.on_immediate_render)
+    finally:
+        app.unmount()
+
+
+def test_request_commit_render_uses_root_callbacks() -> None:
+    stdout = FakeStdout()
+    stdin = FakeStdin()
+    app = Ink(Options(stdout=stdout, stdin=stdin, stderr=stdout, debug=True))
+    try:
+        on_render = Mock()
+        on_immediate_render = Mock()
+        app._root_node.on_render = on_render
+        app._root_node.on_immediate_render = on_immediate_render
+
+        app._request_commit_render("default", immediate=False)
+        app._request_commit_render("discrete", immediate=True)
+
+        on_render.assert_called_once_with()
+        on_immediate_render.assert_called_once_with()
+    finally:
+        app.unmount()
 
 
 def test_suspense_renders_fallback_then_resolved_content() -> None:

@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Callable, Optional
 
 from ink_python.hooks._runtime import useEffect
+from ink_python.reconciler import discreteUpdates
 from ink_python.hooks.use_stdin import useStdin
 
 
@@ -42,7 +43,10 @@ def usePaste(
         if not active:
             return None
 
-        unsubscribe = stdin.on("paste", handler)
+        unsubscribe = stdin.on(
+            "paste",
+            lambda text: discreteUpdates(lambda: handler(text)),
+        )
         return unsubscribe
 
     useEffect(subscribe, (active, handler))

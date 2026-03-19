@@ -332,24 +332,14 @@ Box supports CSS Flexbox properties:
 
 See the `examples/` directory for more examples:
 
-**Basic:**
-- `hello.py` - Basic hello world
-- `counter.py` - Counter with keyboard input
-- `layout.py` - Layout demonstration
-
-**Layout & Styling:**
-- `borders.py` - Border styles (single, double, round, bold, etc.)
-- `justify-content.py` - justifyContent values demonstration
-
-**Hooks:**
-- `use-focus.py` - useFocus hook for keyboard navigation
-- `use-focus-manager.py` - useFocusManager for programmatic focus control
-- `use-cursor.py` - useCursor hook for cursor visibility
-- `use-stderr.py` - useStderr hook for writing to stderr
-- `terminal-resize.py` - useWindowSize hook for handling terminal resize
-
-**Components:**
-- `static.py` - Static component for incremental rendering
+- `examples/alternate-screen/` - Alternate-screen snake game
+- `examples/borders/` - Border styles
+- `examples/chat/` - Interactive chat UI
+- `examples/static/` - Static output rendering
+- `examples/terminal-resize/` - `useWindowSize` terminal resize demo
+- `examples/use-focus/` - Keyboard focus navigation
+- `examples/use-stderr/` - Ink-preserving stderr writes
+- `examples/use-stdout/` - Ink-preserving stdout writes
 
 ## Dependencies
 

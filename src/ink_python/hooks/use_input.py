@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     pass
 
 from ink_python.hooks._runtime import useEffect
+from ink_python.reconciler import discreteUpdates
 from ink_python.hooks.use_stdin import useStdin
 from ink_python.parse_keypress import parseKeypress
 
@@ -72,10 +73,6 @@ class Key:
         return f"Key({', '.join(parts)})"
 
 
-# Input handlers registry
-_input_handlers: list[Callable[[str, Key], None]] = []
-
-
 def useInput(
     handler: Callable[[str, Key], None],
     *,
@@ -120,15 +117,11 @@ def useInput(
         if not is_active:
             return None
 
-        _input_handlers.append(handler)
+        def handle_data(data: str) -> None:
+            char, key = _parse_keypress(data)
+            discreteUpdates(lambda: handler(char, key))
 
-        def cleanup():
-            try:
-                _input_handlers.remove(handler)
-            except ValueError:
-                pass
-
-        return cleanup
+        return stdin.on("input", handle_data)
 
     useEffect(register_handler, (is_active, handler))
 def _parse_keypress(data: str) -> tuple[str, Key]:
@@ -198,16 +191,9 @@ def _dispatch_input(data: str) -> None:
     Args:
         data: Raw input data.
     """
-    char, key = _parse_keypress(data)
-
-    for handler in list(_input_handlers):
-        try:
-            handler(char, key)
-        except Exception:
-            pass  # Ignore handler errors
+    useStdin().emit("input", data)
 
 
 def _clear_input_handlers() -> None:
     """Clear all input handlers."""
-    global _input_handlers
-    _input_handlers.clear()
+    useStdin().clear_event_handlers("input", "paste")

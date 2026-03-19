@@ -47,7 +47,7 @@ def test_select_input_example_smoke() -> None:
 
 def test_alternate_screen_example_smoke() -> None:
     output = _run_example("examples/alternate-screen/index.py", timeout=1.5)
-    assert "Snake" in output
+    assert "Unicorn Snake" in output
     assert "Score:" in output
 
 

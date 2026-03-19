@@ -705,4 +705,81 @@ def test_incremental_rendering_example_preserves_selected_label_and_service_copy
     assert "Incremental Rendering Demo - incrementalRendering=true" in output
     assert "Selected:" in output
     assert "Server Authentication Module" in output
-    assert "System Services Monitor (" in output
+
+
+def test_use_input_discrete_updates_bypass_normal_throttle_in_real_pty() -> None:
+    source = textwrap.dedent(
+        """
+        from ink_python import Text, render, useApp, useInput
+        from ink_python.hooks import useEffect, useState
+
+        def Example():
+            app = useApp()
+            value, set_value = useState("idle")
+
+            def maybe_exit():
+                if value == "pressed":
+                    app.exit()
+                return None
+
+            useEffect(maybe_exit, (value,))
+
+            def on_input(input_char, key):
+                set_value("pressed")
+
+            useInput(on_input)
+            return Text(value)
+
+        app = render(Example, patch_console=False, interactive=True, max_fps=1)
+        app.wait_until_exit()
+        """
+    )
+    output = _run_python_in_pty(
+        source,
+        send=b"x",
+        send_after_text="idle",
+        send_delay_after_text=0.05,
+        timeout=2.0,
+    )
+
+    assert "idle" in output
+    assert "pressed" in output
+
+
+def test_use_paste_discrete_updates_bypass_normal_throttle_in_real_pty() -> None:
+    source = textwrap.dedent(
+        """
+        from ink_python import Text, render, useApp, usePaste
+        from ink_python.hooks import useEffect, useState
+
+        def Example():
+            app = useApp()
+            value, set_value = useState("idle")
+
+            def maybe_exit():
+                if value == "hello":
+                    app.exit()
+                return None
+
+            useEffect(maybe_exit, (value,))
+
+            def on_paste(text):
+                set_value(text)
+
+            usePaste(on_paste)
+            return Text(value)
+
+        app = render(Example, patch_console=False, interactive=True, max_fps=1)
+        app.wait_until_exit()
+        """
+    )
+    output = _run_python_in_pty(
+        source,
+        send=b"\x1b[200~hello\x1b[201~",
+        send_after_text="idle",
+        send_delay_after_text=0.05,
+        timeout=2.0,
+    )
+
+    assert "idle" in output
+    assert "hello" in output

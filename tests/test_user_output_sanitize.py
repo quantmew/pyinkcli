@@ -32,6 +32,18 @@ def test_stdout_handle_write_sanitizes_control_sequences():
     assert stream.getvalue() == "AB"
 
 
+def test_stdout_handle_write_uses_overlay_writer_when_bound():
+    stream = FakeStdout()
+    writes: list[str] = []
+    handle = _StdoutHandle(stream)
+    handle.bind_overlay_writer(writes.append)
+
+    handle.write("A\x1b[2JB\n")
+
+    assert writes == ["AB\n"]
+    assert stream.getvalue() == ""
+
+
 def test_stdout_handle_raw_write_preserves_control_sequences():
     stream = FakeStdout()
     handle = _StdoutHandle(stream)
@@ -48,6 +60,18 @@ def test_stderr_handle_write_sanitizes_control_sequences():
     handle.write("A\x1b[2JB")
 
     assert stream.getvalue() == "AB"
+
+
+def test_stderr_handle_write_uses_overlay_writer_when_bound():
+    stream = FakeStderr()
+    writes: list[str] = []
+    handle = _StderrHandle(stream)
+    handle.bind_overlay_writer(writes.append)
+
+    handle.write("A\x1b[2JB\n")
+
+    assert writes == ["AB\n"]
+    assert stream.getvalue() == ""
 
 
 def test_ink_write_to_stdout_sanitizes_user_output():

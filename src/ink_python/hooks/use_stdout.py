@@ -1,14 +1,15 @@
 """
 useStdout hook for ink-python.
 
-Provides access to the stdout stream.
+Provides access to the stdout stream and Ink-preserving writes.
 """
 
 from __future__ import annotations
 
 import sys
-from typing import Any, Optional, TextIO
+from typing import Any, Callable, Optional, TextIO
 
+from ink_python.components.StdoutContext import _get_stdout
 from ink_python.sanitize_ansi import sanitizeAnsi
 
 
@@ -17,7 +18,8 @@ class _StdoutHandle:
 
     def __init__(self, stream: Optional[TextIO] = None):
         self._stream = stream or sys.stdout
-        self._write_handlers: list[callable] = []
+        self._overlay_writer: Optional[Callable[[str], None]] = None
+        self._resize_handlers: list[Callable[[], None]] = []
 
     @property
     def stream(self) -> TextIO:
@@ -25,8 +27,17 @@ class _StdoutHandle:
         return self._stream
 
     @property
+    def stdout(self) -> TextIO:
+        """Get the underlying stdout stream for JS Ink parity."""
+        return self._stream
+
+    @property
     def columns(self) -> int:
         """Get the number of columns in the terminal."""
+        stream_columns = getattr(self._stream, "columns", None)
+        if isinstance(stream_columns, int) and stream_columns > 0:
+            return stream_columns
+
         try:
             import shutil
             size = shutil.get_terminal_size()
@@ -37,6 +48,10 @@ class _StdoutHandle:
     @property
     def rows(self) -> int:
         """Get the number of rows in the terminal."""
+        stream_rows = getattr(self._stream, "rows", None)
+        if isinstance(stream_rows, int) and stream_rows > 0:
+            return stream_rows
+
         try:
             import shutil
             size = shutil.get_terminal_size()
@@ -49,10 +64,24 @@ class _StdoutHandle:
         """Check if stdout is a TTY."""
         return self._stream.isatty() if hasattr(self._stream, "isatty") else False
 
+    def bind_overlay_writer(self, writer: Optional[Callable[[str], None]]) -> None:
+        """Route write() through the Ink overlay writer when available."""
+        self._overlay_writer = writer
+
+    def _prepare_payload(self, data: str) -> str:
+        if not self.is_tty or not data:
+            return data
+
+        return data.replace("\r\n", "\n").replace("\n", "\r\n")
+
     def write(self, data: str) -> None:
-        """Write sanitized user output to stdout."""
+        """Write sanitized user output while preserving Ink output when possible."""
         sanitized = sanitizeAnsi(data)
-        self._stream.write(sanitized)
+        if self._overlay_writer is not None:
+            self._overlay_writer(sanitized)
+            return
+
+        self._stream.write(self._prepare_payload(sanitized))
         self._stream.flush()
 
     def raw_write(self, data: str) -> None:
@@ -60,7 +89,7 @@ class _StdoutHandle:
         self._stream.write(data)
         self._stream.flush()
 
-    def on_resize(self, handler: callable) -> callable:
+    def on_resize(self, handler: Callable[[], None]) -> Callable[[], None]:
         """
         Register a resize handler.
 
@@ -70,8 +99,18 @@ class _StdoutHandle:
         Returns:
             Unsubscribe function.
         """
-        self._write_handlers.append(handler)
-        return lambda: self._write_handlers.remove(handler)
+        self._resize_handlers.append(handler)
+
+        def unsubscribe() -> None:
+            if handler in self._resize_handlers:
+                self._resize_handlers.remove(handler)
+
+        return unsubscribe
+
+    def emit_resize(self) -> None:
+        """Notify registered resize listeners."""
+        for handler in list(self._resize_handlers):
+            handler()
 
 
 # Global stdout handle
@@ -85,6 +124,10 @@ def useStdout() -> _StdoutHandle:
     Returns:
         StdoutHandle with stream properties and methods.
     """
+    context_value = _get_stdout()
+    if context_value is not None:
+        return context_value
+
     global _stdout_handle
     if _stdout_handle is None:
         _stdout_handle = _StdoutHandle()
@@ -95,3 +138,9 @@ def _set_stdout(stream: TextIO) -> None:
     """Internal: Set the stdout stream."""
     global _stdout_handle
     _stdout_handle = _StdoutHandle(stream)
+
+
+def _emit_stdout_resize() -> None:
+    """Internal: notify resize listeners on the current stdout handle."""
+    if _stdout_handle is not None:
+        _stdout_handle.emit_resize()

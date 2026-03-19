@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional
 
+from ink_python.components._app_context_runtime import _get_app_context
+from ink_python.hooks._runtime import _queue_after_current_batch
+
 if TYPE_CHECKING:
     from ink_python.ink import Ink
 
@@ -19,15 +22,17 @@ class _AppHandle:
         self._ink = ink_instance
         self._exit_handlers: list[callable] = []
 
-    def exit(self, error: Optional[Exception] = None) -> None:
+    def exit(self, error_or_result: Optional[Any] = None) -> None:
         """
         Exit the application.
 
         Args:
-            error: Optional error to pass to exit handler.
+            error_or_result: Optional exit error or result.
         """
         if self._ink is not None:
-            self._ink.unmount(error)
+            _queue_after_current_batch(
+                lambda: self._ink._handle_app_exit(error_or_result)
+            )
 
     def wait_until_exit(self) -> Any:
         """Wait for the application to exit."""
@@ -75,6 +80,10 @@ def useApp() -> _AppHandle:
     Returns:
         AppHandle with methods to control the app.
     """
+    app_context = _get_app_context()
+    if app_context is not None and getattr(app_context, "app", None) is not None:
+        return _AppHandle(app_context.app)
+
     global _app_handle
     if _app_handle is None:
         _app_handle = _AppHandle()

@@ -10,6 +10,8 @@ import sys
 from collections import defaultdict
 from typing import Any, Callable, Optional, TextIO
 
+from ink_python.components.StdinContext import _get_stdin
+
 
 class _StdinHandle:
     """Handle to stdin stream."""
@@ -121,6 +123,16 @@ class _StdinHandle:
         except ValueError:
             pass
 
+    def listener_count(self, event: str) -> int:
+        """Return the number of listeners currently attached to an event."""
+        return len(self._event_handlers.get(event, []))
+
+    def clear_event_handlers(self, *events: str) -> None:
+        """Clear registered handlers for one or more events."""
+        target_events = events or tuple(self._event_handlers.keys())
+        for event in target_events:
+            self._event_handlers.pop(event, None)
+
     def emit(self, event: str, *args: Any) -> None:
         """Emit an event to registered handlers."""
 
@@ -170,6 +182,10 @@ def useStdin() -> _StdinHandle:
     Returns:
         StdinHandle with stream properties and methods.
     """
+    context_value = _get_stdin()
+    if context_value is not None:
+        return context_value
+
     global _stdin_handle
     if _stdin_handle is None:
         _stdin_handle = _StdinHandle()

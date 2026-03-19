@@ -1,23 +1,25 @@
-"""alternate-screen example for ink-python."""
+"""Port of js_source/ink/examples/alternate-screen/alternate-screen.tsx."""
 
 import random
 import threading
 import time
 
-from ink_python import render, Box, Text, useApp, useInput
+from ink_python import Box, Text, render, useApp, useInput, useWindowSize
 from ink_python.hooks import useEffect, useRef, useState
 
 
-HEAD = "[]"
-BODY = "##"
-FOOD = "<>"
+HEAD = "🦄"
+BODY = "✨"
+FOOD = "🌈"
 EMPTY = "  "
 TICK_MS = 0.15
 BOARD_WIDTH = 20
 BOARD_HEIGHT = 15
-BORDER_H = "\u2500" * (BOARD_WIDTH * 2)
-BORDER_TOP = f"\u250c{BORDER_H}\u2510"
-BORDER_BOTTOM = f"\u2514{BORDER_H}\u2518"
+BORDER_H = "─" * (BOARD_WIDTH * 2)
+BORDER_TOP = f"┌{BORDER_H}┐"
+BORDER_BOTTOM = f"└{BORDER_H}┘"
+BOARD_WIDTH_CHARS = BOARD_WIDTH * 2 + 2
+RAINBOW_COLORS = ["red", "#FF7F00", "yellow", "green", "cyan", "blue", "magenta"]
 
 OFFSETS = {
     "up": (0, -1),
@@ -33,6 +35,12 @@ OPPOSITES = {
     "right": "left",
 }
 
+INITIAL_SNAKE = [
+    {"x": 10, "y": 7},
+    {"x": 9, "y": 7},
+    {"x": 8, "y": 7},
+]
+
 
 def random_position(exclude):
     while True:
@@ -45,17 +53,13 @@ def random_position(exclude):
 
 
 def initial_state():
-    snake = [
-        {"x": 10, "y": 7},
-        {"x": 9, "y": 7},
-        {"x": 8, "y": 7},
-    ]
     return {
-        "snake": snake,
-        "food": random_position(snake),
+        "snake": INITIAL_SNAKE,
+        "food": random_position(INITIAL_SNAKE),
         "score": 0,
         "game_over": False,
         "won": False,
+        "frame": 0,
     }
 
 
@@ -77,6 +81,7 @@ def tick_state(state, direction):
 
     ate_food = new_head["x"] == state["food"]["x"] and new_head["y"] == state["food"]["y"]
     collision_segments = state["snake"] if ate_food else state["snake"][:-1]
+
     if any(segment["x"] == new_head["x"] and segment["y"] == new_head["y"] for segment in collision_segments):
         return {**state, "game_over": True, "won": False}
 
@@ -91,6 +96,7 @@ def tick_state(state, direction):
             "score": state["score"] + 1,
             "game_over": True,
             "won": True,
+            "frame": state["frame"] + 1,
         }
 
     return {
@@ -99,6 +105,7 @@ def tick_state(state, direction):
         "score": state["score"] + (1 if ate_food else 0),
         "game_over": False,
         "won": False,
+        "frame": state["frame"] + 1,
     }
 
 
@@ -108,7 +115,7 @@ def build_board(snake, food):
 
     rows = [BORDER_TOP]
     for y in range(BOARD_HEIGHT):
-        row = "\u2502"
+        row = "│"
         for x in range(BOARD_WIDTH):
             key = f"{x},{y}"
             if key == head_key:
@@ -119,7 +126,7 @@ def build_board(snake, food):
                 row += FOOD
             else:
                 row += EMPTY
-        row += "\u2502"
+        row += "│"
         rows.append(row)
 
     rows.append(BORDER_BOTTOM)
@@ -128,6 +135,7 @@ def build_board(snake, food):
 
 def alternate_screen_example():
     app = useApp()
+    columns, _ = useWindowSize()
     game, set_game = useState(initial_state())
     direction = useRef("right")
 
@@ -160,35 +168,63 @@ def alternate_screen_example():
             set_game(initial_state())
             return
 
+        if game["game_over"]:
+            return
+
         current = direction.current
-        if key.up_arrow and current != OPPOSITES["up"]:
+        if key.up_arrow and current != "down":
             direction.current = "up"
-        elif key.down_arrow and current != OPPOSITES["down"]:
+        elif key.down_arrow and current != "up":
             direction.current = "down"
-        elif key.left_arrow and current != OPPOSITES["left"]:
+        elif key.left_arrow and current != "right":
             direction.current = "left"
-        elif key.right_arrow and current != OPPOSITES["right"]:
+        elif key.right_arrow and current != "left":
             direction.current = "right"
 
     useInput(on_input)
 
-    status = (
-        "You won! Press r to restart or q to quit."
-        if game["won"]
-        else "Game over. Press r to restart or q to quit."
-        if game["game_over"]
-        else "Use arrow keys to move. Press q to quit."
-    )
+    title_color = RAINBOW_COLORS[game["frame"] % len(RAINBOW_COLORS)]
+    board = build_board(game["snake"], game["food"])
+    margin_left = max((columns - BOARD_WIDTH_CHARS) // 2, 0)
+
+    if game["game_over"]:
+        status = Box(
+            Text("You Win! " if game["won"] else "Game Over! ", bold=True, color="red"),
+            Text("r: restart | q: quit", dimColor=True),
+            justifyContent="center",
+            marginTop=1,
+        )
+    else:
+        status = Box(
+            Text("Arrow keys: move | Eat 🌈 to grow | q: quit", dimColor=True),
+            justifyContent="center",
+            marginTop=1,
+        )
 
     return Box(
-        Text("Snake", bold=True, color="cyan"),
-        Text(f"Score: {game['score']}"),
-        Text(build_board(game["snake"], game["food"])),
-        Text(status, dimColor=not game["game_over"]),
+        Box(
+            Text("🦄 Unicorn Snake 🦄", bold=True, color=title_color),
+            justifyContent="center",
+        ),
+        Box(
+            Text(f"Score: {game['score']}", bold=True, color="yellow"),
+            justifyContent="center",
+            marginTop=1,
+        ),
+        Box(
+            Text(board),
+            marginLeft=margin_left,
+            marginTop=1,
+        ),
+        status,
         flexDirection="column",
-        padding=1,
+        paddingY=1,
     )
+
+
+def run_alternate_screen_example():
+    return render(alternate_screen_example, alternate_screen=True)
 
 
 if __name__ == "__main__":
-    render(alternate_screen_example, alternate_screen=True).wait_until_exit()
+    run_alternate_screen_example().wait_until_exit()

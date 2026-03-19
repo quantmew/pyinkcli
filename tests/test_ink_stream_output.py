@@ -4,13 +4,20 @@ from __future__ import annotations
 
 from io import StringIO
 
-from ink_python import Text, render
+from ink_python import Text, render, useWindowSize
 from ink_python.ink import Ink, Options
 
 
 class FakeTTY(StringIO):
     def isatty(self) -> bool:
         return True
+
+
+class ResizableTTY(FakeTTY):
+    def __init__(self, columns: int, rows: int):
+        super().__init__()
+        self.columns = columns
+        self.rows = rows
 
 
 def test_ink_prepare_stream_payload_normalizes_newlines_for_tty() -> None:
@@ -72,3 +79,35 @@ def test_ink_alternate_screen_sequences_remain_escape_only() -> None:
         assert "\r\n" not in prefix
     finally:
         ink.unmount()
+
+
+def test_use_window_size_updates_after_resize_rerender() -> None:
+    stdout = ResizableTTY(columns=80, rows=24)
+    stderr = ResizableTTY(columns=80, rows=24)
+    stdin = ResizableTTY(columns=80, rows=24)
+
+    def Example():
+        columns, rows = useWindowSize()
+        return Text(f"{columns}x{rows}")
+
+    app = render(
+        Example,
+        stdout=stdout,
+        stderr=stderr,
+        stdin=stdin,
+        interactive=True,
+        patch_console=False,
+    )
+    try:
+        assert "80x24" in stdout.getvalue()
+
+        stdout.seek(0)
+        stdout.truncate(0)
+        stdout.columns = 100
+        stdout.rows = 40
+        app._handle_resize()
+        app.wait_until_render_flush(timeout=1.0)
+
+        assert "100x40" in stdout.getvalue()
+    finally:
+        app.unmount()

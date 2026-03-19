@@ -14,6 +14,9 @@ from ink_python.components._accessibility_runtime import _is_screen_reader_enabl
 from ink_python.components._background_runtime import _get_background_color
 
 
+_UNSET = object()
+
+
 @component
 def Text(
     *children: RenderableNode,
@@ -30,71 +33,64 @@ def Text(
     aria_hidden: bool = False,
     **kwargs: Any,
 ) -> RenderableNode:
-    if _is_screen_reader_enabled() and aria_hidden:
+    if "backgroundColor" in kwargs and background_color is None:
+        background_color = kwargs.pop("backgroundColor")
+    if "dimColor" in kwargs:
+        dim_color = bool(kwargs.pop("dimColor"))
+    if "ariaLabel" in kwargs and aria_label is None:
+        aria_label = kwargs.pop("ariaLabel")
+    if "ariaHidden" in kwargs:
+        aria_hidden = bool(kwargs.pop("ariaHidden"))
+
+    is_screen_reader_enabled = _is_screen_reader_enabled()
+    if is_screen_reader_enabled and aria_hidden:
         return None
 
     inherited_background = _get_background_color()
+    explicit_background = background_color if background_color is not None else _UNSET
     effective_background = (
-        background_color if background_color is not None else inherited_background
+        inherited_background if explicit_background is _UNSET else explicit_background
     )
 
-    content: list[RenderableNode] = []
-    if _is_screen_reader_enabled() and aria_label:
-        content.append(aria_label)
+    children_or_aria_label: list[RenderableNode] = []
+    if is_screen_reader_enabled and aria_label:
+        children_or_aria_label.append(aria_label)
     else:
-        content.extend(children)
+        children_or_aria_label.extend(children)
 
-    if not content:
+    if not children_or_aria_label:
         return None
 
-    if all(isinstance(c, str) for c in content):
-        text_content = "".join(content)
-        if not text_content:
-            return None
-
-        def transform(s: str, index: int) -> str:
-            result = s
-            if dim_color:
-                result = _dim(result)
-            if color:
-                result = colorize(result, color, "foreground")
-            if effective_background:
-                result = colorize(result, effective_background, "background")
-            if bold:
-                result = _bold(result)
-            if italic:
-                result = _italic(result)
-            if underline:
-                result = _underline(result)
-            if strikethrough:
-                result = _strikethrough(result)
-            if inverse:
-                result = _inverse(result)
-            return result
-
-        return createElement(
-            "ink-text",
-            text_content,
-            style={
-                "flexGrow": 0,
-                "flexShrink": 1,
-                "flexDirection": "row",
-                "textWrap": wrap,
-                "backgroundColor": effective_background,
-            },
-            internal_transform=transform,
-        )
+    def transform(text: str, index: int) -> str:
+        result = text
+        if dim_color:
+            result = _dim(result)
+        if color:
+            result = colorize(result, color, "foreground")
+        if effective_background:
+            result = colorize(result, effective_background, "background")
+        if bold:
+            result = _bold(result)
+        if italic:
+            result = _italic(result)
+        if underline:
+            result = _underline(result)
+        if strikethrough:
+            result = _strikethrough(result)
+        if inverse:
+            result = _inverse(result)
+        return result
 
     return createElement(
         "ink-text",
-        *content,
+        *children_or_aria_label,
         style={
             "flexGrow": 0,
             "flexShrink": 1,
             "flexDirection": "row",
             "textWrap": wrap,
-            "backgroundColor": effective_background,
         },
+        internal_transform=transform,
     )
 
 

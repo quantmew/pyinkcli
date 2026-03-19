@@ -6,7 +6,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable, Hashable
 
-from ink_python.hooks._runtime import _request_rerender
+from ink_python.hooks._runtime import _has_rerender_target, _request_rerender
 
 
 class SuspendSignal(Exception):
@@ -52,7 +52,8 @@ def _resolve_resource(
             record.status = "resolved"
             record.value = value
 
-    _request_rerender()
+    if _has_rerender_target():
+        _request_rerender()
 
 
 def readResource(key: Hashable, loader: Callable[[], Any]) -> Any:
@@ -124,4 +125,3 @@ def resetResource(key: Hashable) -> None:
 def resetAllResources() -> None:
     with _records_lock:
         _records.clear()
-

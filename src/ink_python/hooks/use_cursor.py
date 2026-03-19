@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Mapping, Optional, Union
 
 from ink_python.components._app_context_runtime import _get_app_context
+from ink_python.components.CursorContext import _get_cursor_context
 from ink_python.hooks._runtime import Ref, useEffect, useRef
 from ink_python.hooks.use_stdout import useStdout
 from ink_python.utils.ansi_escapes import cursor_show, cursor_hide
@@ -56,6 +57,7 @@ def useCursor(
     """
     stdout = useStdout()
     app_context = _get_app_context()
+    cursor_context = _get_cursor_context()
     position_ref = useRef(None)
 
     def apply_cursor_visibility():
@@ -74,16 +76,20 @@ def useCursor(
         return cleanup
 
     def sync_cursor_position():
-        if app_context is None or app_context.set_cursor_position is None:
+        set_cursor_position = None
+        if cursor_context is not None:
+            set_cursor_position = getattr(cursor_context, "setCursorPosition", None)
+        elif app_context is not None:
+            set_cursor_position = app_context.set_cursor_position
+
+        if set_cursor_position is None:
             return None
 
-        app_context.set_cursor_position(
-            position_ref.current if enabled else None,
-        )
+        set_cursor_position(position_ref.current if enabled else None)
 
         def cleanup():
-            if app_context.set_cursor_position is not None:
-                app_context.set_cursor_position(None)
+            if set_cursor_position is not None:
+                set_cursor_position(None)
 
         return cleanup
 

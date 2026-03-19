@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+from ink_python.components.FocusContext import _get_focus_context
 from ink_python.hooks._runtime import useEffect, useState
 from ink_python.hooks.use_focus import _focus_runtime, focusNext, focusPrev
 
@@ -27,6 +28,17 @@ def useFocusManager() -> _UseFocusManagerOutput:
     """
     Hook exposing global focus controls.
     """
+
+    focus_context = _get_focus_context()
+    if focus_context is not None:
+        return _UseFocusManagerOutput(
+            enable_focus=focus_context.enableFocus,
+            disable_focus=focus_context.disableFocus,
+            focus_next=focus_context.focusNext,
+            focus_previous=focus_context.focusPrevious,
+            focus=focus_context.focus,
+            active_id=focus_context.active_id,
+        )
 
     _, set_version = useState(0)
 
