@@ -6,6 +6,7 @@ Measure the dimensions of a Box element.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -52,7 +53,16 @@ def measureElement(node: DOMElement) -> ElementDimensions:
     if yoga_node is None:
         return ElementDimensions(width=0, height=0)
 
+    try:
+        width = yoga_node.get_computed_width()
+        height = yoga_node.get_computed_height()
+    except Exception:
+        return ElementDimensions(width=0, height=0)
+
+    if math.isnan(width) or math.isnan(height):
+        return ElementDimensions(width=0, height=0)
+
     return ElementDimensions(
-        width=int(yoga_node.get_computed_width()),
-        height=int(yoga_node.get_computed_height()),
+        width=int(width),
+        height=int(height),
     )

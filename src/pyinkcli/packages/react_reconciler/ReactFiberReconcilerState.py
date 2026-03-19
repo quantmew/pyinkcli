@@ -72,6 +72,7 @@ def initializeReconcilerState(
     reconciler._host_config = None
     reconciler._on_commit = None
     reconciler._on_immediate_commit = None
+    reconciler._attached_host_refs = {}
 
 
 def setCommitHandlers(

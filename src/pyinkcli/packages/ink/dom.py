@@ -42,6 +42,7 @@ class DOMElement:
         childNodes: Optional[list["DOMNode"]] = None,
         parentNode: Optional["DOMElement"] = None,
         yogaNode: Optional["YogaNode"] = None,
+        internal_ref: Any = None,
         internal_transform: Optional[OutputTransformer] = None,
         internal_static: bool = False,
         key: Optional[str] = None,
@@ -59,6 +60,7 @@ class DOMElement:
         self.childNodes = childNodes or []
         self.parentNode = parentNode
         self.yogaNode = yogaNode
+        self.internal_ref = internal_ref
         self.internal_transform = internal_transform
         self.internal_static = internal_static
         self.key = key

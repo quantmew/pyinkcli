@@ -32,6 +32,7 @@ def Box(
     aria_hidden: bool = False,
     aria_role: Optional[str] = None,
     aria_state: Optional[dict[str, bool]] = None,
+    ref: Any = None,
     **style: Any,
 ) -> RenderableNode:
     is_screen_reader_enabled = _is_screen_reader_enabled()
@@ -73,6 +74,7 @@ def Box(
     box_element = createElement(
         "ink-box",
         *actual_children,
+        ref=ref,
         style=box_style,
         internal_accessibility=accessibility,
     )

@@ -107,12 +107,14 @@ def applyProps(
     props: dict[str, Any],
     vnode_key: Optional[str],
 ) -> None:
+    ref = props.pop("ref", None)
     style = props.pop("style", {})
     setStyle(dom_node, style)
     if dom_node.yogaNode:
         apply_styles(dom_node.yogaNode, style)
 
     dom_node.key = vnode_key
+    dom_node.internal_ref = ref
     dom_node.internal_transform = props.pop("internal_transform", None)
 
     internal_static = bool(props.pop("internal_static", False))
@@ -139,7 +141,7 @@ def applyProps(
     new_attributes = {
         key: value
         for key, value in props.items()
-        if key not in ("children", "ref")
+        if key != "children"
     }
 
     for key in list(dom_node.attributes.keys()):

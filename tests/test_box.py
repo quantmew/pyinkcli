@@ -85,3 +85,10 @@ def test_box_overflow():
     style = vnode.props.get("style", {})
     assert style.get("overflowX") == "hidden"
     assert style.get("overflowY") == "hidden"
+
+
+def test_box_passes_through_ref():
+    """Test Box forwards ref to the host element."""
+    ref = {"current": None}
+    vnode = Box(ref=ref)
+    assert vnode.props.get("ref") is ref

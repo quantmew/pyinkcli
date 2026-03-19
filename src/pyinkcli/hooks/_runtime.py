@@ -5,6 +5,7 @@ Public compatibility imports remain in `hooks/state.py`.
 """
 
 from __future__ import annotations
+import math
 import threading
 import time
 from dataclasses import dataclass, field
@@ -25,6 +26,7 @@ class EffectRecord:
 class HookState:
     index: int = 0
     states: list[Any] = field(default_factory=list)
+    state_setters: dict[int, Callable[[Any], None]] = field(default_factory=dict)
     effects: dict[int, EffectRecord] = field(default_factory=dict)
     refs: dict[int, Any] = field(default_factory=dict)
     memos: dict[int, tuple[Any, Deps]] = field(default_factory=dict)
@@ -130,6 +132,22 @@ def _clone_hook_value(value: Any) -> Any:
     if isinstance(value, list):
         return [_clone_hook_value(item) for item in value]
     return value
+
+
+def _state_values_equal(previous: Any, next_value: Any) -> bool:
+    if previous is next_value:
+        return True
+
+    if isinstance(previous, float) and isinstance(next_value, float):
+        if math.isnan(previous) and math.isnan(next_value):
+            return True
+        return previous == next_value
+
+    immutable_types = (str, bytes, int, bool, tuple, frozenset, type(None))
+    if isinstance(previous, immutable_types) and isinstance(next_value, immutable_types):
+        return previous == next_value
+
+    return False
 
 
 def _resolve_nested_parent(
@@ -551,14 +569,23 @@ def useState(
         state.states[index] = value
     current_value = state.states[index]
 
-    def set_value(new_value: Union[T, Callable[[T], T]]) -> None:
-        if callable(new_value):
-            state.states[index] = new_value(state.states[index])
-        else:
-            state.states[index] = new_value
-        _request_rerender()
+    if index not in state.state_setters:
+        def set_value(new_value: Union[T, Callable[[T], T]]) -> None:
+            previous_value = state.states[index]
+            if callable(new_value):
+                next_value = new_value(previous_value)
+            else:
+                next_value = new_value
 
-    return (current_value, set_value)
+            if _state_values_equal(previous_value, next_value):
+                return
+
+            state.states[index] = next_value
+            _request_rerender()
+
+        state.state_setters[index] = set_value
+
+    return (current_value, state.state_setters[index])
 
 
 def useEffect(

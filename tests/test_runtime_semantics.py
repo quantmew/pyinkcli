@@ -6,9 +6,10 @@ import time
 from io import StringIO
 from unittest.mock import Mock
 
-from pyinkcli import Box, Text, render
+from pyinkcli import Box, Text, measureElement, render
 from pyinkcli.component import createElement
 from pyinkcli.dom import addLayoutListener
+from pyinkcli.packages.ink.dom import createNode
 from pyinkcli.components._accessibility_runtime import _provide_accessibility
 from pyinkcli.ink import Ink, Options
 from pyinkcli.hooks.use_cursor import useCursor
@@ -104,6 +105,36 @@ def test_reconciler_runs_layout_callback_before_emitting_layout_listeners() -> N
     reconciler.update_container(Box(Text("Hello")), container)
 
     assert events == ["layout", "listener"]
+
+
+def test_measure_element_returns_zero_before_layout() -> None:
+    node = createNode("ink-box")
+    dimensions = measureElement(node)
+
+    assert dimensions.width == 0
+    assert dimensions.height == 0
+
+
+def test_callback_ref_measurement_matches_ink_progress_bar_pattern() -> None:
+    def Example():
+        width, set_width = useState(0)
+        ref, set_ref = useState(None)
+
+        if ref is not None:
+            dimensions = measureElement(ref)
+            if dimensions.width != width:
+                set_width(dimensions.width)
+
+        return Box(Text(f"Width: {width}"), ref=set_ref, width=12)
+
+    stdout = FakeStdout()
+    stdin = FakeStdin()
+    app = render(createElement(Example), stdout=stdout, stdin=stdin, debug=True)
+    try:
+        app.wait_until_render_flush(timeout=0.2)
+        assert "Width: 12" in stdout.getvalue()
+    finally:
+        app.unmount()
 
 
 def test_ink_wires_root_callbacks_for_commit_flow() -> None:
