@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pyinkcli.packages.react_dom.host import DOMElement
+from pyinkcli.packages.ink.dom import DOMElement
 from pyinkcli.packages.react_reconciler.ReactFiberReconcilerClassComponent import (
     ReactFiberReconcilerClassComponent,
 )

@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 from pyinkcli.packages.react_reconciler.ReactFiberHostContext import getRootHostContext
 
 if TYPE_CHECKING:
-    from pyinkcli.packages.react_dom.host import DOMElement
-    from pyinkcli.packages.react_dom.host_config import ReconcilerHostConfig
+    from pyinkcli.packages.ink.dom import DOMElement
+    from pyinkcli.packages.ink.host_config import ReconcilerHostConfig
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
 
 

@@ -18,6 +18,8 @@ from pyinkcli.hooks._runtime import (
     useState,
 )
 from pyinkcli.hooks.use_cursor import useCursor
+from pyinkcli.hooks.use_input import _clear_input_handlers, _dispatch_input, useInput
+from pyinkcli.hooks.use_stdin import useStdin
 
 
 def render_component(instance_id: str, component):
@@ -47,6 +49,7 @@ def render_components(*items):
 def teardown_function():
     _clear_hook_state()
     _set_rerender_callback(None)
+    _clear_input_handlers()
 
 
 def test_use_state_initial_value():
@@ -179,6 +182,34 @@ def test_use_effect_cleanup_runs_before_re_running_changed_deps():
     assert first == 0
     assert second == 1
     assert calls == ["run:0", "cleanup:0", "run:1"]
+
+
+def test_use_input_keeps_single_subscription_across_rerenders_and_uses_latest_handler():
+    calls: list[tuple[int, str]] = []
+
+    def component():
+        value, set_value = useState(0)
+
+        def handler(input_char, key) -> None:
+            calls.append((value, input_char))
+
+        useInput(handler)
+
+        if value == 0:
+            set_value(1)
+
+        return value
+
+    first = render_component("use-input-stable-handler", component)
+    second = render_component("use-input-stable-handler", component)
+
+    assert first == 0
+    assert second == 1
+    assert useStdin().listener_count("input") == 1
+
+    _dispatch_input("q")
+
+    assert calls == [(1, "q")]
 
 
 def test_use_state_setter_requests_rerender_each_time_it_updates() -> None:

@@ -12,7 +12,7 @@ def renderBackground(x: int, y: int, node: DOMElement, output: Output) -> None:
     if not bg_color:
         return
 
-    yoga_node = node.yoga_node
+    yoga_node = node.yogaNode
     if yoga_node is None:
         return
 

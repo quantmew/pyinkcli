@@ -6,25 +6,24 @@ from typing import TypedDict
 
 
 class HostContext(TypedDict):
-    is_inside_text: bool
+    isInsideText: bool
 
 
 def getRootHostContext() -> HostContext:
-    return {"is_inside_text": False}
+    return {"isInsideText": False}
 
 
 def getChildHostContext(
     parent_host_context: HostContext,
     element_name: str,
 ) -> HostContext:
-    previous_is_inside_text = parent_host_context.get("is_inside_text", False)
+    previous_is_inside_text = parent_host_context.get("isInsideText", False)
     is_inside_text = element_name in ("ink-text", "ink-virtual-text")
 
     if previous_is_inside_text == is_inside_text:
         return parent_host_context
 
-    return {"is_inside_text": is_inside_text}
+    return {"isInsideText": is_inside_text}
 
 
 __all__ = ["HostContext", "getChildHostContext", "getRootHostContext"]
-

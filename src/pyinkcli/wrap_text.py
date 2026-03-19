@@ -9,8 +9,8 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pyinkcli.sanitize_ansi import sanitizeAnsi
 from pyinkcli.packages.ink.styles import TextWrap
+from pyinkcli.sanitize_ansi import sanitizeAnsi
 from pyinkcli.utils.wrap_ansi import wrap_ansi, truncate_string
 
 

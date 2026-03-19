@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
-from pyinkcli.packages.react_dom.host import DOMElement
-from pyinkcli.packages.react_dom.host_config import ReconcilerHostConfig
+from pyinkcli.packages.ink.dom import DOMElement
+from pyinkcli.packages.ink.host_config import ReconcilerHostConfig
 from pyinkcli.packages.react_reconciler.ReactFiberContainerUpdate import (
     commitContainerUpdate as _commit_container_update_impl,
     createContainer as _create_container_impl,

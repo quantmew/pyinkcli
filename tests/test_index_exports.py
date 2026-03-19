@@ -81,6 +81,11 @@ def test_root_package_no_longer_exposes_trimmed_compat_exports() -> None:
         raise AssertionError(f"{name} should not be exposed from pyinkcli root package")
 
 
+def test_root_package_does_not_expose_internal_index_glue() -> None:
+    assert not hasattr(pyinkcli, "_index_all")
+    assert not hasattr(pyinkcli, "annotations")
+
+
 def test_cursor_helpers_export_camel_case_names() -> None:
     assert cursor_helpers.__all__ == [
         "CursorPosition",
@@ -125,10 +130,15 @@ def test_dom_exports_match_js_like_public_names() -> None:
         "emitLayoutListeners",
         "squashTextNodes",
     ]
+    assert not hasattr(dom, "add_layout_listener")
+    assert not hasattr(dom, "emit_layout_listeners")
 
 
 def test_styles_exports_only_public_styles_type() -> None:
     assert styles.__all__ == ["Styles"]
+    assert hasattr(styles, "Styles")
+    assert not hasattr(styles, "TextWrap")
+    assert not hasattr(styles, "apply_styles")
 
 
 def test_context_modules_export_js_like_primary_names() -> None:

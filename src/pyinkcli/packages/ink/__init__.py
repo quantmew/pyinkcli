@@ -21,6 +21,7 @@ from pyinkcli.packages.ink.dom import (
 )
 from pyinkcli.packages.ink.output import Output
 from pyinkcli.packages.ink.styles import Styles, TextWrap, apply_styles
+from pyinkcli.packages.ink.host_config import ReconcilerHostConfig
 from pyinkcli.packages.ink.render_background import renderBackground
 from pyinkcli.packages.ink.render_border import renderBorder
 from pyinkcli.packages.ink.render_node_to_output import (
@@ -49,6 +50,7 @@ __all__ = [
     "insertBeforeNode",
     "Output",
     "OutputTransformer",
+    "ReconcilerHostConfig",
     "removeChildNode",
     "render",
     "renderBackground",

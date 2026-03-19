@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pyinkcli.packages.react_dom.host import emitLayoutListeners
+from pyinkcli.packages.ink.dom import emitLayoutListeners
 from pyinkcli.packages.react_reconciler.ReactEventPriorities import UpdatePriority
 
 if TYPE_CHECKING:
@@ -31,21 +31,24 @@ def requestHostRender(
         reconciler._on_commit()
 
 
-def afterCommit(reconciler: "_Reconciler", container: "ReconcilerContainer") -> None:
+def resetAfterCommit(
+    reconciler: "_Reconciler",
+    container: "ReconcilerContainer",
+) -> None:
     dom_container = container.container
-    if callable(dom_container.on_compute_layout):
-        dom_container.on_compute_layout()
-    elif dom_container.yoga_node:
+    if callable(dom_container.onComputeLayout):
+        dom_container.onComputeLayout()
+    elif dom_container.yogaNode:
         reconciler._calculate_layout(dom_container)
 
     emitLayoutListeners(dom_container)
 
-    if dom_container.is_static_dirty:
-        dom_container.is_static_dirty = False
+    if dom_container.isStaticDirty:
+        dom_container.isStaticDirty = False
         requestHostRender(reconciler, container.current_render_priority, immediate=True)
         return
 
     requestHostRender(reconciler, container.current_render_priority, immediate=False)
 
 
-__all__ = ["afterCommit", "requestHostRender"]
+__all__ = ["requestHostRender", "resetAfterCommit"]

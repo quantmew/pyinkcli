@@ -6,8 +6,7 @@ Represents the virtual DOM nodes used by the renderer.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypedDict, Union
 
 if TYPE_CHECKING:
     from pyinkcli._yoga import LayoutNode as YogaNode
@@ -26,71 +25,89 @@ DOMNodeAttribute = Union[bool, str, int, float]
 OutputTransformer = Callable[[str, int], str]
 
 
-@dataclass
-class AccessibilityInfo:
-    """Accessibility information for screen readers."""
-
-    role: Optional[str] = None
-    state: Optional[dict[str, bool]] = None
+class AccessibilityInfo(TypedDict, total=False):
+    role: Optional[str]
+    state: dict[str, bool]
 
 
-@dataclass
 class DOMElement:
     """Represents an element node in the DOM tree."""
 
-    node_name: ElementName
-    style: Styles = field(default_factory=dict)
-    attributes: dict[str, Any] = field(default_factory=dict)
-    child_nodes: list[DOMNode] = field(default_factory=list)
-    parent_node: Optional[DOMElement] = None
-    yoga_node: Optional[YogaNode] = None
+    def __init__(
+        self,
+        nodeName: ElementName,
+        *,
+        style: Optional["Styles"] = None,
+        attributes: Optional[dict[str, Any]] = None,
+        childNodes: Optional[list["DOMNode"]] = None,
+        parentNode: Optional["DOMElement"] = None,
+        yogaNode: Optional["YogaNode"] = None,
+        internal_transform: Optional[OutputTransformer] = None,
+        internal_static: bool = False,
+        key: Optional[str] = None,
+        internal_accessibility: Optional[AccessibilityInfo] = None,
+        isStaticDirty: bool = False,
+        staticNode: Optional["DOMElement"] = None,
+        onComputeLayout: Optional[Callable[[], None]] = None,
+        onRender: Optional[Callable[[], None]] = None,
+        onImmediateRender: Optional[Callable[[], None]] = None,
+        internal_layoutListeners: Optional[set[Callable[[], None]]] = None,
+    ) -> None:
+        self.nodeName = nodeName
+        self.style = style or {}
+        self.attributes = attributes or {}
+        self.childNodes = childNodes or []
+        self.parentNode = parentNode
+        self.yogaNode = yogaNode
+        self.internal_transform = internal_transform
+        self.internal_static = internal_static
+        self.key = key
+        self.internal_accessibility = internal_accessibility or {}
+        self.isStaticDirty = isStaticDirty
+        self.staticNode = staticNode
+        self.onComputeLayout = onComputeLayout
+        self.onRender = onRender
+        self.onImmediateRender = onImmediateRender
+        self.internal_layoutListeners = internal_layoutListeners or set()
 
-    # Internal properties
-    internal_transform: Optional[OutputTransformer] = None
-    internal_static: bool = False
-    internal_key: Optional[str] = None
-    internal_accessibility: AccessibilityInfo = field(
-        default_factory=AccessibilityInfo
-    )
 
-    # Root node callbacks
-    is_static_dirty: bool = False
-    static_node: Optional[DOMElement] = None
-    on_compute_layout: Optional[Callable[[], None]] = None
-    on_render: Optional[Callable[[], None]] = None
-    on_immediate_render: Optional[Callable[[], None]] = None
-    internal_layout_listeners: set[Callable[[], None]] = field(default_factory=set)
-
-
-@dataclass
 class TextNode:
     """Represents a text node in the DOM tree."""
 
-    node_name: TextName = "#text"
-    node_value: str = ""
-    style: Styles = field(default_factory=dict)
-    parent_node: Optional[DOMElement] = None
-    yoga_node: Optional[YogaNode] = None
+    def __init__(
+        self,
+        *,
+        nodeName: TextName = "#text",
+        nodeValue: str = "",
+        style: Optional["Styles"] = None,
+        parentNode: Optional[DOMElement] = None,
+        yogaNode: Optional["YogaNode"] = None,
+    ) -> None:
+        self.nodeName = nodeName
+        self.nodeValue = nodeValue
+        self.style = style or {}
+        self.parentNode = parentNode
+        self.yogaNode = yogaNode
 
 
 # Union type for all DOM nodes
 DOMNode = Union[DOMElement, TextNode]
 
 
-def _find_child_index(parent: DOMElement, child: DOMNode) -> int:
+def _find_child_index(node: DOMElement, childNode: DOMNode) -> int:
     """Find a child index by identity, not dataclass equality."""
-    for index, current_child in enumerate(parent.child_nodes):
-        if current_child is child:
+    for index, currentChild in enumerate(node.childNodes):
+        if currentChild is childNode:
             return index
     return -1
 
 
-def createNode(node_name: ElementName) -> DOMElement:
+def createNode(nodeName: ElementName) -> DOMElement:
     """
     Create a new DOM element node.
 
     Args:
-        node_name: The type of element to create.
+        nodeName: The type of element to create.
 
     Returns:
         A new DOMElement instance.
@@ -98,17 +115,17 @@ def createNode(node_name: ElementName) -> DOMElement:
     from pyinkcli._yoga import Node
 
     node = DOMElement(
-        node_name=node_name,
+        nodeName=nodeName,
         style={},
         attributes={},
-        child_nodes=[],
-        parent_node=None,
-        yoga_node=None if node_name == "ink-virtual-text" else Node.create(),
+        childNodes=[],
+        parentNode=None,
+        yogaNode=None if nodeName == "ink-virtual-text" else Node.create(),
     )
 
     # Set up measure function for text nodes
-    if node_name == "ink-text" and node.yoga_node:
-        node.yoga_node.set_measure_func(lambda w, h: _measure_text_node(node, w))
+    if nodeName == "ink-text" and node.yogaNode:
+        node.yogaNode.set_measure_func(lambda w, h: _measure_text_node(node, w))
 
     return node
 
@@ -124,95 +141,97 @@ def createTextNode(text: str) -> TextNode:
         A new TextNode instance.
     """
     node = TextNode(
-        node_name="#text",
-        node_value=text,
+        nodeName="#text",
+        nodeValue=text,
         style={},
-        parent_node=None,
-        yoga_node=None,
+        parentNode=None,
+        yogaNode=None,
     )
     setTextNodeValue(node, text)
     return node
 
 
-def appendChildNode(parent: DOMElement, child: DOMNode) -> None:
+def appendChildNode(node: DOMElement, childNode: DOMNode) -> None:
     """
     Append a child node to a parent element.
 
     Args:
-        parent: The parent element.
-        child: The child node to append.
+        node: The parent element.
+        childNode: The child node to append.
     """
-    if child.parent_node is not None:
-        removeChildNode(child.parent_node, child)
+    if childNode.parentNode is not None:
+        removeChildNode(childNode.parentNode, childNode)
 
-    child.parent_node = parent
-    parent.child_nodes.append(child)
+    childNode.parentNode = node
+    node.childNodes.append(childNode)
 
-    if child.yoga_node is not None and parent.yoga_node is not None:
-        parent.yoga_node.insert_child(
-            child.yoga_node, parent.yoga_node.get_child_count()
+    if childNode.yogaNode is not None and node.yogaNode is not None:
+        node.yogaNode.insert_child(
+            childNode.yogaNode, node.yogaNode.get_child_count()
         )
 
-    if parent.node_name in ("ink-text", "ink-virtual-text"):
-        _mark_node_as_dirty(parent)
+    if node.nodeName in ("ink-text", "ink-virtual-text"):
+        _mark_node_as_dirty(node)
 
 
 def insertBeforeNode(
-    parent: DOMElement, new_child: DOMNode, before_child: DOMNode
+    node: DOMElement,
+    newChildNode: DOMNode,
+    beforeChildNode: DOMNode,
 ) -> None:
     """
     Insert a child node before another child.
 
     Args:
-        parent: The parent element.
-        new_child: The new child to insert.
-        before_child: The existing child to insert before.
+        node: The parent element.
+        newChildNode: The new child to insert.
+        beforeChildNode: The existing child to insert before.
     """
-    if new_child.parent_node is not None:
-        removeChildNode(new_child.parent_node, new_child)
+    if newChildNode.parentNode is not None:
+        removeChildNode(newChildNode.parentNode, newChildNode)
 
-    new_child.parent_node = parent
+    newChildNode.parentNode = node
 
-    index = _find_child_index(parent, before_child)
+    index = _find_child_index(node, beforeChildNode)
 
     if index >= 0:
-        parent.child_nodes.insert(index, new_child)
-        if new_child.yoga_node is not None and parent.yoga_node is not None:
-            parent.yoga_node.insert_child(new_child.yoga_node, index)
+        node.childNodes.insert(index, newChildNode)
+        if newChildNode.yogaNode is not None and node.yogaNode is not None:
+            node.yogaNode.insert_child(newChildNode.yogaNode, index)
     else:
-        parent.child_nodes.append(new_child)
-        if new_child.yoga_node is not None and parent.yoga_node is not None:
-            parent.yoga_node.insert_child(
-                new_child.yoga_node, parent.yoga_node.get_child_count()
+        node.childNodes.append(newChildNode)
+        if newChildNode.yogaNode is not None and node.yogaNode is not None:
+            node.yogaNode.insert_child(
+                newChildNode.yogaNode, node.yogaNode.get_child_count()
             )
 
-    if parent.node_name in ("ink-text", "ink-virtual-text"):
-        _mark_node_as_dirty(parent)
+    if node.nodeName in ("ink-text", "ink-virtual-text"):
+        _mark_node_as_dirty(node)
 
 
-def removeChildNode(parent: DOMElement, child: DOMNode) -> None:
+def removeChildNode(node: DOMElement, removeNode: DOMNode) -> None:
     """
     Remove a child node from a parent element.
 
     Args:
-        parent: The parent element.
-        child: The child node to remove.
+        node: The parent element.
+        removeNode: The child node to remove.
     """
-    if child.yoga_node is not None and child.parent_node is not None:
-        if child.parent_node.yoga_node is not None:
-            child.parent_node.yoga_node.remove_child(child.yoga_node)
+    if removeNode.yogaNode is not None and removeNode.parentNode is not None:
+        if removeNode.parentNode.yogaNode is not None:
+            removeNode.parentNode.yogaNode.remove_child(removeNode.yogaNode)
 
-    child.parent_node = None
+    removeNode.parentNode = None
 
-    index = _find_child_index(parent, child)
+    index = _find_child_index(node, removeNode)
     if index >= 0:
-        parent.child_nodes.pop(index)
+        node.childNodes.pop(index)
 
-    if parent.node_name in ("ink-text", "ink-virtual-text"):
-        _mark_node_as_dirty(parent)
+    if node.nodeName in ("ink-text", "ink-virtual-text"):
+        _mark_node_as_dirty(node)
 
 
-def setAttribute(node: DOMElement, key: str, value: Any) -> None:
+def setAttribute(node: DOMElement, key: str, value: DOMNodeAttribute | Any) -> None:
     """
     Set an attribute on an element.
 
@@ -222,7 +241,7 @@ def setAttribute(node: DOMElement, key: str, value: Any) -> None:
         value: The attribute value.
     """
     if key == "internal_accessibility":
-        node.internal_accessibility = value
+        node.internal_accessibility = value or {}
         return
     node.attributes[key] = value
 
@@ -248,41 +267,41 @@ def setTextNodeValue(node: TextNode, text: str) -> None:
     """
     if not isinstance(text, str):
         text = str(text)
-    node.node_value = text
+    node.nodeValue = text
     _mark_node_as_dirty(node)
 
 
 def addLayoutListener(
-    root_node: DOMElement, listener: Callable[[], None]
+    rootNode: DOMElement, listener: Callable[[], None]
 ) -> Callable[[], None]:
     """
     Add a layout listener to a root node.
 
     Args:
-        root_node: The root node.
+        rootNode: The root node.
         listener: The listener function.
 
     Returns:
         A function to remove the listener.
     """
-    if root_node.node_name != "ink-root":
+    if rootNode.nodeName != "ink-root":
         return lambda: None
 
-    root_node.internal_layout_listeners.add(listener)
-    return lambda: root_node.internal_layout_listeners.discard(listener)
+    rootNode.internal_layoutListeners.add(listener)
+    return lambda: rootNode.internal_layoutListeners.discard(listener)
 
 
-def emitLayoutListeners(root_node: DOMElement) -> None:
+def emitLayoutListeners(rootNode: DOMElement) -> None:
     """
     Emit layout events to all listeners.
 
     Args:
-        root_node: The root node.
+        rootNode: The root node.
     """
-    if root_node.node_name != "ink-root" or not root_node.internal_layout_listeners:
+    if rootNode.nodeName != "ink-root" or not rootNode.internal_layoutListeners:
         return
 
-    for listener in root_node.internal_layout_listeners:
+    for listener in rootNode.internal_layoutListeners:
         listener()
 
 
@@ -303,19 +322,19 @@ def squashTextNodes(node: DOMElement) -> str:
     from pyinkcli.sanitize_ansi import sanitizeAnsi
 
     text = ""
-    for index, child in enumerate(node.child_nodes):
-        node_text = ""
+    for index, child in enumerate(node.childNodes):
+        nodeText = ""
         if isinstance(child, TextNode):
-            node_text = child.node_value
-        elif isinstance(child, DOMElement) and child.node_name in (
+            nodeText = child.nodeValue
+        elif isinstance(child, DOMElement) and child.nodeName in (
             "ink-text",
             "ink-virtual-text",
         ):
-            node_text = squashTextNodes(child)
-            if node_text and callable(child.internal_transform):
-                node_text = child.internal_transform(node_text, index)
+            nodeText = squashTextNodes(child)
+            if nodeText and callable(child.internal_transform):
+                nodeText = child.internal_transform(nodeText, index)
 
-        text += node_text
+        text += nodeText
 
     return sanitizeAnsi(text)
 
@@ -338,7 +357,7 @@ def _measure_text_node(
     import math
 
     text = (
-        node.node_value
+        node.nodeValue
         if isinstance(node, TextNode)
         else squashTextNodes(node) if isinstance(node, DOMElement) else ""
     )
@@ -353,24 +372,24 @@ def _measure_text_node(
     if dimensions[0] >= 1 and 0 < width < 1:
         return dimensions
 
-    text_wrap = node.style.get("textWrap", "wrap") if node.style else "wrap"
-    wrapped_text = wrapText(text, int(width), text_wrap)
+    textWrap = node.style.get("textWrap", "wrap") if node.style else "wrap"
+    wrappedText = wrapText(text, int(width), textWrap)
 
-    return measureText(wrapped_text)
+    return measureText(wrappedText)
 
 
 def _find_closest_yoga_node(node: Optional[DOMNode]) -> Optional[yoga.Node]:
     """Find the closest ancestor with a Yoga node."""
-    if node is None or node.parent_node is None:
+    if node is None or node.parentNode is None:
         return None
-    return node.yoga_node or _find_closest_yoga_node(node.parent_node)
+    return node.yogaNode or _find_closest_yoga_node(node.parentNode)
 
 
 def _mark_node_as_dirty(node: Optional[DOMNode]) -> None:
     """Mark the closest Yoga node as dirty for re-measurement."""
-    yoga_node = _find_closest_yoga_node(node)
-    if yoga_node is not None:
-        yoga_node.mark_dirty()
+    yogaNode = _find_closest_yoga_node(node)
+    if yogaNode is not None:
+        yogaNode.mark_dirty()
 
 
 __all__ = [

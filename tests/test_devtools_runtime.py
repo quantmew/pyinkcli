@@ -1460,7 +1460,7 @@ def test_devtools_backend_facade_exposes_host_instance_and_profiling_methods() -
         snapshot = renderer["getTreeSnapshot"]()
         suspense_node = next(node for node in snapshot["nodes"] if node["displayName"] == "Suspense")
         text_node = next(node for node in snapshot["nodes"] if node["displayName"] == "ink-text")
-        host_instance = app._root_node.child_nodes[0]
+        host_instance = app._root_node.childNodes[0]
 
         profiling_response = backend["getProfilingStatus"]({"requestID": 61})
         assert profiling_response["event"] == "profilingStatus"

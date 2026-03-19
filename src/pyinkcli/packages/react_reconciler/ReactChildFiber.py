@@ -12,7 +12,7 @@ from pyinkcli.packages.react_reconciler.ReactFiberHostContext import getChildHos
 
 if TYPE_CHECKING:
     from pyinkcli.component import RenderableNode
-    from pyinkcli.packages.react_dom.host import DOMElement
+    from pyinkcli.packages.ink.dom import DOMElement
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
 
 
@@ -64,7 +64,7 @@ def reconcileChild(
 
     if isinstance(vnode, str):
         host_context = reconciler._host_context_stack[-1]
-        if not host_context.get("is_inside_text", False):
+        if not host_context.get("isInsideText", False):
             raise ValueError(
                 f'Text string "{vnode[:20]}..." must be rendered inside <Text> component'
             )
@@ -309,7 +309,7 @@ def reconcileChild(
         return dom_index
 
     host_context = reconciler._host_context_stack[-1]
-    is_inside_text = host_context.get("is_inside_text", False)
+    is_inside_text = host_context.get("isInsideText", False)
 
     if is_inside_text and element_name == "ink-box":
         raise ValueError("<Box> can't be nested inside <Text> component")

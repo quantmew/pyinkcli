@@ -25,9 +25,9 @@ def test_reconciler_reuses_host_nodes_on_update():
     )
     reconciler.update_container(first_tree, container)
 
-    box_node = root.child_nodes[0]
-    text_node = box_node.child_nodes[0]
-    text_leaf = text_node.child_nodes[0]
+    box_node = root.childNodes[0]
+    text_node = box_node.childNodes[0]
+    text_leaf = text_node.childNodes[0]
 
     second_tree = createElement(
         "ink-box",
@@ -36,10 +36,10 @@ def test_reconciler_reuses_host_nodes_on_update():
     )
     reconciler.update_container(second_tree, container)
 
-    assert root.child_nodes[0] is box_node
-    assert box_node.child_nodes[0] is text_node
-    assert text_node.child_nodes[0] is text_leaf
-    assert text_leaf.node_value == "world"
+    assert root.childNodes[0] is box_node
+    assert box_node.childNodes[0] is text_node
+    assert text_node.childNodes[0] is text_leaf
+    assert text_leaf.nodeValue == "world"
 
 
 def test_reconciler_trims_removed_children_without_replacing_survivors():
@@ -54,8 +54,8 @@ def test_reconciler_trims_removed_children_without_replacing_survivors():
     )
     reconciler.update_container(first_tree, container)
 
-    box_node = root.child_nodes[0]
-    first_child = box_node.child_nodes[0]
+    box_node = root.childNodes[0]
+    first_child = box_node.childNodes[0]
 
     second_tree = createElement(
         "ink-box",
@@ -63,9 +63,9 @@ def test_reconciler_trims_removed_children_without_replacing_survivors():
     )
     reconciler.update_container(second_tree, container)
 
-    assert root.child_nodes[0] is box_node
-    assert len(box_node.child_nodes) == 1
-    assert box_node.child_nodes[0] is first_child
+    assert root.childNodes[0] is box_node
+    assert len(box_node.childNodes) == 1
+    assert box_node.childNodes[0] is first_child
 
 
 def test_reconciler_reorders_keyed_children_without_recreating_them():
@@ -80,9 +80,9 @@ def test_reconciler_reorders_keyed_children_without_recreating_them():
     )
     reconciler.update_container(first_tree, container)
 
-    box_node = root.child_nodes[0]
-    first_child = box_node.child_nodes[0]
-    second_child = box_node.child_nodes[1]
+    box_node = root.childNodes[0]
+    first_child = box_node.childNodes[0]
+    second_child = box_node.childNodes[1]
 
     second_tree = createElement(
         "ink-box",
@@ -91,8 +91,8 @@ def test_reconciler_reorders_keyed_children_without_recreating_them():
     )
     reconciler.update_container(second_tree, container)
 
-    assert box_node.child_nodes[0] is second_child
-    assert box_node.child_nodes[1] is first_child
+    assert box_node.childNodes[0] is second_child
+    assert box_node.childNodes[1] is first_child
 
 
 def test_concurrent_container_coalesces_to_latest_tree() -> None:
@@ -105,14 +105,14 @@ def test_concurrent_container_coalesces_to_latest_tree() -> None:
 
     deadline = time.time() + 0.5
     while time.time() < deadline:
-        if root.child_nodes:
-            text_node = root.child_nodes[0]
-            if text_node.child_nodes and text_node.child_nodes[0].node_value == "second":
+        if root.childNodes:
+            text_node = root.childNodes[0]
+            if text_node.childNodes and text_node.childNodes[0].nodeValue == "second":
                 break
         time.sleep(0.01)
 
-    text_node = root.child_nodes[0]
-    assert text_node.child_nodes[0].node_value == "second"
+    text_node = root.childNodes[0]
+    assert text_node.childNodes[0].nodeValue == "second"
 
 
 def test_reconciler_module_update_helpers_expose_batched_and_discrete_surfaces() -> None:

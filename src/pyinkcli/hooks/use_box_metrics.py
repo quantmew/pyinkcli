@@ -58,7 +58,7 @@ def useBoxMetrics(ref: dict) -> _UseBoxMetricsResult:
         return _UseBoxMetricsResult()
 
     element: DOMElement = ref["current"]
-    yoga_node = getattr(element, "yoga_node", None)
+    yoga_node = getattr(element, "yogaNode", None)
 
     if yoga_node is None:
         return _UseBoxMetricsResult()

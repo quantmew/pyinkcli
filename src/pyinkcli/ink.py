@@ -27,12 +27,9 @@ from typing import (
 from pyinkcli._component_runtime import createElement, scopeRender
 from pyinkcli.components._accessibility_runtime import _provide_accessibility
 from pyinkcli.components._app_context_runtime import Props as AppContextProps
-from pyinkcli.packages.react_dom.client import (
-    RenderResult,
-    createRootNode,
-    render as render_dom,
-)
-from pyinkcli.packages.react_dom.host import DOMElement
+from pyinkcli.packages.ink.dom import DOMElement, createNode
+from pyinkcli.packages.ink.host_config import ReconcilerHostConfig
+from pyinkcli.packages.ink.renderer import RenderResult, render as render_dom
 from pyinkcli.hooks.use_app import _set_app_ink
 from pyinkcli.hooks.use_input import _dispatch_input, _clear_input_handlers
 from pyinkcli.hooks._runtime import (
@@ -44,7 +41,6 @@ from pyinkcli.hooks.use_stdin import _set_stdin, useStdin
 from pyinkcli.hooks.use_stdout import _emit_stdout_resize, _set_stdout
 from pyinkcli.hooks.use_stderr import _set_stderr
 from pyinkcli.input_parser import InputParser
-from pyinkcli.packages.react_dom.host_config import ReconcilerHostConfig
 from pyinkcli.packages.react_reconciler.ReactFiberReconciler import createReconciler
 from pyinkcli.log_update import LogUpdate
 from pyinkcli.sanitize_ansi import sanitizeAnsi
@@ -66,6 +62,11 @@ from pyinkcli.packages.react_devtools_core.backend import initializeBackend
 
 if TYPE_CHECKING:
     from pyinkcli.component import RenderableNode
+
+
+def _create_root_node() -> DOMElement:
+    root = createNode("ink-root")
+    return root
 
 
 @dataclass
@@ -231,7 +232,7 @@ class Ink:
         self._stdin_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
         # Create root node
-        self._root_node = createRootNode()
+        self._root_node = _create_root_node()
 
         # Set up render throttling
         render_throttle_ms = (
@@ -265,9 +266,9 @@ class Ink:
             self._root_node,
             tag=1 if self._concurrent else 0,
         )
-        self._root_node.on_compute_layout = self._calculate_layout
-        self._root_node.on_render = self._handle_root_render
-        self._root_node.on_immediate_render = self._handle_root_immediate_render
+        self._root_node.onComputeLayout = self._calculate_layout
+        self._root_node.onRender = self._handle_root_render
+        self._root_node.onImmediateRender = self._handle_root_immediate_render
 
         # Set up app context
         self._app_context = AppContextProps(self)
@@ -481,13 +482,13 @@ class Ink:
             metrics = RenderMetrics(render_time=time.time() - start_time)
             self._on_render(metrics)
 
-        static_output_delta = self._get_static_output_delta(result.static_output)
+        static_output_delta = self._get_static_output_delta(result.staticOutput)
         has_static_output = static_output_delta != ""
-        self._last_static_output_frame = result.static_output
+        self._last_static_output_frame = result.staticOutput
 
         self._render_frame(
             result.output,
-            result.output_height,
+            result.outputHeight,
             static_output_delta if has_static_output else "",
         )
 
@@ -499,8 +500,8 @@ class Ink:
         # should not write raw user control sequences straight to the terminal.
         return RenderResult(
             output=sanitizeAnsi(result.output),
-            output_height=result.output_height,
-            static_output=sanitizeAnsi(result.static_output),
+            outputHeight=result.outputHeight,
+            staticOutput=sanitizeAnsi(result.staticOutput),
         )
 
     def _mark_render_flushed(self) -> None:
@@ -704,9 +705,9 @@ class Ink:
 
         terminal_width = getWindowSize(self._stdout)["columns"]
 
-        if self._root_node.yoga_node:
-            self._root_node.yoga_node.set_width(terminal_width)
-            self._root_node.yoga_node.calculate_layout(
+        if self._root_node.yogaNode:
+            self._root_node.yogaNode.set_width(terminal_width)
+            self._root_node.yogaNode.calculate_layout(
                 yoga.UNDEFINED,
                 yoga.UNDEFINED,
                 yoga.DIRECTION_LTR,
@@ -725,12 +726,12 @@ class Ink:
         immediate: bool,
     ) -> None:
         self._pending_commit_priority = priority
-        if immediate and callable(self._root_node.on_immediate_render):
-            self._root_node.on_immediate_render()
+        if immediate and callable(self._root_node.onImmediateRender):
+            self._root_node.onImmediateRender()
             return
 
-        if callable(self._root_node.on_render):
-            self._root_node.on_render()
+        if callable(self._root_node.onRender):
+            self._root_node.onRender()
             return
 
         self._flush_requested_root_render(immediate=immediate)

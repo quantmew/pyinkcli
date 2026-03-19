@@ -96,7 +96,7 @@ def test_reconciler_runs_layout_callback_before_emitting_layout_listeners() -> N
     def on_compute_layout() -> None:
         events.append("layout")
 
-    root_node.on_compute_layout = on_compute_layout
+    root_node.onComputeLayout = on_compute_layout
     addLayoutListener(root_node, lambda: events.append("listener"))
 
     reconciler = createReconciler(root_node)
@@ -111,9 +111,9 @@ def test_ink_wires_root_callbacks_for_commit_flow() -> None:
     stdin = FakeStdin()
     app = Ink(Options(stdout=stdout, stdin=stdin, stderr=stdout, debug=True))
     try:
-        assert callable(app._root_node.on_compute_layout)
-        assert callable(app._root_node.on_render)
-        assert callable(app._root_node.on_immediate_render)
+        assert callable(app._root_node.onComputeLayout)
+        assert callable(app._root_node.onRender)
+        assert callable(app._root_node.onImmediateRender)
     finally:
         app.unmount()
 
@@ -125,8 +125,8 @@ def test_request_commit_render_uses_root_callbacks() -> None:
     try:
         on_render = Mock()
         on_immediate_render = Mock()
-        app._root_node.on_render = on_render
-        app._root_node.on_immediate_render = on_immediate_render
+        app._root_node.onRender = on_render
+        app._root_node.onImmediateRender = on_immediate_render
 
         app._request_commit_render("default", immediate=False)
         app._request_commit_render("discrete", immediate=True)

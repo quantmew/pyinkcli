@@ -1,4 +1,4 @@
-"""Renderer host configuration shared between the terminal renderer and reconciler."""
+"""Shared host config types for the Ink renderer and reconciler."""
 
 from __future__ import annotations
 
@@ -19,4 +19,4 @@ class ReconcilerHostConfig:
     request_render: Callable[[UpdatePriority, bool], None]
 
 
-__all__ = ["ReconcilerHostConfig"]
+__all__ = ["ReconcilerHostConfig", "UpdatePriority"]

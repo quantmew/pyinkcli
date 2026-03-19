@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional
 
-from pyinkcli.packages.react_dom.host import (
+from pyinkcli.packages.ink.dom import (
     AccessibilityInfo,
     DOMElement,
     DOMNode,
@@ -17,9 +17,10 @@ from pyinkcli.packages.react_dom.host import (
     setAttribute,
     setStyle,
     setTextNodeValue,
-    apply_styles,
 )
-from pyinkcli.packages.react_dom.host_config import ReconcilerHostConfig
+from pyinkcli.packages.ink.host_config import ReconcilerHostConfig
+from pyinkcli.packages.ink.styles import apply_styles
+from pyinkcli.packages.react_reconciler.ReactFiberReconciler import cleanupYogaNode
 
 if TYPE_CHECKING:
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
@@ -30,8 +31,8 @@ def getExistingChild(
     parent: DOMElement,
     dom_index: int,
 ) -> Optional[DOMNode]:
-    if 0 <= dom_index < len(parent.child_nodes):
-        return parent.child_nodes[dom_index]
+    if 0 <= dom_index < len(parent.childNodes):
+        return parent.childNodes[dom_index]
     return None
 
 
@@ -45,19 +46,19 @@ def findMatchingChild(
     existing = getExistingChild(reconciler, parent, dom_index)
     if (
         isinstance(existing, DOMElement)
-        and existing.node_name == actual_type
-        and existing.internal_key == vnode_key
+        and existing.nodeName == actual_type
+        and existing.key == vnode_key
     ):
         return existing
 
     if vnode_key is None:
         return existing
 
-    for child in parent.child_nodes[dom_index + 1:]:
+    for child in parent.childNodes[dom_index + 1:]:
         if (
             isinstance(child, DOMElement)
-            and child.node_name == actual_type
-            and child.internal_key == vnode_key
+            and child.nodeName == actual_type
+            and child.key == vnode_key
         ):
             return child
 
@@ -66,16 +67,15 @@ def findMatchingChild(
 
 def disposeNode(reconciler: "_Reconciler", node: DOMNode) -> None:
     if isinstance(node, DOMElement):
-        while node.child_nodes:
-            child = node.child_nodes[0]
+        while node.childNodes:
+            child = node.childNodes[0]
             removeChildNode(node, child)
             disposeNode(reconciler, child)
 
-        if reconciler.root_node.static_node is node:
-            reconciler.root_node.static_node = None
+        if reconciler.root_node.staticNode is node:
+            reconciler.root_node.staticNode = None
 
-        if node.yoga_node is not None and hasattr(node.yoga_node, "free"):
-            node.yoga_node.free()
+        cleanupYogaNode(node.yogaNode)
 
 
 def insertOrReplaceChild(
@@ -92,7 +92,7 @@ def insertOrReplaceChild(
         appendChildNode(parent, child)
         return
 
-    if child.parent_node is parent:
+    if child.parentNode is parent:
         insertBeforeNode(parent, child, existing)
         return
 
@@ -109,30 +109,32 @@ def applyProps(
 ) -> None:
     style = props.pop("style", {})
     setStyle(dom_node, style)
-    if dom_node.yoga_node:
-        apply_styles(dom_node.yoga_node, style)
+    if dom_node.yogaNode:
+        apply_styles(dom_node.yogaNode, style)
 
-    dom_node.internal_key = vnode_key
+    dom_node.key = vnode_key
     dom_node.internal_transform = props.pop("internal_transform", None)
 
     internal_static = bool(props.pop("internal_static", False))
     dom_node.internal_static = internal_static
     if internal_static:
-        reconciler.root_node.is_static_dirty = True
-        reconciler.root_node.static_node = dom_node
-    elif reconciler.root_node.static_node is dom_node:
-        reconciler.root_node.static_node = None
+        reconciler.root_node.isStaticDirty = True
+        reconciler.root_node.staticNode = dom_node
+    elif reconciler.root_node.staticNode is dom_node:
+        reconciler.root_node.staticNode = None
 
     internal_accessibility = props.pop("internal_accessibility", None)
     if internal_accessibility is None:
-        dom_node.internal_accessibility = AccessibilityInfo()
-    elif isinstance(internal_accessibility, AccessibilityInfo):
-        dom_node.internal_accessibility = internal_accessibility
+        dom_node.internal_accessibility = {}
     else:
-        dom_node.internal_accessibility = AccessibilityInfo(
-            role=internal_accessibility.get("role"),
-            state=internal_accessibility.get("state"),
-        )
+        dom_node.internal_accessibility = {
+            key: value
+            for key, value in {
+                "role": internal_accessibility.get("role"),
+                "state": internal_accessibility.get("state"),
+            }.items()
+            if value is not None
+        }
 
     new_attributes = {
         key: value
@@ -175,7 +177,7 @@ def reconcileElementNode(
     current_existing = getExistingChild(reconciler, parent, dom_index)
     existing = findMatchingChild(reconciler, parent, dom_index, actual_type, vnode_key)
 
-    if isinstance(existing, DOMElement) and existing.node_name == actual_type:
+    if isinstance(existing, DOMElement) and existing.nodeName == actual_type:
         dom_node = existing
         if current_existing is not None and current_existing is not dom_node:
             insertBeforeNode(parent, dom_node, current_existing)
@@ -192,8 +194,8 @@ def removeExtraChildren(
     parent: DOMElement,
     start_index: int,
 ) -> None:
-    while len(parent.child_nodes) > start_index:
-        child = parent.child_nodes[start_index]
+    while len(parent.childNodes) > start_index:
+        child = parent.childNodes[start_index]
         removeChildNode(parent, child)
         disposeNode(reconciler, child)
 

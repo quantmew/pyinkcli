@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Optional
 
 from pyinkcli._component_runtime import _Component, isElement
-from pyinkcli.packages.react_dom.host import DOMElement
+from pyinkcli.packages.ink.dom import DOMElement
 from pyinkcli.packages.react_reconciler.ReactFiberClassComponent import (
     applyErrorBoundaryState as _apply_error_boundary_state_impl,
     captureCommitPhaseError as _capture_commit_phase_error_impl,

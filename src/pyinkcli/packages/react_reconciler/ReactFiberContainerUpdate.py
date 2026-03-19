@@ -6,7 +6,7 @@ import threading
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from pyinkcli.hooks._runtime import _finish_hook_state
-from pyinkcli.packages.react_dom.host import DOMElement
+from pyinkcli.packages.ink.dom import DOMElement
 from pyinkcli.packages.react_reconciler.ReactFiberReconciler import packageInfo
 from pyinkcli.packages.react_reconciler.ReactFiberRoot import ReconcilerContainer
 
@@ -266,8 +266,8 @@ def calculateLayout(
 ) -> None:
     from pyinkcli import _yoga as yoga
 
-    if root.yoga_node:
-        root.yoga_node.calculate_layout(
+    if root.yogaNode:
+        root.yogaNode.calculate_layout(
             yoga.UNDEFINED,
             yoga.UNDEFINED,
             yoga.DIRECTION_LTR,

@@ -14,7 +14,7 @@ from pyinkcli.hooks._runtime import _batched_updates_runtime
 
 if TYPE_CHECKING:
     from pyinkcli.component import RenderableNode
-    from pyinkcli.packages.react_dom.host import DOMElement
+    from pyinkcli.packages.ink.dom import DOMElement
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
 
 

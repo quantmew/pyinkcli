@@ -46,12 +46,12 @@ def _format_accessibility_output(
 
 def applyPaddingToText(node: DOMElement, text: str) -> str:
     """Apply padding offset to text."""
-    if node.child_nodes:
-        first_child = node.child_nodes[0]
-        if hasattr(first_child, "yoga_node") and first_child.yoga_node:
-            offset_x = first_child.yoga_node.get_computed_left()
-            offset_y = first_child.yoga_node.get_computed_top()
-            text = "\n" * offset_y + indentString(text, offset_x)
+    if node.childNodes:
+        firstChild = node.childNodes[0]
+        if hasattr(firstChild, "yogaNode") and firstChild.yogaNode:
+            offsetX = firstChild.yogaNode.get_computed_left()
+            offsetY = firstChild.yogaNode.get_computed_top()
+            text = "\n" * offsetY + indentString(text, offsetX)
     return text
 
 
@@ -74,11 +74,7 @@ def _clamped_max_width(yoga_node) -> int:
 def renderNodeToOutput(
     node: DOMElement,
     output: Output,
-    *,
-    offset_x: int = 0,
-    offset_y: int = 0,
-    transformers: Optional[list[OutputTransformer]] = None,
-    skip_static_elements: bool = False,
+    options: Optional[dict[str, object]] = None,
 ) -> None:
     """
     Render a DOM node to the output buffer.
@@ -86,99 +82,101 @@ def renderNodeToOutput(
     Args:
         node: The DOM node to render.
         output: The output buffer.
-        offset_x: X offset from parent.
-        offset_y: Y offset from parent.
-        transformers: List of text transformers.
-        skip_static_elements: Whether to skip static elements.
+        options: Render options aligned with Ink's renderer surface.
     """
-    if skip_static_elements and node.internal_static:
+    options = options or {}
+    offsetX = int(options.get("offsetX", 0))
+    offsetY = int(options.get("offsetY", 0))
+    transformers = list(options.get("transformers", []) or [])
+    skipStaticElements = bool(options.get("skipStaticElements", False))
+
+    if skipStaticElements and node.internal_static:
         return
 
-    yoga_node = node.yoga_node
-    if yoga_node is None:
+    yogaNode = node.yogaNode
+    if yogaNode is None:
         return
 
-    if yoga_node.get_display() == yoga.DISPLAY_NONE:
+    if yogaNode.get_display() == yoga.DISPLAY_NONE:
         return
 
-    # Calculate position
-    x = int(offset_x + yoga_node.get_computed_left())
-    y = int(offset_y + yoga_node.get_computed_top())
+    x = int(offsetX + yogaNode.get_computed_left())
+    y = int(offsetY + yogaNode.get_computed_top())
 
-    # Build transformer list
-    new_transformers = list(transformers or [])
+    newTransformers = transformers
     if node.internal_transform is not None:
-        new_transformers.insert(0, node.internal_transform)
+        newTransformers = [node.internal_transform, *transformers]
 
-    # Handle text nodes
-    if node.node_name == "ink-text":
+    if node.nodeName == "ink-text":
         text = squashTextNodes(node)
         if text:
-            current_width = widest_line(text)
-            max_width = _clamped_max_width(yoga_node)
+            currentWidth = widest_line(text)
+            maxWidth = _clamped_max_width(yogaNode)
 
-            if current_width > max_width:
-                text_wrap = node.style.get("textWrap", "wrap")
-                text = wrapText(text, max_width, text_wrap)
+            if currentWidth > maxWidth:
+                textWrap = node.style.get("textWrap", "wrap")
+                text = wrapText(text, maxWidth, textWrap)
 
             text = applyPaddingToText(node, text)
-            output.write(x, y, text, transformers=new_transformers)
+            output.write(x, y, text, transformers=newTransformers)
         return
 
     clipped = False
 
-    if node.node_name == "ink-box":
+    if node.nodeName == "ink-box":
         renderBackground(x, y, node, output)
         renderBorder(x, y, node, output)
 
-        clip_horizontal = (
+        clipHorizontally = (
             node.style.get("overflowX") == "hidden"
             or node.style.get("overflow") == "hidden"
         )
-        clip_vertical = (
+        clipVertically = (
             node.style.get("overflowY") == "hidden"
             or node.style.get("overflow") == "hidden"
         )
 
-        if clip_horizontal or clip_vertical:
+        if clipHorizontally or clipVertically:
             x1 = (
-                x + yoga_node.get_computed_border(yoga.EDGE_LEFT)
-                if clip_horizontal
+                x + yogaNode.get_computed_border(yoga.EDGE_LEFT)
+                if clipHorizontally
                 else None
             )
             x2 = (
                 x
-                + yoga_node.get_computed_width()
-                - yoga_node.get_computed_border(yoga.EDGE_RIGHT)
-                if clip_horizontal
+                + yogaNode.get_computed_width()
+                - yogaNode.get_computed_border(yoga.EDGE_RIGHT)
+                if clipHorizontally
                 else None
             )
             y1 = (
-                y + yoga_node.get_computed_border(yoga.EDGE_TOP)
-                if clip_vertical
+                y + yogaNode.get_computed_border(yoga.EDGE_TOP)
+                if clipVertically
                 else None
             )
             y2 = (
                 y
-                + yoga_node.get_computed_height()
-                - yoga_node.get_computed_border(yoga.EDGE_BOTTOM)
-                if clip_vertical
+                + yogaNode.get_computed_height()
+                - yogaNode.get_computed_border(yoga.EDGE_BOTTOM)
+                if clipVertically
                 else None
             )
 
             output.clip(x1=x1, x2=x2, y1=y1, y2=y2)
             clipped = True
 
-    if node.node_name in ("ink-root", "ink-box"):
-        for child in node.child_nodes:
-            if isinstance(child, DOMElement):
+    if node.nodeName in ("ink-root", "ink-box"):
+        for childNode in node.childNodes:
+            if isinstance(childNode, DOMElement):
                 renderNodeToOutput(
-                    child,
+                    childNode,
                     output,
-                    offset_x=x,
-                    offset_y=y,
-                    transformers=new_transformers,
-                    skip_static_elements=skip_static_elements,
+                    {
+                        "offsetX": x,
+                        "offsetY": y,
+                        "transformers": newTransformers,
+                        "skipStaticElements": skipStaticElements,
+                    },
                 )
 
         if clipped:
@@ -187,63 +185,73 @@ def renderNodeToOutput(
 
 def renderNodeToScreenReaderOutput(
     node: DOMElement,
-    *,
-    parent_role: Optional[str] = None,
-    skip_static_elements: bool = False,
+    options: Optional[dict[str, object]] = None,
 ) -> str:
     """
     Render a DOM node for screen reader output.
 
     Args:
         node: The DOM node to render.
-        parent_role: The parent's ARIA role.
-        skip_static_elements: Whether to skip static elements.
+        options: Render options aligned with Ink's renderer surface.
 
     Returns:
         The screen reader friendly output.
     """
-    if skip_static_elements and node.internal_static:
+    options = options or {}
+    parentRole = options.get("parentRole")
+    skipStaticElements = bool(options.get("skipStaticElements", False))
+
+    if skipStaticElements and node.internal_static:
         return ""
 
-    yoga_node = node.yoga_node
-    if yoga_node and yoga_node.get_display() == yoga.DISPLAY_NONE:
+    yogaNode = node.yogaNode
+    if yogaNode and yogaNode.get_display() == yoga.DISPLAY_NONE:
         return ""
 
     output = ""
 
-    if node.node_name == "ink-text":
+    if node.nodeName == "ink-text":
         output = squashTextNodes(node)
-    elif node.node_name in ("ink-box", "ink-root"):
+    elif node.nodeName in ("ink-box", "ink-root"):
         # Determine separator based on flex direction
-        flex_direction = node.style.get("flexDirection", "row")
-        separator = " " if flex_direction in ("row", "row-reverse") else "\n"
-
-        # Get children, possibly reversed
-        children = list(node.child_nodes)
-        if flex_direction in ("row-reverse", "column-reverse"):
-            children.reverse()
-
-        # Render children
-        parts = []
-        for child in children:
-            if isinstance(child, DOMElement):
-                child_output = renderNodeToScreenReaderOutput(
-                    child,
-                    parent_role=node.internal_accessibility.role if node.internal_accessibility else None,
-                    skip_static_elements=skip_static_elements,
-                )
-                if child_output:
-                    parts.append(child_output)
-
-        output = separator.join(parts)
+        separator = (
+            " "
+            if node.style.get("flexDirection") in ("row", "row-reverse")
+            else "\n"
+        )
+        childNodes = (
+            list(reversed(node.childNodes))
+            if node.style.get("flexDirection") in ("row-reverse", "column-reverse")
+            else list(node.childNodes)
+        )
+        output = separator.join(
+            filter(
+                None,
+                [
+                    renderNodeToScreenReaderOutput(
+                        childNode,
+                        {
+                            "parentRole": (
+                                node.internal_accessibility.get("role")
+                                if node.internal_accessibility
+                                else None
+                            ),
+                            "skipStaticElements": skipStaticElements,
+                        },
+                    )
+                    for childNode in childNodes
+                    if isinstance(childNode, DOMElement)
+                ],
+            )
+        )
 
     # Add accessibility info
     if node.internal_accessibility:
         output = _format_accessibility_output(
-            node.internal_accessibility.role,
-            node.internal_accessibility.state,
+            node.internal_accessibility.get("role"),
+            node.internal_accessibility.get("state"),
             output,
-            parent_role,
+            parentRole,
         )
 
     return output

@@ -12,7 +12,7 @@ from typing import Callable, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     pass
 
-from pyinkcli.hooks._runtime import useEffect
+from pyinkcli.hooks._runtime import useEffect, useRef
 from pyinkcli.packages.react_reconciler.ReactFiberReconciler import discreteUpdates
 from pyinkcli.hooks.use_stdin import useStdin
 from pyinkcli.parse_keypress import parseKeypress
@@ -99,6 +99,8 @@ def useInput(
             return Text("Press keys...")
     """
     stdin = useStdin()
+    handler_ref = useRef(handler)
+    handler_ref.current = handler
 
     def manage_raw_mode():
         if not is_active:
@@ -119,11 +121,14 @@ def useInput(
 
         def handle_data(data: str) -> None:
             char, key = _parse_keypress(data)
-            discreteUpdates(lambda: handler(char, key))
+            current_handler = handler_ref.current
+            if current_handler is None:
+                return
+            discreteUpdates(lambda: current_handler(char, key))
 
         return stdin.on("input", handle_data)
 
-    useEffect(register_handler, (is_active, handler))
+    useEffect(register_handler, (is_active,))
 def _parse_keypress(data: str) -> tuple[str, Key]:
     key = Key()
     if not data:

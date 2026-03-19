@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional
 
-from pyinkcli.packages.react_dom.host import DOMElement, DOMNode
+from pyinkcli.packages.ink.dom import DOMElement, DOMNode
 from pyinkcli.packages.react_reconciler.ReactChildFiber import (
     getChildPathToken as _get_child_path_token_impl,
     getElementName as _get_element_name_impl,

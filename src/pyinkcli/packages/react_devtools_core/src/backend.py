@@ -1,7 +1,9 @@
-"""Bridge request composition for the React DevTools backend facade."""
+"""Source backend implementation mirroring react-devtools-core/src/backend.js."""
 
 from __future__ import annotations
 
+import socket
+import warnings
 from copy import deepcopy
 from typing import Any
 
@@ -9,19 +11,33 @@ from pyinkcli.packages.react_devtools_core.backend_constants import (
     CURRENT_BRIDGE_PROTOCOL,
 )
 from pyinkcli.packages.react_devtools_core.backend_handlers import (
+    create_agent_notification_method as _create_agent_notification_method,
+    create_agent_request_method as _create_agent_request_method,
     create_constant_response_handler as _create_constant_response_handler,
     create_delete_path_handler as _create_delete_path_handler,
+    create_element_path_lookup as _create_element_path_lookup,
+    create_host_instance_id_lookup as _create_host_instance_id_lookup,
+    create_host_instance_name_lookup as _create_host_instance_name_lookup,
     create_id_handler as _create_id_handler,
     create_legacy_override_handler as _create_legacy_override_handler,
     create_notification_handler as _create_notification_handler,
     create_override_value_handler as _create_override_value_handler,
     create_owners_list_handler as _create_owners_list_handler,
+    create_persisted_selection_clearer as _create_persisted_selection_clearer,
+    create_persisted_selection_getter as _create_persisted_selection_getter,
+    create_persisted_selection_match_getter as _create_persisted_selection_match_getter,
+    create_persisted_selection_match_setter as _create_persisted_selection_match_setter,
+    create_persisted_selection_setter as _create_persisted_selection_setter,
     create_rename_path_handler as _create_rename_path_handler,
+    create_stop_inspecting_native_handler as _create_stop_inspecting_native_handler,
     create_toggle_handler as _create_toggle_handler,
+    create_tracked_path_setter as _create_tracked_path_setter,
     normalize_id_payload as _normalize_id_payload,
 )
 from pyinkcli.packages.react_devtools_core.backend_inspection import (
     dispatchInspectScreenRequest as _dispatch_inspect_screen_request,
+    normalizePersistedSelection as _normalize_persisted_selection,
+    normalizePersistedSelectionMatch as _normalize_persisted_selection_match,
     package_version,
     syncSelectionState as _sync_selection_state,
 )
@@ -32,9 +48,15 @@ from pyinkcli.packages.react_devtools_core.hydration import (
     make_devtools_backend_notification_handlers,
     normalize_inspect_element_bridge_payload,
 )
+from pyinkcli.packages.react_devtools_core.window_polyfill import (
+    installDevtoolsWindowPolyfill,
+)
 
 
-def createBridgeDispatcher(
+_devtools_initialized: bool = False
+
+
+def _create_bridge_dispatcher(
     renderer_interface: dict[str, Any],
     *,
     state: dict[str, Any],
@@ -224,4 +246,120 @@ def createBridgeDispatcher(
     }
 
 
-__all__ = ["createBridgeDispatcher"]
+def _create_agent(
+    renderer_interface: dict[str, Any],
+    *,
+    state: dict[str, Any],
+    dispatch_message: Any,
+) -> dict[str, Any]:
+    return {
+        "getOwnersList": _create_agent_request_method(dispatch_message, "getOwnersList"),
+        "getBackendVersion": _create_agent_request_method(dispatch_message, "getBackendVersion"),
+        "getBridgeProtocol": _create_agent_request_method(dispatch_message, "getBridgeProtocol"),
+        "getProfilingStatus": _create_agent_request_method(dispatch_message, "getProfilingStatus"),
+        "getProfilingData": _create_agent_request_method(dispatch_message, "getProfilingData"),
+        "inspectElement": _create_agent_request_method(dispatch_message, "inspectElement"),
+        "inspectScreen": _create_agent_request_method(dispatch_message, "inspectScreen"),
+        "overrideValueAtPath": _create_agent_request_method(dispatch_message, "overrideValueAtPath"),
+        "overrideContext": _create_agent_request_method(dispatch_message, "overrideContext"),
+        "overrideHookState": _create_agent_request_method(dispatch_message, "overrideHookState"),
+        "overrideProps": _create_agent_request_method(dispatch_message, "overrideProps"),
+        "overrideState": _create_agent_request_method(dispatch_message, "overrideState"),
+        "deletePath": _create_agent_request_method(dispatch_message, "deletePath"),
+        "renamePath": _create_agent_request_method(dispatch_message, "renamePath"),
+        "overrideError": _create_agent_request_method(dispatch_message, "overrideError"),
+        "overrideSuspense": _create_agent_request_method(dispatch_message, "overrideSuspense"),
+        "scheduleUpdate": _create_agent_request_method(dispatch_message, "scheduleUpdate"),
+        "scheduleRetry": _create_agent_request_method(dispatch_message, "scheduleRetry"),
+        "clearErrorsAndWarnings": _create_agent_notification_method(dispatch_message, "clearErrorsAndWarnings"),
+        "clearErrorsForElementID": _create_agent_notification_method(dispatch_message, "clearErrorsForElementID"),
+        "clearWarningsForElementID": _create_agent_notification_method(dispatch_message, "clearWarningsForElementID"),
+        "copyElementPath": _create_agent_notification_method(dispatch_message, "copyElementPath"),
+        "storeAsGlobal": _create_agent_notification_method(dispatch_message, "storeAsGlobal"),
+        "logElementToConsole": _create_agent_notification_method(dispatch_message, "logElementToConsole"),
+        "overrideSuspenseMilestone": _create_agent_notification_method(
+            dispatch_message,
+            "overrideSuspenseMilestone",
+        ),
+        "getIDForHostInstance": _create_host_instance_id_lookup(),
+        "getComponentNameForHostInstance": _create_host_instance_name_lookup(),
+        "getPathForElement": _create_element_path_lookup(renderer_interface),
+        "setTrackedPath": _create_tracked_path_setter(renderer_interface),
+        "getPersistedSelection": _create_persisted_selection_getter(state),
+        "setPersistedSelection": _create_persisted_selection_setter(
+            renderer_interface,
+            state,
+            _normalize_persisted_selection,
+        ),
+        "clearPersistedSelection": _create_persisted_selection_clearer(renderer_interface, state),
+        "getPersistedSelectionMatch": _create_persisted_selection_match_getter(state),
+        "setPersistedSelectionMatch": _create_persisted_selection_match_setter(
+            state,
+            _normalize_persisted_selection_match,
+        ),
+        "stopInspectingNative": _create_stop_inspecting_native_handler(state),
+    }
+
+
+def createBackend(
+    renderer_interface: dict[str, Any],
+) -> dict[str, Any]:
+    backend_state = {
+        "lastNotification": None,
+        "lastStopInspectingHostSelected": None,
+        "lastSelectedElementID": None,
+        "lastSelectedRendererID": None,
+        "persistedSelection": None,
+        "persistedSelectionMatch": None,
+    }
+
+    bridge_dispatcher = _create_bridge_dispatcher(
+        renderer_interface,
+        state=backend_state,
+    )
+    agent_methods = _create_agent(
+        renderer_interface,
+        state=backend_state,
+        dispatch_message=bridge_dispatcher["dispatchBridgeMessage"],
+    )
+
+    return {
+        "backendState": backend_state,
+        **bridge_dispatcher,
+        **agent_methods,
+    }
+
+
+def isBackendReachable(host: str = "localhost", port: int = 8097, timeout: float = 2.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def initializeBackend() -> bool:
+    global _devtools_initialized
+    if _devtools_initialized:
+        return True
+
+    installDevtoolsWindowPolyfill()
+    if isBackendReachable():
+        _devtools_initialized = True
+        return True
+
+    warnings.warn(
+        "DEV is set to true, but the React DevTools server is not running. "
+        "Start it with:\n\n$ npx react-devtools\n",
+        stacklevel=2,
+    )
+    return False
+
+
+__all__ = [
+    "CURRENT_BRIDGE_PROTOCOL",
+    "createBackend",
+    "initializeBackend",
+    "installDevtoolsWindowPolyfill",
+    "isBackendReachable",
+]

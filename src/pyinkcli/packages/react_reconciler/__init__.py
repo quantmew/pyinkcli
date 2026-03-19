@@ -1,7 +1,7 @@
 """React reconciler-aligned namespace for pyinkcli internals."""
 
+from pyinkcli.packages.ink.host_config import ReconcilerHostConfig
 from pyinkcli.packages.react_reconciler.ReactEventPriorities import UpdatePriority
-from pyinkcli.packages.react_dom.host_config import ReconcilerHostConfig
 from pyinkcli.packages.react_reconciler.ReactFiberReconciler import (
     batchedUpdates,
     consumePendingRerenderPriority,

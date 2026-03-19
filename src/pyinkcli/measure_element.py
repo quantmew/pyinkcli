@@ -48,7 +48,7 @@ def measureElement(node: DOMElement) -> ElementDimensions:
         ...         print(f"Width: {dims.width}, Height: {dims.height}")
         ...     return createElement(Box, onLayout=on_layout)
     """
-    yoga_node = node.yoga_node
+    yoga_node = node.yogaNode
     if yoga_node is None:
         return ElementDimensions(width=0, height=0)
 

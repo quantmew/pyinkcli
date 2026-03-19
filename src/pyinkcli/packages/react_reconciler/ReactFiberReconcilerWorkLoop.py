@@ -10,7 +10,7 @@ from pyinkcli.hooks._runtime import (
 )
 from pyinkcli.packages.react_reconciler.ReactEventPriorities import UpdatePriority
 from pyinkcli.packages.react_reconciler.ReactFiberCommitWork import (
-    afterCommit as _after_commit_work,
+    resetAfterCommit as _reset_after_commit,
     requestHostRender as _request_host_render_impl,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberRoot import ReconcilerContainer
@@ -56,7 +56,7 @@ class ReactFiberReconcilerWorkLoop:
         _dispatch_commit_render(self, container)
 
     def _after_commit(self, container: ReconcilerContainer) -> None:
-        _after_commit_work(self, container)
+        _reset_after_commit(self, container)
 
     def _request_host_render(
         self,

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from pyinkcli.packages.ink.output import Output
@@ -15,84 +14,54 @@ if TYPE_CHECKING:
     from pyinkcli.packages.ink.dom import DOMElement
 
 
-@dataclass
 class RenderResult:
-    """Result of rendering the DOM tree."""
-
-    output: str
-    output_height: int
-    static_output: str
-
-
-def render(node: DOMElement, is_screen_reader_enabled: bool = False) -> RenderResult:
-    """
-    Render the DOM tree to terminal output.
-
-    Args:
-        node: The root DOM node.
-        is_screen_reader_enabled: Whether screen reader mode is enabled.
-
-    Returns:
-        RenderResult with output, height, and static output.
-    """
-    if node.yoga_node is None:
-        return RenderResult(output="", output_height=0, static_output="")
-
-    if is_screen_reader_enabled:
-        return _render_screen_reader(node)
-
-    return _render_normal(node)
+    def __init__(self, output: str, outputHeight: int, staticOutput: str) -> None:
+        self.output = output
+        self.outputHeight = outputHeight
+        self.staticOutput = staticOutput
 
 
-def _render_normal(node: DOMElement) -> RenderResult:
-    """Render for normal terminal output."""
-    yoga_node = node.yoga_node
+def render(node: DOMElement, isScreenReaderEnabled: bool = False) -> RenderResult:
+    if node.yogaNode:
+        if isScreenReaderEnabled:
+            output = renderNodeToScreenReaderOutput(node, {"skipStaticElements": True})
+            outputHeight = 0 if output == "" else len(output.split("\n"))
 
-    # Create main output buffer
-    main_output = Output(
-        width=int(yoga_node.get_computed_width()),
-        height=int(yoga_node.get_computed_height()),
-    )
+            staticOutput = ""
+            if node.staticNode:
+                staticOutput = renderNodeToScreenReaderOutput(
+                    node.staticNode, {"skipStaticElements": False}
+                )
 
-    # Render main content
-    renderNodeToOutput(node, main_output, skip_static_elements=True)
+            return RenderResult(
+                output=output,
+                outputHeight=outputHeight,
+                staticOutput=f"{staticOutput}\n" if staticOutput else "",
+            )
 
-    # Render static content if present
-    static_output_str = ""
-    if node.static_node and node.static_node.yoga_node:
-        static_output = Output(
-            width=int(node.static_node.yoga_node.get_computed_width()),
-            height=int(node.static_node.yoga_node.get_computed_height()),
+        output = Output(
+            width=int(node.yogaNode.get_computed_width()),
+            height=int(node.yogaNode.get_computed_height()),
         )
-        renderNodeToOutput(node.static_node, static_output, skip_static_elements=False)
-        static_str, _ = static_output.get()
-        static_output_str = static_str + "\n" if static_str else ""
 
-    # Get final output
-    output_str, height = main_output.get()
+        renderNodeToOutput(node, output, {"skipStaticElements": True})
 
-    return RenderResult(
-        output=output_str,
-        output_height=height,
-        static_output=static_output_str,
-    )
+        staticOutput = None
+        if node.staticNode and node.staticNode.yogaNode:
+            staticOutput = Output(
+                width=int(node.staticNode.yogaNode.get_computed_width()),
+                height=int(node.staticNode.yogaNode.get_computed_height()),
+            )
+            renderNodeToOutput(
+                node.staticNode, staticOutput, {"skipStaticElements": False}
+            )
 
+        generatedOutput, outputHeight = output.get()
 
-def _render_screen_reader(node: DOMElement) -> RenderResult:
-    """Render for screen reader output."""
-    output = renderNodeToScreenReaderOutput(node, skip_static_elements=True)
-    output_height = output.count("\n") + 1 if output else 0
-
-    static_output = ""
-    if node.static_node:
-        static_output = renderNodeToScreenReaderOutput(
-            node.static_node, skip_static_elements=False
+        return RenderResult(
+            output=generatedOutput,
+            outputHeight=outputHeight,
+            staticOutput=f"{staticOutput.get()[0]}\n" if staticOutput else "",
         )
-        if static_output:
-            static_output += "\n"
 
-    return RenderResult(
-        output=output,
-        output_height=output_height,
-        static_output=static_output,
-    )
+    return RenderResult(output="", outputHeight=0, staticOutput="")

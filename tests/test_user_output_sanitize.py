@@ -110,8 +110,8 @@ def test_debug_render_path_sanitizes_render_result_output(monkeypatch):
     def fake_render_dom(node, is_screen_reader_enabled):
         return ink_module.RenderResult(
             output="A\x1b[2JB",
-            output_height=1,
-            static_output="S\x1b[2JT\n",
+            outputHeight=1,
+            staticOutput="S\x1b[2JT\n",
         )
 
     monkeypatch.setattr(ink_module, "render_dom", fake_render_dom)
