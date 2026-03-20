@@ -4,20 +4,20 @@ import array as array_module
 import builtins
 import datetime as datetime_module
 import enum
-from io import StringIO
-from pathlib import Path
 import re
 from collections import OrderedDict
+from io import StringIO
+from pathlib import Path
 from unittest.mock import patch
 
 from pyinkcli import Text, render
 from pyinkcli._component_runtime import _Component
 from pyinkcli.component import createElement
+from pyinkcli.hooks import useState
 from pyinkcli.packages.react_devtools_core.hydration import (
     make_bridge_call,
     make_bridge_notification,
 )
-from pyinkcli.hooks import useState
 from pyinkcli.suspense_runtime import SuspendSignal
 
 

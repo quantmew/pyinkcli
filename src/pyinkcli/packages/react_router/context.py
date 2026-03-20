@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Generator, Optional, Protocol
+from typing import Any, Protocol
 
 
 class Navigator(Protocol):
@@ -21,7 +22,7 @@ class NavigationContextObject:
     basename: str
     navigator: Navigator
     static: bool
-    unstable_useTransitions: Optional[bool]
+    unstable_useTransitions: bool | None
     future: dict[str, Any]
 
 
@@ -44,30 +45,31 @@ OutletContext: ContextVar[Any] = ContextVar(
 )
 
 
-NavigationContext: ContextVar[Optional[NavigationContextObject]] = ContextVar(
+NavigationContext: ContextVar[NavigationContextObject | None] = ContextVar(
     "react_router_navigation_context",
     default=None,
 )
-LocationContext: ContextVar[Optional[LocationContextObject]] = ContextVar(
+LocationContext: ContextVar[LocationContextObject | None] = ContextVar(
     "react_router_location_context",
     default=None,
 )
-RouteContext: ContextVar[RouteContextObject] = ContextVar(
+RouteContext: ContextVar[RouteContextObject | None] = ContextVar(
     "react_router_route_context",
-    default=RouteContextObject(outlet=None, matches=[], isDataRoute=False),
+    default=None,
 )
 
 
-def _get_navigation_context() -> Optional[NavigationContextObject]:
+def _get_navigation_context() -> NavigationContextObject | None:
     return NavigationContext.get()
 
 
-def _get_location_context() -> Optional[LocationContextObject]:
+def _get_location_context() -> LocationContextObject | None:
     return LocationContext.get()
 
 
 def _get_route_context() -> RouteContextObject:
-    return RouteContext.get()
+    context = RouteContext.get()
+    return context or RouteContextObject(outlet=None, matches=[], isDataRoute=False)
 
 
 def _get_outlet_context() -> Any:

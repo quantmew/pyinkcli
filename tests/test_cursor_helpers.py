@@ -7,7 +7,14 @@ from pyinkcli.cursor_helpers import (
     buildReturnToBottomPrefix,
     cursorPositionChanged,
 )
-from pyinkcli.utils.ansi_escapes import cursor_down, cursor_left, cursor_to, cursor_up, hide_cursor_escape, show_cursor_escape
+from pyinkcli.utils.ansi_escapes import (
+    cursor_down,
+    cursor_left,
+    cursor_to,
+    cursor_up,
+    hide_cursor_escape,
+    show_cursor_escape,
+)
 
 
 def test_cursor_position_changed():

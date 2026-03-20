@@ -2,9 +2,7 @@
 
 import io
 
-from pyinkcli import Box, Text, renderToString
-from pyinkcli import render
-
+from pyinkcli import Box, Text, render, renderToString
 
 BG_RED = "\x1b[41m"
 BG_YELLOW = "\x1b[43m"

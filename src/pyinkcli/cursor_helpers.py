@@ -6,7 +6,7 @@ Ported from js_source/ink/src/cursor-helpers.ts semantics.
 
 from __future__ import annotations
 
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 from pyinkcli.utils.ansi_escapes import (
     cursor_down,
@@ -18,30 +18,26 @@ from pyinkcli.utils.ansi_escapes import (
 )
 
 CursorPosition = tuple[int, int]
-CursorOnlyInput = TypedDict(
-    "CursorOnlyInput",
-    {
-        "cursorWasShown": bool,
-        "previousLineCount": int,
-        "previousCursorPosition": Optional[CursorPosition],
-        "visibleLineCount": int,
-        "cursorPosition": Optional[CursorPosition],
-    },
-)
+class CursorOnlyInput(TypedDict):
+    cursorWasShown: bool
+    previousLineCount: int
+    previousCursorPosition: CursorPosition | None
+    visibleLineCount: int
+    cursorPosition: CursorPosition | None
 showCursorEscape = show_cursor_escape
 hideCursorEscape = hide_cursor_escape
 
 
 def cursorPositionChanged(
-    a: Optional[CursorPosition],
-    b: Optional[CursorPosition],
+    a: CursorPosition | None,
+    b: CursorPosition | None,
 ) -> bool:
     return a != b
 
 
 def buildCursorSuffix(
     visible_line_count: int,
-    cursor_position: Optional[CursorPosition],
+    cursor_position: CursorPosition | None,
 ) -> str:
     if cursor_position is None:
         return ""
@@ -57,7 +53,7 @@ def buildCursorSuffix(
 
 def buildReturnToBottom(
     previous_line_count: int,
-    previous_cursor_position: Optional[CursorPosition],
+    previous_cursor_position: CursorPosition | None,
 ) -> str:
     if previous_cursor_position is None:
         return ""
@@ -71,9 +67,9 @@ def buildCursorOnlySequence(
     *,
     cursor_was_shown: bool,
     previous_line_count: int,
-    previous_cursor_position: Optional[CursorPosition],
+    previous_cursor_position: CursorPosition | None,
     visible_line_count: int,
-    cursor_position: Optional[CursorPosition],
+    cursor_position: CursorPosition | None,
 ) -> str:
     hide_prefix = hide_cursor_escape if cursor_was_shown else ""
     return (
@@ -86,7 +82,7 @@ def buildCursorOnlySequence(
 def buildReturnToBottomPrefix(
     cursor_was_shown: bool,
     previous_line_count: int,
-    previous_cursor_position: Optional[CursorPosition],
+    previous_cursor_position: CursorPosition | None,
 ) -> str:
     if not cursor_was_shown:
         return ""

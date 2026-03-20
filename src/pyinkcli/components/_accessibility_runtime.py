@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Generator
 
-
-accessibilityContext: ContextVar[dict[str, bool]] = ContextVar(
+accessibilityContext: ContextVar[dict[str, bool] | None] = ContextVar(
     "accessibility_context",
-    default={"isScreenReaderEnabled": False},
+    default=None,
 )
 
 
 def _is_screen_reader_enabled() -> bool:
-    return accessibilityContext.get().get("isScreenReaderEnabled", False)
+    context = accessibilityContext.get()
+    return context.get("isScreenReaderEnabled", False) if context is not None else False
 
 
 @contextmanager

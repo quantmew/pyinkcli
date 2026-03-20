@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import re
 import urllib.parse
-from functools import cmp_to_key
 from dataclasses import dataclass, field
-from typing import Any, Optional, Union
+from functools import cmp_to_key
+from typing import Any
 
 from pyinkcli.packages.react_router.router.history import Path, To, parsePath
 
@@ -34,11 +34,11 @@ def createContext(defaultValue: Any = _CONTEXT_SENTINEL) -> RouterContext:
 class RouteObject:
     id: str
     caseSensitive: bool = False
-    path: Optional[str] = None
-    index: Optional[bool] = False
+    path: str | None = None
+    index: bool | None = False
     element: Any = None
     Component: Any = None
-    children: list["RouteObject"] = field(default_factory=list)
+    children: list[RouteObject] = field(default_factory=list)
     middleware: Any = None
     loader: Any = None
     action: Any = None
@@ -54,7 +54,7 @@ class RouteObject:
 
 @dataclass
 class RouteMatch:
-    params: dict[str, Optional[str]]
+    params: dict[str, str | None]
     pathname: str
     pathnameBase: str
     route: RouteObject
@@ -64,14 +64,14 @@ class RouteMatch:
 class UIMatch:
     id: str
     pathname: str
-    params: dict[str, Optional[str]]
+    params: dict[str, str | None]
     data: Any = None
     loaderData: Any = None
     handle: Any = None
 
 
 class Headers(dict[str, str]):
-    def __init__(self, init: Optional[Any] = None):
+    def __init__(self, init: Any | None = None):
         super().__init__()
         if init is None:
             return
@@ -101,7 +101,7 @@ class Response:
 @dataclass
 class DataWithResponseInit:
     data: Any
-    init: Optional[dict[str, Any]] = None
+    init: dict[str, Any] | None = None
     type: str = "DataWithResponseInit"
 
 
@@ -109,7 +109,7 @@ class ErrorResponseImpl:
     def __init__(
         self,
         status: int,
-        statusText: Optional[str],
+        statusText: str | None,
         data: Any,
         internal: bool = False,
     ):
@@ -127,7 +127,7 @@ class RouterContext:
 
 
 class RouterContextProvider:
-    def __init__(self, init: Optional[dict[RouterContext, Any]] = None):
+    def __init__(self, init: dict[RouterContext, Any] | None = None):
         self._map: dict[RouterContext, Any] = {}
         if init:
             for context, value in init.items():
@@ -142,63 +142,6 @@ class RouterContextProvider:
 
     def set(self, context: RouterContext, value: Any) -> None:
         self._map[context] = value
-
-
-class Headers(dict[str, str]):
-    def __init__(self, init: Optional[Any] = None):
-        super().__init__()
-        if init is None:
-            return
-        if isinstance(init, Headers):
-            for key, value in init.items():
-                self[key] = value
-            return
-        if isinstance(init, dict):
-            for key, value in init.items():
-                self[str(key)] = str(value)
-            return
-        for key, value in init:
-            self[str(key)] = str(value)
-
-    def set(self, key: str, value: Any) -> None:
-        self[str(key)] = str(value)
-
-
-@dataclass
-class Response:
-    body: Any = None
-    status: int = 200
-    headers: Headers = field(default_factory=Headers)
-    statusText: str = ""
-
-
-@dataclass
-class DataWithResponseInit:
-    data: Any
-    init: Optional[dict[str, Any]] = None
-    type: str = "DataWithResponseInit"
-
-
-@dataclass
-class ErrorResponseImpl:
-    status: int
-    statusText: str
-    data: Any
-    internal: bool = False
-    error: Optional[Exception] = None
-
-    def __init__(
-        self,
-        status: int,
-        statusText: Optional[str],
-        data: Any,
-        internal: bool = False,
-    ):
-        self.status = status
-        self.statusText = statusText or ""
-        self.internal = internal
-        self.error = data if isinstance(data, Exception) else None
-        self.data = str(data) if isinstance(data, Exception) else data
 
 
 @dataclass
@@ -255,7 +198,7 @@ def decodePath(value: str) -> str:
         return value
 
 
-def stripBasename(pathname: str, basename: str) -> Optional[str]:
+def stripBasename(pathname: str, basename: str) -> str | None:
     if basename == "/":
         return pathname
     if not pathname.lower().startswith(basename.lower()):
@@ -300,7 +243,7 @@ def normalizeHash(hash_value: str) -> str:
 
 def data(
     payload: Any,
-    init: Optional[Union[int, dict[str, Any]]] = None,
+    init: int | dict[str, Any] | None = None,
 ) -> DataWithResponseInit:
     response_init = {"status": init} if isinstance(init, int) else init
     return DataWithResponseInit(payload, response_init)
@@ -308,7 +251,7 @@ def data(
 
 def redirect(
     url: str,
-    init: Optional[Union[int, dict[str, Any]]] = 302,
+    init: int | dict[str, Any] | None = 302,
 ) -> Response:
     response_init = {"status": init} if isinstance(init, int) else dict(init or {})
     if "status" not in response_init:
@@ -326,7 +269,7 @@ def redirect(
 
 def redirectDocument(
     url: str,
-    init: Optional[Union[int, dict[str, Any]]] = None,
+    init: int | dict[str, Any] | None = None,
 ) -> Response:
     response = redirect(url, init)
     response.headers.set("X-Remix-Reload-Document", "true")
@@ -335,7 +278,7 @@ def redirectDocument(
 
 def replace(
     url: str,
-    init: Optional[Union[int, dict[str, Any]]] = None,
+    init: int | dict[str, Any] | None = None,
 ) -> Response:
     response = redirect(url, init)
     response.headers.set("X-Remix-Replace", "true")
@@ -517,8 +460,8 @@ def resolveTo(
 def convertRoutesToDataRoutes(
     routes: list[RouteObject],
     mapRouteProperties: Any,
-    parentPath: Optional[list[str]] = None,
-    manifest: Optional[dict[str, RouteObject]] = None,
+    parentPath: list[str] | None = None,
+    manifest: dict[str, RouteObject] | None = None,
     allowInPlaceMutations: bool = False,
 ) -> list[RouteObject]:
     parentPath = [] if parentPath is None else parentPath
@@ -585,7 +528,7 @@ def _clone_route(route: RouteObject) -> RouteObject:
     )
 
 
-def _mergeRouteUpdates(route: RouteObject, updates: Optional[dict[str, Any]]) -> RouteObject:
+def _mergeRouteUpdates(route: RouteObject, updates: dict[str, Any] | None) -> RouteObject:
     if not updates:
         return route
 
@@ -602,7 +545,7 @@ def matchRoutes(
     routes: list[RouteObject],
     locationArg: str | dict[str, Any],
     basename: str = "/",
-) -> Optional[list[RouteMatch]]:
+) -> list[RouteMatch] | None:
     return matchRoutesImpl(routes, locationArg, basename, False)
 
 
@@ -611,7 +554,7 @@ def matchRoutesImpl(
     locationArg: str | dict[str, Any],
     basename: str,
     allowPartial: bool,
-) -> Optional[list[RouteMatch]]:
+) -> list[RouteMatch] | None:
     location = parsePath(locationArg) if isinstance(locationArg, str) else locationArg
     pathname = stripBasename(location.get("pathname", "/"), basename)
     if pathname is None:
@@ -628,8 +571,8 @@ def matchRoutesImpl(
 
 def flattenRoutes(
     routes: list[RouteObject],
-    branches: Optional[list[_RouteBranch]] = None,
-    parentsMeta: Optional[list[_RouteMeta]] = None,
+    branches: list[_RouteBranch] | None = None,
+    parentsMeta: list[_RouteMeta] | None = None,
     parentPath: str = "",
     hasParentOptionalSegments: bool = False,
 ) -> list[_RouteBranch]:
@@ -640,7 +583,7 @@ def flattenRoutes(
         route: RouteObject,
         index: int,
         route_has_parent_optional_segments: bool = hasParentOptionalSegments,
-        relativePath: Optional[str] = None,
+        relativePath: str | None = None,
     ) -> None:
         meta = _RouteMeta(
             relativePath=route.path or "" if relativePath is None else relativePath,
@@ -721,7 +664,9 @@ def rankRouteBranches(branches: list[_RouteBranch]) -> None:
 
 
 def _compareIndexes(a: list[int], b: list[int]) -> int:
-    siblings = len(a) == len(b) and all(left == right for left, right in zip(a[:-1], b[:-1]))
+    siblings = len(a) == len(b) and all(
+        left == right for left, right in zip(a[:-1], b[:-1])
+    )
     if siblings:
         return a[-1] - b[-1]
     return 0
@@ -729,7 +674,7 @@ def _compareIndexes(a: list[int], b: list[int]) -> int:
 
 def generatePath(
     originalPath: str,
-    params: Optional[dict[str, Any]] = None,
+    params: dict[str, Any] | None = None,
 ) -> str:
     params = {} if params is None else params
     path = originalPath
@@ -781,7 +726,7 @@ _static_segment_value = 10
 _splat_penalty = -2
 
 
-def computeScore(path: str, index: Optional[bool]) -> int:
+def computeScore(path: str, index: bool | None) -> int:
     segments = path.split("/")
     initial_score = len(segments)
     if any(segment == "*" for segment in segments):
@@ -805,8 +750,8 @@ def matchRouteBranch(
     branch: _RouteBranch,
     pathname: str,
     allowPartial: bool = False,
-) -> Optional[list[RouteMatch]]:
-    matched_params: dict[str, Optional[str]] = {}
+) -> list[RouteMatch] | None:
+    matched_params: dict[str, str | None] = {}
     matched_pathname = "/"
     matches: list[RouteMatch] = []
     routes_meta = branch.routesMeta
@@ -848,7 +793,7 @@ def matchRouteBranch(
     return matches
 
 
-def matchPath(pattern: str | dict[str, Any], pathname: str) -> Optional[dict[str, Any]]:
+def matchPath(pattern: str | dict[str, Any], pathname: str) -> dict[str, Any] | None:
     if isinstance(pattern, str):
         pattern = {"path": pattern, "caseSensitive": False, "end": True}
     matcher, compiled_params = compilePath(
@@ -862,7 +807,7 @@ def matchPath(pattern: str | dict[str, Any], pathname: str) -> Optional[dict[str
     matched_pathname = match.group(0)
     pathname_base = re.sub(r"(.)/+$", r"\1", matched_pathname)
     capture_groups = list(match.groups())
-    params: dict[str, Optional[str]] = {}
+    params: dict[str, str | None] = {}
     for index, param in enumerate(compiled_params):
         param_name = param["paramName"]
         is_optional = param.get("isOptional", False)

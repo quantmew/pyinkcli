@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from contextlib import suppress
+from typing import TYPE_CHECKING, Any
 
 from pyinkcli._component_runtime import (
     _Component,
@@ -19,17 +20,17 @@ if TYPE_CHECKING:
 
 
 def reconcileClassComponent(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     *,
     component_type: type[_Component],
     component_id: str,
     props: dict[str, Any],
-    children: list["RenderableNode"],
-    parent: "DOMElement",
+    children: list[RenderableNode],
+    parent: DOMElement,
     path: tuple[Any, ...],
     dom_index: int,
     devtools_parent_id: str,
-    vnode_key: Optional[str],
+    vnode_key: str | None,
     owner_entry: dict[str, Any],
 ) -> int:
     instance, is_new_instance, previous_props, previous_state = getOrCreateClassComponentInstance(
@@ -180,10 +181,10 @@ def reconcileClassComponent(
 
 
 def getOrCreateClassComponentInstance(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     component_type: type[_Component],
     component_id: str,
-    children: tuple["RenderableNode", ...],
+    children: tuple[RenderableNode, ...],
     props: dict[str, Any],
 ) -> tuple[_Component, bool, dict[str, Any], dict[str, Any]]:
     reconciler._visited_class_component_ids.add(component_id)
@@ -208,7 +209,7 @@ def getOrCreateClassComponentInstance(
 
 
 def scheduleClassComponentCommitCallback(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     instance: _Component,
     *,
     is_new_instance: bool,
@@ -244,7 +245,7 @@ def scheduleClassComponentCommitCallback(
 
 
 def invokeComponentDidMount(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     instance: _Component,
 ) -> None:
     instance._is_mounted = True
@@ -252,7 +253,7 @@ def invokeComponentDidMount(
 
 
 def invokeComponentDidUpdate(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     instance: _Component,
     previous_props: dict[str, Any],
     previous_state: dict[str, Any],
@@ -262,14 +263,14 @@ def invokeComponentDidUpdate(
 
 
 def flushClassComponentCommitCallbacks(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
 ) -> bool:
     callbacks = reconciler._pending_class_component_commit_callbacks[:]
     reconciler._pending_class_component_commit_callbacks.clear()
     if not callbacks:
         return reconciler._commit_phase_recovery_requested
 
-    unhandled_error: Optional[Exception] = None
+    unhandled_error: Exception | None = None
 
     def run_callbacks() -> None:
         nonlocal unhandled_error
@@ -288,7 +289,7 @@ def flushClassComponentCommitCallbacks(
     return reconciler._commit_phase_recovery_requested
 
 
-def cleanupClassComponentInstances(reconciler: "_Reconciler") -> None:
+def cleanupClassComponentInstances(reconciler: _Reconciler) -> None:
     component_ids = list(reconciler._class_component_instances.keys())
     for component_id in component_ids:
         instance = reconciler._class_component_instances.pop(component_id, None)
@@ -297,7 +298,7 @@ def cleanupClassComponentInstances(reconciler: "_Reconciler") -> None:
         unmountClassComponentInstance(reconciler, instance)
 
 
-def disposeStaleClassComponentInstances(reconciler: "_Reconciler") -> None:
+def disposeStaleClassComponentInstances(reconciler: _Reconciler) -> None:
     stale_component_ids = [
         component_id
         for component_id in reconciler._class_component_instances
@@ -311,7 +312,7 @@ def disposeStaleClassComponentInstances(reconciler: "_Reconciler") -> None:
 
 
 def unmountClassComponentInstance(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     instance: _Component,
 ) -> None:
     instance._is_unmounted = True
@@ -325,7 +326,7 @@ def unmountClassComponentInstance(
 
 
 def captureCommitPhaseError(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     instance: _Component,
     error: Exception,
 ) -> bool:
@@ -346,7 +347,7 @@ def captureCommitPhaseError(
 
 
 def isErrorBoundary(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     component_type: type[_Component],
     instance: _Component,
 ) -> bool:
@@ -356,11 +357,11 @@ def isErrorBoundary(
 
 
 def renderErrorBoundaryFallback(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     component_type: type[_Component],
     instance: _Component,
     error: Exception,
-) -> "RenderableNode":
+) -> RenderableNode:
     applyErrorBoundaryState(reconciler, component_type, instance, error)
 
     if callable(getattr(instance, "componentDidCatch", None)):
@@ -370,7 +371,7 @@ def renderErrorBoundaryFallback(
 
 
 def applyErrorBoundaryState(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     component_type: type[_Component],
     instance: _Component,
     error: Exception,
@@ -387,7 +388,7 @@ def applyErrorBoundaryState(
 
 
 def flushComponentDidCatchCallbacks(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     *,
     include_deferred: bool,
 ) -> None:
@@ -397,10 +398,8 @@ def flushComponentDidCatchCallbacks(
         pending_callbacks.extend(reconciler._deferred_component_did_catch)
         reconciler._deferred_component_did_catch.clear()
     for instance, error in pending_callbacks:
-        try:
+        with suppress(Exception):
             instance.componentDidCatch(error)
-        except Exception:
-            pass
 
 
 __all__ = [

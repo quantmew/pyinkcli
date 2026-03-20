@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from pyinkcli.hooks._runtime import (
     _delete_hook_state_path,
@@ -15,9 +15,9 @@ if TYPE_CHECKING:
 
 
 def getDevtoolsMutableProps(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     base = reconciler._devtools_prop_overrides.get(node_id)
     if base is None:
         base = reconciler._devtools_effective_props.get(node_id)
@@ -27,17 +27,17 @@ def getDevtoolsMutableProps(
 
 
 def recordDevtoolsBackendNotification(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     event: str,
     *,
-    renderer_id: Optional[int] = None,
-    node_id: Optional[str] = None,
-    path: Optional[list[Any]] = None,
-    count: Optional[int] = None,
-    copied_value: Optional[str] = None,
-    global_key: Optional[str] = None,
-    suspended_set: Optional[list[Any]] = None,
-    normalized_suspended_set: Optional[list[Any]] = None,
+    renderer_id: int | None = None,
+    node_id: str | None = None,
+    path: list[Any] | None = None,
+    count: int | None = None,
+    copied_value: str | None = None,
+    global_key: str | None = None,
+    suspended_set: list[Any] | None = None,
+    normalized_suspended_set: list[Any] | None = None,
 ) -> None:
     entry: dict[str, Any] = {"event": event}
     if renderer_id is not None:
@@ -60,7 +60,7 @@ def recordDevtoolsBackendNotification(
 
 
 def overrideDevtoolsProps(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
     path: list[Any],
     value: Any,
@@ -74,7 +74,7 @@ def overrideDevtoolsProps(
 
 
 def overrideDevtoolsError(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
     force_error: bool,
 ) -> bool:
@@ -115,7 +115,7 @@ def overrideDevtoolsError(
 
 
 def overrideDevtoolsSuspense(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
     force_fallback: bool,
 ) -> bool:
@@ -137,9 +137,9 @@ def overrideDevtoolsSuspense(
 
 
 def overrideDevtoolsSuspenseMilestone(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     suspended_set: list[str],
-    renderer_id: Optional[int] = None,
+    renderer_id: int | None = None,
 ) -> bool:
     normalized_target: set[str] = set()
     for node_id in suspended_set:
@@ -186,7 +186,7 @@ def overrideDevtoolsSuspenseMilestone(
 
 
 def deleteDevtoolsPropsPath(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
     path: list[Any],
 ) -> bool:
@@ -200,7 +200,7 @@ def deleteDevtoolsPropsPath(
 
 
 def renameDevtoolsPropsPath(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
     old_path: list[Any],
     new_path: list[Any],
@@ -217,7 +217,7 @@ def renameDevtoolsPropsPath(
 
 
 def overrideDevtoolsHookState(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     node_id: str,
     path: list[Any],
     value: Any,
@@ -226,7 +226,7 @@ def overrideDevtoolsHookState(
 
 
 def deleteDevtoolsHookStatePath(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     node_id: str,
     path: list[Any],
 ) -> bool:
@@ -234,7 +234,7 @@ def deleteDevtoolsHookStatePath(
 
 
 def renameDevtoolsHookStatePath(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     node_id: str,
     old_path: list[Any],
     new_path: list[Any],
@@ -243,7 +243,7 @@ def renameDevtoolsHookStatePath(
 
 
 def overrideDevtoolsState(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
     path: list[Any],
     value: Any,
@@ -264,7 +264,7 @@ def overrideDevtoolsState(
 
 
 def deleteDevtoolsStatePath(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
     path: list[Any],
 ) -> bool:
@@ -277,7 +277,7 @@ def deleteDevtoolsStatePath(
 
 
 def renameDevtoolsStatePath(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
     old_path: list[Any],
     new_path: list[Any],
@@ -294,10 +294,10 @@ def renameDevtoolsStatePath(
 
 
 def overrideDevtoolsValueAtPath(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     value_type: str,
     node_id: str,
-    hook_id: Optional[int],
+    hook_id: int | None,
     path: list[Any],
     value: Any,
 ) -> bool:
@@ -314,10 +314,10 @@ def overrideDevtoolsValueAtPath(
 
 
 def deleteDevtoolsPath(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     value_type: str,
     node_id: str,
-    hook_id: Optional[int],
+    hook_id: int | None,
     path: list[Any],
 ) -> bool:
     if value_type == "props":
@@ -333,10 +333,10 @@ def deleteDevtoolsPath(
 
 
 def renameDevtoolsPath(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     value_type: str,
     node_id: str,
-    hook_id: Optional[int],
+    hook_id: int | None,
     old_path: list[Any],
     new_path: list[Any],
 ) -> bool:
@@ -354,7 +354,7 @@ def renameDevtoolsPath(
 
 
 def scheduleDevtoolsUpdate(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
 ) -> bool:
     if not reconciler._has_tree_node(node_id):
@@ -366,7 +366,7 @@ def scheduleDevtoolsUpdate(
 
 
 def scheduleDevtoolsRetry(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
 ) -> bool:
     if not reconciler._has_tree_node(node_id):
@@ -378,8 +378,8 @@ def scheduleDevtoolsRetry(
 
 
 def clearDevtoolsErrorsAndWarnings(
-    reconciler: "_Reconciler",
-    renderer_id: Optional[int] = None,
+    reconciler: _Reconciler,
+    renderer_id: int | None = None,
 ) -> bool:
     recordDevtoolsBackendNotification(
         reconciler,
@@ -390,9 +390,9 @@ def clearDevtoolsErrorsAndWarnings(
 
 
 def clearDevtoolsErrorsForElement(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     id: str,
-    renderer_id: Optional[int] = None,
+    renderer_id: int | None = None,
 ) -> bool:
     recordDevtoolsBackendNotification(
         reconciler,
@@ -404,9 +404,9 @@ def clearDevtoolsErrorsForElement(
 
 
 def clearDevtoolsWarningsForElement(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     id: str,
-    renderer_id: Optional[int] = None,
+    renderer_id: int | None = None,
 ) -> bool:
     recordDevtoolsBackendNotification(
         reconciler,
@@ -418,11 +418,11 @@ def clearDevtoolsWarningsForElement(
 
 
 def copyDevtoolsElementPath(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     id: str,
     path: list[Any],
-    renderer_id: Optional[int] = None,
-) -> Optional[str]:
+    renderer_id: int | None = None,
+) -> str | None:
     from pyinkcli.packages.react_devtools_core.window_polyfill import installDevtoolsWindowPolyfill
 
     copied = reconciler.getSerializedElementValueByPath(id, path)
@@ -440,12 +440,12 @@ def copyDevtoolsElementPath(
 
 
 def storeDevtoolsValueAsGlobal(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     id: str,
     path: list[Any],
     count: int,
-    renderer_id: Optional[int] = None,
-) -> Optional[str]:
+    renderer_id: int | None = None,
+) -> str | None:
     from pyinkcli.packages.react_devtools_core.window_polyfill import installDevtoolsWindowPolyfill
 
     global_key = f"$reactTemp{count}"
@@ -467,35 +467,35 @@ def storeDevtoolsValueAsGlobal(
 
 
 def getDevtoolsLastCopiedValue(
-    reconciler: "_Reconciler",
-) -> Optional[str]:
+    reconciler: _Reconciler,
+) -> str | None:
     return reconciler._devtools_last_copied_value
 
 
 def getDevtoolsLastLoggedElement(
-    reconciler: "_Reconciler",
-) -> Optional[dict[str, Any]]:
+    reconciler: _Reconciler,
+) -> dict[str, Any] | None:
     if reconciler._devtools_last_logged_element is None:
         return None
     return reconciler._clone_inspected_value(reconciler._devtools_last_logged_element)
 
 
 def getDevtoolsTrackedPath(
-    reconciler: "_Reconciler",
-) -> Optional[list[dict[str, Any]]]:
+    reconciler: _Reconciler,
+) -> list[dict[str, Any]] | None:
     if reconciler._devtools_tracked_path is None:
         return None
     return reconciler._clone_inspected_value(reconciler._devtools_tracked_path)
 
 
 def getDevtoolsStoredGlobals(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
 ) -> dict[str, Any]:
     return reconciler._clone_inspected_value(reconciler._devtools_stored_globals)
 
 
 def getDevtoolsBackendNotificationLog(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
 ) -> list[dict[str, Any]]:
     return [
         {
@@ -507,9 +507,9 @@ def getDevtoolsBackendNotificationLog(
 
 
 def logDevtoolsElementToConsole(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     id: str,
-    renderer_id: Optional[int] = None,
+    renderer_id: int | None = None,
 ) -> bool:
     from pyinkcli.packages.react_devtools_core.window_polyfill import installDevtoolsWindowPolyfill
 
@@ -529,8 +529,8 @@ def logDevtoolsElementToConsole(
 
 
 def setDevtoolsTrackedPath(
-    reconciler: "_Reconciler",
-    path: Optional[list[dict[str, Any]]],
+    reconciler: _Reconciler,
+    path: list[dict[str, Any]] | None,
 ) -> None:
     reconciler._devtools_tracked_path = (
         reconciler._clone_inspected_value(path) if path is not None else None

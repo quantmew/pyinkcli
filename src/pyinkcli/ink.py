@@ -12,54 +12,50 @@ import signal
 import sys
 import threading
 import time
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from contextlib import suppress
+from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
     TextIO,
-    Union,
 )
 
 from pyinkcli._component_runtime import createElement, scopeRender
 from pyinkcli.components._accessibility_runtime import _provide_accessibility
 from pyinkcli.components._app_context_runtime import Props as AppContextProps
-from pyinkcli.packages.ink.dom import DOMElement, createNode
-from pyinkcli.packages.ink.host_config import ReconcilerHostConfig
-from pyinkcli.packages.ink.renderer import RenderResult, render as render_dom
-from pyinkcli.hooks.use_app import _set_app_ink
-from pyinkcli.hooks.use_input import _dispatch_input, _clear_input_handlers
 from pyinkcli.hooks._runtime import (
     _clear_hook_state,
     _flush_scheduled_rerender,
     _reset_hook_state,
     _set_rerender_callback,
 )
+from pyinkcli.hooks.use_app import _set_app_ink
+from pyinkcli.hooks.use_input import _clear_input_handlers, _dispatch_input
+from pyinkcli.hooks.use_stderr import _set_stderr
 from pyinkcli.hooks.use_stdin import _set_stdin, useStdin
 from pyinkcli.hooks.use_stdout import _emit_stdout_resize, _set_stdout
-from pyinkcli.hooks.use_stderr import _set_stderr
 from pyinkcli.input_parser import InputParser
-from pyinkcli.packages.react_reconciler.ReactFiberReconciler import createReconciler
+from pyinkcli.instances import instances
 from pyinkcli.log_update import LogUpdate
+from pyinkcli.packages.ink.dom import DOMElement, createNode
+from pyinkcli.packages.ink.host_config import ReconcilerHostConfig
+from pyinkcli.packages.ink.renderer import RenderResult
+from pyinkcli.packages.ink.renderer import render as render_dom
+from pyinkcli.packages.react_reconciler.ReactFiberReconciler import createReconciler
+from pyinkcli.patch_console import patch_console
 from pyinkcli.sanitize_ansi import sanitizeAnsi
 from pyinkcli.utils import getWindowSize
-from pyinkcli.write_synchronized import shouldSynchronize
 from pyinkcli.utils.ansi_escapes import (
+    begin_synchronized_output,
+    clear_terminal,
     cursor_hide,
     cursor_show,
+    end_synchronized_output,
     enter_alternative_screen,
     exit_alternative_screen,
-    erase_lines,
-    clear_terminal,
-    begin_synchronized_output,
-    end_synchronized_output,
 )
-from pyinkcli.instances import instances
-from pyinkcli.patch_console import patch_console
-from pyinkcli.packages.react_devtools_core.backend import initializeBackend
+from pyinkcli.write_synchronized import shouldSynchronize
 
 if TYPE_CHECKING:
     from pyinkcli.component import RenderableNode
@@ -87,15 +83,15 @@ class Options:
     debug: bool = False
     exit_on_ctrl_c: bool = True
     patch_console: bool = True
-    is_screen_reader_enabled: Optional[bool] = None
-    wait_until_exit: Optional[Callable[[], Any]] = None
+    is_screen_reader_enabled: bool | None = None
+    wait_until_exit: Callable[[], Any] | None = None
     max_fps: int = 30
     incremental_rendering: bool = False
     concurrent: bool = False
-    kitty_keyboard: Optional[Dict[str, Any]] = None
-    interactive: Optional[bool] = None
+    kitty_keyboard: dict[str, Any] | None = None
+    interactive: bool | None = None
     alternate_screen: bool = False
-    on_render: Optional[Callable[[RenderMetrics], None]] = None
+    on_render: Callable[[RenderMetrics], None] | None = None
 
 
 
@@ -137,7 +133,7 @@ class Ink:
         return throttled
 
     @staticmethod
-    def _resolve_interactive(stdout: TextIO, interactive: Optional[bool]) -> bool:
+    def _resolve_interactive(stdout: TextIO, interactive: bool | None) -> bool:
         if interactive is not None:
             return interactive
 
@@ -148,13 +144,13 @@ class Ink:
     @classmethod
     def mount(
         cls,
-        node: "RenderableNode | Callable",
+        node: RenderableNode | Callable,
         *,
         stdout: TextIO,
         stdin: TextIO,
         stderr: TextIO,
         **kwargs: Any,
-    ) -> "Ink":
+    ) -> Ink:
         """Create or reuse a render instance for a target stdout stream."""
         stream_key = id(stdout)
         existing = instances.get(stream_key)
@@ -174,7 +170,7 @@ class Ink:
         instances[stream_key] = app
         return app
 
-    def __init__(self, options: Optional[Options] = None):
+    def __init__(self, options: Options | None = None):
         """
         Initialize the Ink application.
 
@@ -212,7 +208,7 @@ class Ink:
         self._last_output_height = 0
         self._last_static_output_frame = ""
         self._last_terminal_width = getWindowSize(self._stdout)["columns"]
-        self._current_component: Optional["RenderableNode | Callable"] = None
+        self._current_component: RenderableNode | Callable | None = None
         self._full_static_output = ""
         self._has_pending_throttled_render = False
         self._pending_commit_priority = "default"
@@ -224,12 +220,12 @@ class Ink:
         self._transition_idle_event: threading.Event = threading.Event()
         self._transition_idle_event.set()
         self._exit_result: Any = None
-        self._exit_error: Optional[Exception] = None
-        self._before_exit_handler: Optional[Callable[[], None]] = None
+        self._exit_error: Exception | None = None
+        self._before_exit_handler: Callable[[], None] | None = None
         self._on_unmount_callbacks: list[Callable[[], None]] = []
         self._transition_generation = 0
         self._transition_lock = threading.Lock()
-        self._restore_console: Optional[Callable[[], None]] = None
+        self._restore_console: Callable[[], None] | None = None
         self._stdin_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
         # Create root node
@@ -315,7 +311,7 @@ class Ink:
         """Check if concurrent rendering mode is enabled."""
         return self._concurrent
 
-    def render(self, node: "RenderableNode | Callable") -> None:
+    def render(self, node: RenderableNode | Callable) -> None:
         """
         Render a component tree.
 
@@ -343,15 +339,15 @@ class Ink:
 
     def _normalize_render_node(
         self,
-        node: "RenderableNode | Callable",
-    ) -> "RenderableNode":
+        node: RenderableNode | Callable,
+    ) -> RenderableNode:
         if callable(node):
             return createElement(node)
         if isinstance(node, str):
             return createElement("ink-text", node)
         return node
 
-    def _create_wrapped_app(self, vnode: "RenderableNode") -> "RenderableNode":
+    def _create_wrapped_app(self, vnode: RenderableNode) -> RenderableNode:
         from pyinkcli.components.App import App
 
         return scopeRender(
@@ -373,7 +369,7 @@ class Ink:
             lambda: _provide_accessibility(self._is_screen_reader_enabled),
         )
 
-    def unmount(self, error: Optional[Exception] = None) -> None:
+    def unmount(self, error: Exception | None = None) -> None:
         """
         Unmount the application.
 
@@ -412,7 +408,7 @@ class Ink:
             raise self._exit_error
         return self._exit_result
 
-    def wait_until_render_flush(self, timeout: Optional[float] = None) -> None:
+    def wait_until_render_flush(self, timeout: float | None = None) -> None:
         """Wait until the latest render has been written out."""
         if self._is_unmounted or self._is_unmounting:
             return
@@ -421,7 +417,7 @@ class Ink:
         self._wait_for_render_flush(timeout=timeout)
         self._wait_for_transition_idle(timeout=timeout)
 
-    def rerender(self, node: "RenderableNode | Callable") -> None:
+    def rerender(self, node: RenderableNode | Callable) -> None:
         """Alias matching the JS Instance surface."""
         self.render(node)
 
@@ -435,10 +431,8 @@ class Ink:
 
     def _invoke_before_exit_handler(self) -> None:
         if self._before_exit_handler:
-            try:
+            with suppress(Exception):
                 self._before_exit_handler()
-            except Exception:
-                pass
 
     def _perform_final_render(self) -> None:
         if not self._should_perform_final_render():
@@ -452,7 +446,7 @@ class Ink:
             # that case; skipping the final render keeps teardown robust.
             return
 
-    def _finalize_exit_state(self, error: Optional[Exception]) -> None:
+    def _finalize_exit_state(self, error: Exception | None) -> None:
         if error:
             self._exit_error = error
         self._mark_transition_idle()
@@ -464,7 +458,7 @@ class Ink:
         if self._can_clear_terminal_output():
             self._clear_and_restore_output()
 
-    def set_cursor_position(self, position: Optional[tuple[int, int]]) -> None:
+    def set_cursor_position(self, position: tuple[int, int] | None) -> None:
         """Set the cursor position relative to the current Ink output."""
         self._set_log_cursor_position(position)
 
@@ -515,26 +509,23 @@ class Ink:
     def _mark_transition_idle(self) -> None:
         self._transition_idle_event.set()
 
-    def _wait_for_render_flush(self, timeout: Optional[float] = None) -> None:
+    def _wait_for_render_flush(self, timeout: float | None = None) -> None:
         self._render_flush_event.wait(timeout=timeout)
 
-    def _wait_for_transition_idle(self, timeout: Optional[float] = None) -> None:
+    def _wait_for_transition_idle(self, timeout: float | None = None) -> None:
         self._transition_idle_event.wait(timeout=timeout)
 
     def _can_clear_terminal_output(self) -> bool:
         return self._interactive and not self._debug
 
-    def _set_log_cursor_position(self, position: Optional[tuple[int, int]]) -> None:
+    def _set_log_cursor_position(self, position: tuple[int, int] | None) -> None:
         self._log.set_cursor_position(position)
 
     def _should_perform_final_render(self) -> bool:
         if self._is_stdout_closed():
             return False
 
-        if not self._interactive and self._last_output:
-            return False
-
-        return True
+        return not (not self._interactive and self._last_output)
 
     def _render_frame(
         self,
@@ -775,7 +766,7 @@ class Ink:
     def _schedule_transition(
         self,
         callback: Callable[[], None],
-        on_complete: Optional[Callable[[bool], None]] = None,
+        on_complete: Callable[[bool], None] | None = None,
         delay: float = 0.05,
     ) -> None:
         """Schedule a deferred transition callback through the app runtime."""
@@ -1039,10 +1030,8 @@ class Ink:
         callbacks = self._on_unmount_callbacks[:]
         self._on_unmount_callbacks.clear()
         for callback in callbacks:
-            try:
+            with suppress(Exception):
                 callback()
-            except Exception:
-                pass
 
     def _restore_terminal_state(self) -> None:
         if self._is_stdout_closed():

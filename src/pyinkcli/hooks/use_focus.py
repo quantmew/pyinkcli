@@ -6,8 +6,9 @@ Maintains a focus registry inspired by Ink's focus runtime.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple
 
 from pyinkcli.hooks._runtime import useEffect, useState
 from pyinkcli.hooks.use_stdin import useStdin
@@ -22,7 +23,7 @@ class _FocusEntry:
 class _FocusRuntime:
     def __init__(self) -> None:
         self.enabled = True
-        self.active_id: Optional[str] = None
+        self.active_id: str | None = None
         self.entries: list[_FocusEntry] = []
         self.listeners: list[Callable[[], None]] = []
 
@@ -30,19 +31,15 @@ class _FocusRuntime:
         self.listeners.append(listener)
 
         def unsubscribe() -> None:
-            try:
+            with suppress(ValueError):
                 self.listeners.remove(listener)
-            except ValueError:
-                pass
 
         return unsubscribe
 
     def notify(self) -> None:
         for listener in list(self.listeners):
-            try:
+            with suppress(Exception):
                 listener()
-            except Exception:
-                pass
 
     def add(self, element_id: str, auto_focus: bool = False) -> None:
         changed = False
@@ -172,10 +169,10 @@ def _create_focus_id() -> str:
 
 def useFocus(
     *,
-    id: Optional[str] = None,
+    id: str | None = None,
     auto_focus: bool = False,
     is_active: bool = True,
-) -> Tuple[bool, Callable[[Optional[str]], None]]:
+) -> tuple[bool, Callable[[str | None], None]]:
     """
     Hook to manage focus state.
     """
@@ -224,7 +221,7 @@ def useFocus(
 
     useEffect(manage_raw_mode, (element_id, is_active))
 
-    def focus(target_id: Optional[str] = None) -> None:
+    def focus(target_id: str | None = None) -> None:
         _focus_runtime.focus(target_id or element_id)
 
     is_focused = (

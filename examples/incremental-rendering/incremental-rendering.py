@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import random
-import sys
 import threading
 import time
 from datetime import datetime
 
 from pyinkcli import Box, Text, render, useApp, useInput, useWindowSize
 from pyinkcli.hooks import useEffect, useState
-
 
 ROWS = [
     "Server Authentication Module - Handles JWT token validation, OAuth2 flows, and session management across distributed systems",

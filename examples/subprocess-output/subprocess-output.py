@@ -6,7 +6,7 @@ import subprocess
 import threading
 from pathlib import Path
 
-from pyinkcli import render, Box, Text
+from pyinkcli import Box, Text, render
 from pyinkcli.ansi_tokenizer import tokenizeAnsi
 from pyinkcli.hooks import useEffect, useState
 

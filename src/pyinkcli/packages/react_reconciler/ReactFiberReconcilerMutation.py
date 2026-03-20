@@ -2,20 +2,34 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from pyinkcli.packages.ink.dom import DOMElement, DOMNode
 from pyinkcli.packages.react_reconciler.ReactChildFiber import (
     getChildPathToken as _get_child_path_token_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactChildFiber import (
     getElementName as _get_element_name_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactChildFiber import (
     reconcileChild as _reconcile_child_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactChildFiber import (
     reconcileChildren as _reconcile_children_impl,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberConfig import (
     disposeNode as _dispose_node_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberConfig import (
     getExistingChild as _get_existing_child_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberConfig import (
     reconcileElementNode as _reconcile_element_node_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberConfig import (
     reconcileTextNode as _reconcile_text_node_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberConfig import (
     removeExtraChildren as _remove_extra_children_impl,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberContainerUpdate import (
@@ -30,7 +44,7 @@ class ReactFiberReconcilerMutation:
     def _reconcile_children(
         self,
         parent: DOMElement,
-        children: list["RenderableNode"],
+        children: list[RenderableNode],
         path: tuple[Any, ...],
         dom_index: int,
         devtools_parent_id: str,
@@ -46,7 +60,7 @@ class ReactFiberReconcilerMutation:
 
     def _reconcile_child(
         self,
-        vnode: "RenderableNode",
+        vnode: RenderableNode,
         parent: DOMElement,
         path: tuple[Any, ...],
         dom_index: int,
@@ -74,10 +88,10 @@ class ReactFiberReconcilerMutation:
         parent: DOMElement,
         actual_type: str,
         props: dict[str, Any],
-        children: list["RenderableNode"],
+        children: list[RenderableNode],
         path: tuple[Any, ...],
         dom_index: int,
-        vnode_key: Optional[str],
+        vnode_key: str | None,
     ) -> DOMElement:
         del children, path
         return _reconcile_element_node_impl(
@@ -93,7 +107,7 @@ class ReactFiberReconcilerMutation:
         self,
         dom_node: DOMElement,
         props: dict[str, Any],
-        vnode_key: Optional[str],
+        vnode_key: str | None,
     ) -> None:
         from pyinkcli.packages.react_reconciler.ReactFiberConfig import applyProps
 
@@ -103,7 +117,7 @@ class ReactFiberReconcilerMutation:
         self,
         parent: DOMElement,
         dom_index: int,
-    ) -> Optional[DOMNode]:
+    ) -> DOMNode | None:
         return _get_existing_child_impl(self, parent, dom_index)
 
     def _find_matching_child(
@@ -111,8 +125,8 @@ class ReactFiberReconcilerMutation:
         parent: DOMElement,
         dom_index: int,
         actual_type: str,
-        vnode_key: Optional[str],
-    ) -> Optional[DOMNode]:
+        vnode_key: str | None,
+    ) -> DOMNode | None:
         from pyinkcli.packages.react_reconciler.ReactFiberConfig import findMatchingChild
 
         return findMatchingChild(self, parent, dom_index, actual_type, vnode_key)
@@ -135,12 +149,12 @@ class ReactFiberReconcilerMutation:
 
     def _get_child_path_token(
         self,
-        child: "RenderableNode",
+        child: RenderableNode,
         index: int,
     ) -> Any:
         return _get_child_path_token_impl(self, child, index)
 
-    def _get_element_name(self, node_type: Any) -> Optional[str]:
+    def _get_element_name(self, node_type: Any) -> str | None:
         return _get_element_name_impl(self, node_type)
 
     def _calculate_layout(self, root: DOMElement) -> None:

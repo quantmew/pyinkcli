@@ -6,7 +6,7 @@ Provides access to the Ink app instance.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from pyinkcli.components._app_context_runtime import _get_app_context
 from pyinkcli.hooks._runtime import _queue_after_current_batch
@@ -18,11 +18,11 @@ if TYPE_CHECKING:
 class _AppHandle:
     """Handle to the Ink application instance."""
 
-    def __init__(self, ink_instance: Optional["Ink"] = None):
+    def __init__(self, ink_instance: Ink | None = None):
         self._ink = ink_instance
         self._exit_handlers: list[callable] = []
 
-    def exit(self, error_or_result: Optional[Any] = None) -> None:
+    def exit(self, error_or_result: Any | None = None) -> None:
         """
         Exit the application.
 
@@ -40,7 +40,7 @@ class _AppHandle:
             return self._ink.wait_until_exit()
         return None
 
-    def wait_until_render_flush(self, timeout: Optional[float] = None) -> Any:
+    def wait_until_render_flush(self, timeout: float | None = None) -> Any:
         """Wait for pending render output to flush."""
         if self._ink is not None:
             return self._ink.wait_until_render_flush(timeout=timeout)
@@ -64,13 +64,13 @@ class _AppHandle:
         self._exit_handlers.append(handler)
         return lambda: self._exit_handlers.remove(handler)
 
-    def _set_ink(self, ink_instance: "Ink") -> None:
+    def _set_ink(self, ink_instance: Ink) -> None:
         """Set the Ink instance."""
         self._ink = ink_instance
 
 
 # Global app handle
-_app_handle: Optional[_AppHandle] = None
+_app_handle: _AppHandle | None = None
 
 
 def useApp() -> _AppHandle:
@@ -90,7 +90,7 @@ def useApp() -> _AppHandle:
     return _app_handle
 
 
-def _set_app_ink(ink_instance: "Ink") -> None:
+def _set_app_ink(ink_instance: Ink) -> None:
     """Internal: Set the Ink instance on the global app handle."""
     global _app_handle
     if _app_handle is None:

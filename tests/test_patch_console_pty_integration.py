@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
+import fcntl
 import os
 import pty
 import select
+import struct
 import subprocess
 import sys
+import termios
 import textwrap
 import time
-import fcntl
-import termios
-import struct
 
 
 def _run_python_in_pty(
@@ -71,9 +71,14 @@ def _run_python_in_pty(
                 if not chunk:
                     break
                 captured.extend(chunk)
-                if send and not sent and send_after_text is not None:
-                    if send_after_text.encode() in captured and send_not_before is None:
-                        send_not_before = time.time() + send_delay_after_text
+                if (
+                    send
+                    and not sent
+                    and send_after_text is not None
+                    and send_after_text.encode() in captured
+                    and send_not_before is None
+                ):
+                    send_not_before = time.time() + send_delay_after_text
 
             if process.poll() is not None:
                 while True:
@@ -614,7 +619,7 @@ def test_utf8_input_is_not_mojibake_in_real_pty() -> None:
     )
     output = _run_python_in_pty(
         source,
-        send="中文\r".encode("utf-8"),
+        send="中文\r".encode(),
         send_after_text="ready",
         timeout=4.0,
     )

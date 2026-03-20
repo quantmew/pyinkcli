@@ -7,8 +7,9 @@ Provides standard and incremental terminal update modes.
 from __future__ import annotations
 
 import sys
-from typing import Optional, TextIO
+from typing import TextIO
 
+from pyinkcli._restore_cursor import ensureCursorRestoreRegistered
 from pyinkcli.cursor_helpers import (
     CursorPosition,
     buildCursorOnlySequence,
@@ -18,8 +19,13 @@ from pyinkcli.cursor_helpers import (
     hideCursorEscape,
     showCursorEscape,
 )
-from pyinkcli._restore_cursor import ensureCursorRestoreRegistered
-from pyinkcli.utils.ansi_escapes import cursor_next_line, cursor_to, cursor_up, erase_end_line, erase_lines
+from pyinkcli.utils.ansi_escapes import (
+    cursor_next_line,
+    cursor_to,
+    cursor_up,
+    erase_end_line,
+    erase_lines,
+)
 
 
 def _visible_line_count(lines: list[str], output: str) -> int:
@@ -41,9 +47,9 @@ class LogUpdate:
         self._incremental = incremental
         self._previous_output = ""
         self._previous_lines: list[str] = []
-        self._cursor_position: Optional[CursorPosition] = None
+        self._cursor_position: CursorPosition | None = None
         self._cursor_dirty = False
-        self._previous_cursor_position: Optional[CursorPosition] = None
+        self._previous_cursor_position: CursorPosition | None = None
         self._cursor_was_shown = False
         self._has_hidden_cursor = False
 
@@ -134,7 +140,7 @@ class LogUpdate:
         )
         self._cursor_was_shown = active_cursor is not None
 
-    def set_cursor_position(self, position: Optional[CursorPosition]) -> None:
+    def set_cursor_position(self, position: CursorPosition | None) -> None:
         self._cursor_position = position
         self._cursor_dirty = True
 
@@ -144,7 +150,7 @@ class LogUpdate:
     def will_render(self, output: str) -> bool:
         return self._has_changes(output, self._cursor_position if self._cursor_dirty else None)
 
-    def _get_active_cursor(self) -> Optional[CursorPosition]:
+    def _get_active_cursor(self) -> CursorPosition | None:
         active = self._cursor_position if self._cursor_dirty else None
         self._cursor_dirty = False
         return active
@@ -152,7 +158,7 @@ class LogUpdate:
     def _has_changes(
         self,
         output: str,
-        active_cursor: Optional[CursorPosition],
+        active_cursor: CursorPosition | None,
     ) -> bool:
         return output != self._previous_output or cursorPositionChanged(
             active_cursor,
@@ -162,7 +168,7 @@ class LogUpdate:
     def _render_standard(
         self,
         output: str,
-        active_cursor: Optional[CursorPosition],
+        active_cursor: CursorPosition | None,
     ) -> str:
         lines = output.split("\n")
         visible_count = _visible_line_count(lines, output)
@@ -194,7 +200,7 @@ class LogUpdate:
     def _render_incremental(
         self,
         output: str,
-        active_cursor: Optional[CursorPosition],
+        active_cursor: CursorPosition | None,
     ) -> str:
         next_lines = output.split("\n")
         visible_count = _visible_line_count(next_lines, output)
@@ -267,7 +273,7 @@ class LogUpdate:
 
 
 def _createLogUpdate(
-    stream: Optional[TextIO] = None,
+    stream: TextIO | None = None,
     *,
     incremental: bool = False,
 ) -> LogUpdate:
@@ -275,7 +281,7 @@ def _createLogUpdate(
 
 
 def logUpdate(
-    stream: Optional[TextIO] = None,
+    stream: TextIO | None = None,
     *,
     incremental: bool = False,
 ) -> LogUpdate:

@@ -7,8 +7,9 @@ which keeps ANSI styling, clipping, and full-width character handling stable.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Literal, Optional, TypedDict, Union
+from typing import Literal, TypedDict
 
 from pyinkcli.ansi_tokenizer import tokenizeAnsi
 from pyinkcli.sanitize_ansi import sanitizeAnsi
@@ -50,7 +51,7 @@ def _styled_char(
     prefix: str = "",
     suffix: str = "",
     placeholder: bool = False,
-) -> "_StyledChar":
+) -> _StyledChar:
     return _StyledChar(
         value=value,
         width=width,
@@ -61,11 +62,11 @@ def _styled_char(
     )
 
 
-def _placeholder_char() -> "_StyledChar":
+def _placeholder_char() -> _StyledChar:
     return _styled_char(value="", width=0, placeholder=True)
 
 
-def _clone_styled_char(cell: "_StyledChar") -> "_StyledChar":
+def _clone_styled_char(cell: _StyledChar) -> _StyledChar:
     return _styled_char(
         value=cell.value,
         width=cell.width,
@@ -76,27 +77,27 @@ def _clone_styled_char(cell: "_StyledChar") -> "_StyledChar":
     )
 
 
-def _clone_styled_chars(cells: "_StyledLine") -> "_StyledLine":
+def _clone_styled_chars(cells: _StyledLine) -> _StyledLine:
     return [_clone_styled_char(cell) for cell in cells]
 
 
-def _is_zero_width(cell: "_StyledChar") -> bool:
+def _is_zero_width(cell: _StyledChar) -> bool:
     return cell.width == 0
 
 
-def _has_styled_payload(cell: "_StyledChar") -> bool:
+def _has_styled_payload(cell: _StyledChar) -> bool:
     return bool(cell.styles or cell.prefix or cell.suffix)
 
 
-def _styled_payload(cell: "_StyledChar") -> str:
+def _styled_payload(cell: _StyledChar) -> str:
     return cell.prefix + cell.value + cell.suffix
 
 
-def _append_suffix_payload(cell: "_StyledChar", payload: str) -> None:
+def _append_suffix_payload(cell: _StyledChar, payload: str) -> None:
     cell.suffix += payload
 
 
-def _append_pending_prefix(cells: "_StyledLine", pending_prefix: str) -> None:
+def _append_pending_prefix(cells: _StyledLine, pending_prefix: str) -> None:
     if not pending_prefix:
         return
     if cells:
@@ -107,9 +108,9 @@ def _append_pending_prefix(cells: "_StyledLine", pending_prefix: str) -> None:
 
 def _append_zero_width(
     *,
-    cells: "_StyledLine",
-    output: "_StyledLine",
-    cell: "_StyledChar",
+    cells: _StyledLine,
+    output: _StyledLine,
+    cell: _StyledChar,
     allow_leading_output: bool = False,
 ) -> None:
     payload = _styled_payload(cell)
@@ -137,10 +138,10 @@ class OutputWriteOptions(TypedDict):
 
 
 class OutputClip(TypedDict, total=False):
-    x1: Optional[int]
-    x2: Optional[int]
-    y1: Optional[int]
-    y2: Optional[int]
+    x1: int | None
+    x2: int | None
+    y1: int | None
+    y2: int | None
 
 
 class OutputResult:
@@ -154,10 +155,10 @@ class Output:
 
     @dataclass
     class _ClipRegion:
-        x1: Optional[int] = None
-        x2: Optional[int] = None
-        y1: Optional[int] = None
-        y2: Optional[int] = None
+        x1: int | None = None
+        x2: int | None = None
+        y1: int | None = None
+        y2: int | None = None
 
     @dataclass
     class _WriteOperation:
@@ -169,7 +170,7 @@ class Output:
 
     @dataclass
     class _ClipOperation:
-        clip: "Output._ClipRegion"
+        clip: Output._ClipRegion
         type: Literal["clip"] = field(default="clip", init=False)
 
     @dataclass
@@ -177,13 +178,13 @@ class Output:
         type: Literal["unclip"] = field(default="unclip", init=False)
 
     @staticmethod
-    def _blank_cell() -> "_StyledChar":
+    def _blank_cell() -> _StyledChar:
         return _styled_char(value=" ")
 
     @staticmethod
     def _styled_cells(
         line: str,
-        styled_cell_cache: Optional[_StyledCharCache] = None,
+        styled_cell_cache: _StyledCharCache | None = None,
     ) -> _StyledLine:
         if styled_cell_cache is not None:
             cached = styled_cell_cache.get(line)
@@ -238,7 +239,7 @@ class Output:
         start: int,
         end: int,
         *,
-        styled_cell_cache: Optional[_StyledCharCache] = None,
+        styled_cell_cache: _StyledCharCache | None = None,
     ) -> str:
             if end <= start:
                 return ""
@@ -285,7 +286,7 @@ class Output:
         x: int,
         line: str,
         *,
-        styled_cell_cache: Optional[_StyledCharCache] = None,
+        styled_cell_cache: _StyledCharCache | None = None,
     ) -> None:
             offset_x = x
             for cell in Output._styled_cells(line, styled_cell_cache=styled_cell_cache):
@@ -422,9 +423,9 @@ class Output:
 
     @staticmethod
     def _merge_cells(
-        existing: "_StyledChar",
-        incoming: "_StyledChar",
-    ) -> "_StyledChar":
+        existing: _StyledChar,
+        incoming: _StyledChar,
+    ) -> _StyledChar:
             merged = _clone_styled_char(incoming)
             if not any(Output._is_background_style(style) for style in merged.styles):
                 inherited_background = tuple(
@@ -509,7 +510,7 @@ class Output:
         self.width = options["width"]
         self.height = options["height"]
         self._operations: list[
-            Union[Output._WriteOperation, Output._ClipOperation, Output._UnclipOperation]
+            Output._WriteOperation | Output._ClipOperation | Output._UnclipOperation
         ] = []
         self._width_cache: dict[str, int] = {}
         self._block_width_cache: dict[str, int] = {}
@@ -590,8 +591,8 @@ class Output:
     def _apply_write(
         self,
         output: list[_StyledLine],
-        operation: "Output._WriteOperation",
-        clip: Optional["Output._ClipRegion"],
+        operation: Output._WriteOperation,
+        clip: Output._ClipRegion | None,
     ) -> None:
         x = operation.x
         y = operation.y

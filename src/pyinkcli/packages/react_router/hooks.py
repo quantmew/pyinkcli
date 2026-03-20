@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from pyinkcli._component_runtime import RenderableNode, createElement, scopeRender
 from pyinkcli.packages.react_router.context import (
@@ -39,7 +40,7 @@ def useLocation() -> Any:
     return _get_location_context().location
 
 
-def useHref(to: Any, options: Optional[dict[str, Any]] = None) -> str:
+def useHref(to: Any, options: dict[str, Any] | None = None) -> str:
     if not useInRouterContext():
         raise RuntimeError("useHref() may be used only in the context of a <Router> component.")
 
@@ -70,13 +71,13 @@ def useNavigationType() -> str:
     return _get_location_context().navigationType
 
 
-def useMatch(pattern: str | dict[str, Any]) -> Optional[dict[str, Any]]:
+def useMatch(pattern: str | dict[str, Any]) -> dict[str, Any] | None:
     if not useInRouterContext():
         raise RuntimeError("useMatch() may be used only in the context of a <Router> component.")
     return matchPath(pattern, decodePath(useLocation().pathname))
 
 
-def useNavigate() -> Callable[[Any, Optional[dict[str, Any]]], None]:
+def useNavigate() -> Callable[[Any, dict[str, Any] | None], None]:
     if not useInRouterContext():
         raise RuntimeError("useNavigate() may be used only in the context of a <Router> component.")
 
@@ -85,7 +86,7 @@ def useNavigate() -> Callable[[Any, Optional[dict[str, Any]]], None]:
     location_pathname = useLocation().pathname
     route_pathnames = getResolveToMatches(route_context.matches)
 
-    def navigate(to: Any, options: Optional[dict[str, Any]] = None) -> None:
+    def navigate(to: Any, options: dict[str, Any] | None = None) -> None:
         options = options or {}
         if isinstance(to, int):
             navigation_context.navigator.go(to)
@@ -122,14 +123,14 @@ def useOutlet(context: Any = None) -> RenderableNode:
     return scopeRender(outlet, lambda value=context: _provide_outlet_context(value))
 
 
-def useParams() -> dict[str, Optional[str]]:
+def useParams() -> dict[str, str | None]:
     matches = _get_route_context().matches
     return matches[-1].params if matches else {}
 
 
 def useResolvedPath(
     to: Any,
-    options: Optional[dict[str, Any]] = None,
+    options: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     options = options or {}
     route_context = _get_route_context()
@@ -145,14 +146,14 @@ def useResolvedPath(
 
 def useRoutes(
     routes: list[RouteObject],
-    locationArg: Optional[dict[str, Any] | str] = None,
+    locationArg: dict[str, Any] | str | None = None,
 ) -> RenderableNode:
     return useRoutesImpl(routes, locationArg)
 
 
 def useRoutesImpl(
     routes: list[RouteObject],
-    locationArg: Optional[dict[str, Any] | str] = None,
+    locationArg: dict[str, Any] | str | None = None,
 ) -> RenderableNode:
     if not useInRouterContext():
         raise RuntimeError("useRoutes() may be used only in the context of a <Router> component.")
@@ -161,7 +162,6 @@ def useRoutesImpl(
     parent_matches = _get_route_context().matches
     route_match = parent_matches[-1] if parent_matches else None
     parent_params = route_match.params if route_match else {}
-    parent_pathname = route_match.pathname if route_match else "/"
     parent_pathname_base = route_match.pathnameBase if route_match else "/"
 
     location_from_context = useLocation()
@@ -233,8 +233,8 @@ def useRoutesImpl(
 
 
 def _renderMatches(
-    matches: Optional[list[RouteMatch]],
-    parentMatches: Optional[list[RouteMatch]] = None,
+    matches: list[RouteMatch] | None,
+    parentMatches: list[RouteMatch] | None = None,
 ) -> RenderableNode:
     if matches is None:
         return None

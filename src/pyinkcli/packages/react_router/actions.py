@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
 from urllib.parse import urlparse
 
 from pyinkcli.packages.react_router.router import Headers
@@ -10,10 +9,10 @@ from pyinkcli.packages.react_router.router import Headers
 
 def throwIfPotentialCSRFAttack(
     headers: Headers,
-    allowedActionOrigins: Optional[list[str]],
+    allowedActionOrigins: list[str] | None,
 ) -> None:
     origin_header = headers.get("origin")
-    origin_domain: Optional[str] = None
+    origin_domain: str | None = None
 
     try:
         origin_domain = (
@@ -29,18 +28,21 @@ def throwIfPotentialCSRFAttack(
 
     host = _parseHostHeader(headers)
 
-    if origin_domain and (not host or origin_domain != host["value"]):
-        if not _isAllowedOrigin(origin_domain, allowedActionOrigins):
-            if host:
-                raise Error(
-                    f"{host['type']} header does not match `origin` header from a "
-                    "forwarded action request. Aborting the action."
-                )
+    if (
+        origin_domain
+        and (not host or origin_domain != host["value"])
+        and not _isAllowedOrigin(origin_domain, allowedActionOrigins)
+    ):
+        if host:
             raise Error(
-                "`x-forwarded-host` or `host` headers are not provided. One of these "
-                "is needed to compare the `origin` header from a forwarded action "
-                "request. Aborting the action."
+                f"{host['type']} header does not match `origin` header from a "
+                "forwarded action request. Aborting the action."
             )
+        raise Error(
+            "`x-forwarded-host` or `host` headers are not provided. One of these "
+            "is needed to compare the `origin` header from a forwarded action "
+            "request. Aborting the action."
+        )
 
 
 class Error(Exception):
@@ -79,7 +81,7 @@ def _matchWildcardDomain(domain: str, pattern: str) -> bool:
 
 def _isAllowedOrigin(
     originDomain: str,
-    allowedActionOrigins: Optional[list[str]] = None,
+    allowedActionOrigins: list[str] | None = None,
 ) -> bool:
     return any(
         allowed_origin
@@ -91,7 +93,7 @@ def _isAllowedOrigin(
     )
 
 
-def _parseHostHeader(headers: Headers) -> Optional[dict[str, str]]:
+def _parseHostHeader(headers: Headers) -> dict[str, str] | None:
     forwarded_host_header = headers.get("x-forwarded-host")
     forwarded_host_value = (
         forwarded_host_header.split(",")[0].strip()

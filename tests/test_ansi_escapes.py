@@ -1,23 +1,22 @@
 """Tests for ANSI escapes utility."""
 
-import pytest
 from pyinkcli.utils.ansi_escapes import (
-    cursor_to,
-    cursor_move,
-    cursor_up,
+    beep,
+    clear_terminal,
+    cursor_backward,
     cursor_down,
     cursor_forward,
-    cursor_backward,
-    cursor_left,
     cursor_hide,
+    cursor_left,
+    cursor_move,
     cursor_show,
+    cursor_to,
+    cursor_up,
+    enter_alternative_screen,
     erase_line,
     erase_lines,
     erase_screen,
-    clear_terminal,
-    enter_alternative_screen,
     exit_alternative_screen,
-    beep,
     link,
 )
 

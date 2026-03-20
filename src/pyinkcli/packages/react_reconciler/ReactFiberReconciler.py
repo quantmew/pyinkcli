@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 from pyinkcli.hooks._runtime import (
     _batched_updates_runtime,
@@ -18,15 +19,15 @@ if TYPE_CHECKING:
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
 
 
-_reconciler_instance: Optional["_Reconciler"] = None
+_reconciler_instance: _Reconciler | None = None
 
 
-def diff(before: Dict[str, Any], after: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def diff(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any] | None:
     if before == after:
         return None
     if not before:
         return after
-    changed: Dict[str, Any] = {}
+    changed: dict[str, Any] = {}
     changed_any = False
     for key in before:
         if key not in after:
@@ -39,7 +40,7 @@ def diff(before: Dict[str, Any], after: Dict[str, Any]) -> Optional[Dict[str, An
     return changed if changed_any else None
 
 
-def cleanupYogaNode(node: Optional[Any]) -> None:
+def cleanupYogaNode(node: Any | None) -> None:
     if node is None:
         return
     unset = getattr(node, "unset_measure_func", None) or getattr(node, "unsetMeasureFunc", None)
@@ -68,7 +69,7 @@ def loadPackageJson() -> dict[str, str]:
 packageInfo = loadPackageJson()
 
 
-def getReconciler(root_node: Optional[DOMElement] = None) -> "_Reconciler":
+def getReconciler(root_node: DOMElement | None = None) -> _Reconciler:
     global _reconciler_instance
     if _reconciler_instance is None and root_node is not None:
         from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
@@ -77,7 +78,7 @@ def getReconciler(root_node: Optional[DOMElement] = None) -> "_Reconciler":
     return _reconciler_instance
 
 
-def createReconciler(root_node: DOMElement) -> "_Reconciler":
+def createReconciler(root_node: DOMElement) -> _Reconciler:
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
 
     return _Reconciler(root_node)
@@ -91,7 +92,7 @@ def discreteUpdates(callback: Callable[[], Any]) -> Any:
     return _discrete_updates_runtime(callback)
 
 
-def consumePendingRerenderPriority() -> Optional[UpdatePriority]:
+def consumePendingRerenderPriority() -> UpdatePriority | None:
     return _consume_pending_rerender_priority()
 
 

@@ -6,13 +6,12 @@ import random
 import threading
 import time
 
-from pyinkcli import Box, Static, render
-from pyinkcli.component import createElement
-from pyinkcli.hooks import useEffect, useState
-
 from summary import Summary
 from test import Test
 
+from pyinkcli import Box, Static, render
+from pyinkcli.component import createElement
+from pyinkcli.hooks import useEffect, useState
 
 PATHS = [
     "tests/login.js",
@@ -84,7 +83,7 @@ def jest_example():
                         ]
                     )
                     set_completed_tests(
-                        lambda previous: [*previous, *completed_batch]
+                        lambda previous, batch=completed_batch: [*previous, *batch]
                     )
 
                 time.sleep(0.05)

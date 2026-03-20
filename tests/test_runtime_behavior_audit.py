@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import time
-from threading import Event
 from io import StringIO
+from threading import Event
 
 from pyinkcli import Text, render, renderToString
 from pyinkcli.component import createElement

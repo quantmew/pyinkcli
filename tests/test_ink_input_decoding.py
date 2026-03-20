@@ -29,7 +29,7 @@ def _make_ink_with_stdin(data: bytes) -> Ink:
 
 
 def test_read_stdin_chunk_decodes_utf8_multibyte_sequences() -> None:
-    ink = _make_ink_with_stdin("中文".encode("utf-8"))
+    ink = _make_ink_with_stdin("中文".encode())
     try:
         assert ink._read_stdin_chunk() == "中"
         assert ink._read_stdin_chunk() == "文"

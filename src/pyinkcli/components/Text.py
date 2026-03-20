@@ -6,13 +6,12 @@ Canonical component module matching JS basename.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
-from pyinkcli.colorize import colorize
 from pyinkcli._component_runtime import RenderableNode, component, createElement
+from pyinkcli.colorize import colorize
 from pyinkcli.components._accessibility_runtime import _is_screen_reader_enabled
 from pyinkcli.components._background_runtime import _get_background_color
-
 
 _UNSET = object()
 
@@ -20,8 +19,8 @@ _UNSET = object()
 @component
 def Text(
     *children: RenderableNode,
-    color: Optional[str] = None,
-    background_color: Optional[str] = None,
+    color: str | None = None,
+    background_color: str | None = None,
     dim_color: bool = False,
     bold: bool = False,
     italic: bool = False,
@@ -29,7 +28,7 @@ def Text(
     strikethrough: bool = False,
     inverse: bool = False,
     wrap: str = "wrap",
-    aria_label: Optional[str] = None,
+    aria_label: str | None = None,
     aria_hidden: bool = False,
     **kwargs: Any,
 ) -> RenderableNode:

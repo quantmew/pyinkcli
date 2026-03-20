@@ -4,9 +4,10 @@ Stdout context split from `context.py`.
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any, Generator, TypedDict
+from typing import Any, TypedDict
 
 
 class Props(TypedDict):

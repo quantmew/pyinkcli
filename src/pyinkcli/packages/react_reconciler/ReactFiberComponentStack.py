@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
 
 
 def getSourceForTarget(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     target: Any,
     display_name: str,
-) -> Optional[list[Any]]:
+) -> list[Any] | None:
     try:
         source_file = inspect.getsourcefile(target) or inspect.getfile(target)
         _, line_number = inspect.getsourcelines(target)
@@ -26,10 +26,10 @@ def getSourceForTarget(
 
 
 def makeCallSite(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     display_name: str,
-    source: Optional[list[Any]],
-) -> Optional[list[Any]]:
+    source: list[Any] | None,
+) -> list[Any] | None:
     if source is None:
         return None
     return [
@@ -43,7 +43,7 @@ def makeCallSite(
     ]
 
 
-def serializeDevtoolsOwnerStack(reconciler: "_Reconciler") -> Optional[list[dict[str, Any]]]:
+def serializeDevtoolsOwnerStack(reconciler: _Reconciler) -> list[dict[str, Any]] | None:
     if not reconciler._owner_component_stack:
         return None
     owners: list[dict[str, Any]] = []
@@ -64,11 +64,11 @@ def serializeDevtoolsOwnerStack(reconciler: "_Reconciler") -> Optional[list[dict
 
 
 def buildDevtoolsStack(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     entries: list[dict[str, Any]],
     *,
-    current_entry: Optional[dict[str, Any]] = None,
-) -> Optional[list[list[Any]]]:
+    current_entry: dict[str, Any] | None = None,
+) -> list[list[Any]] | None:
     frames: list[list[Any]] = []
     if current_entry is not None:
         current_frame = makeCallSite(
@@ -85,7 +85,7 @@ def buildDevtoolsStack(
     return frames or None
 
 
-def getCurrentOwnerSource(reconciler: "_Reconciler") -> Optional[list[Any]]:
+def getCurrentOwnerSource(reconciler: _Reconciler) -> list[Any] | None:
     if not reconciler._owner_component_stack:
         return None
     return reconciler._clone_inspected_value(

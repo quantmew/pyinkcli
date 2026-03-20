@@ -5,7 +5,7 @@ Demonstrates keyboard input handling with arrow keys.
 Port of js_source/ink/examples/use-input/use-input.tsx
 """
 
-from pyinkcli import render, Box, Text, useInput, useApp
+from pyinkcli import Box, Text, render, useApp, useInput
 
 
 def robot_example():

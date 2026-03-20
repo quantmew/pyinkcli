@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from pyinkcli.hooks._runtime import (
     _batched_updates_runtime,
@@ -10,14 +11,22 @@ from pyinkcli.hooks._runtime import (
 )
 from pyinkcli.packages.react_reconciler.ReactEventPriorities import UpdatePriority
 from pyinkcli.packages.react_reconciler.ReactFiberCommitWork import (
-    resetAfterCommit as _reset_after_commit,
     requestHostRender as _request_host_render_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberCommitWork import (
+    resetAfterCommit as _reset_after_commit,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberRoot import ReconcilerContainer
 from pyinkcli.packages.react_reconciler.ReactFiberWorkLoop import (
     dispatchCommitRender as _dispatch_commit_render,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberWorkLoop import (
     drainPendingRerenders as _drain_pending_rerenders,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberWorkLoop import (
     priorityRank,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberWorkLoop import (
     requestRerender as _request_rerender,
 )
 

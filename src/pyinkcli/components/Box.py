@@ -6,7 +6,7 @@ Canonical component module matching JS basename.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from pyinkcli._component_runtime import RenderableNode, createElement, scopeRender
 from pyinkcli.components._accessibility_runtime import _is_screen_reader_enabled
@@ -14,9 +14,9 @@ from pyinkcli.components._background_runtime import _provide_background_color
 
 
 def _resolve_background_color(
-    background_color: Optional[str],
+    background_color: str | None,
     style: dict[str, Any],
-) -> tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     if background_color is not None:
         return True, background_color
 
@@ -27,11 +27,11 @@ def _resolve_background_color(
 
 def Box(
     *children: RenderableNode,
-    background_color: Optional[str] = None,
-    aria_label: Optional[str] = None,
+    background_color: str | None = None,
+    aria_label: str | None = None,
     aria_hidden: bool = False,
-    aria_role: Optional[str] = None,
-    aria_state: Optional[dict[str, bool]] = None,
+    aria_role: str | None = None,
+    aria_state: dict[str, bool] | None = None,
     ref: Any = None,
     **style: Any,
 ) -> RenderableNode:

@@ -19,9 +19,8 @@ from pyinkcli.packages.ink.dom import (
     setTextNodeValue,
     squashTextNodes,
 )
-from pyinkcli.packages.ink.output import Output
-from pyinkcli.packages.ink.styles import Styles, TextWrap, apply_styles
 from pyinkcli.packages.ink.host_config import ReconcilerHostConfig
+from pyinkcli.packages.ink.output import Output
 from pyinkcli.packages.ink.render_background import renderBackground
 from pyinkcli.packages.ink.render_border import renderBorder
 from pyinkcli.packages.ink.render_node_to_output import (
@@ -32,6 +31,7 @@ from pyinkcli.packages.ink.render_node_to_output import (
     renderNodeToScreenReaderOutput,
 )
 from pyinkcli.packages.ink.renderer import RenderResult, render
+from pyinkcli.packages.ink.styles import Styles, TextWrap, apply_styles
 
 __all__ = [
     "DOMElement",

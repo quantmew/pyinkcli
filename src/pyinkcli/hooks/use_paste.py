@@ -6,16 +6,16 @@ Registers bracketed paste handlers on the shared stdin event bus.
 
 from __future__ import annotations
 
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from pyinkcli.hooks._runtime import useEffect
-from pyinkcli.packages.react_reconciler.ReactFiberReconciler import discreteUpdates
 from pyinkcli.hooks.use_stdin import useStdin
+from pyinkcli.packages.react_reconciler.ReactFiberReconciler import discreteUpdates
 
 
 def usePaste(
     handler: Callable[[str], None],
-    is_active: Optional[bool] = None,
+    is_active: bool | None = None,
 ) -> None:
     """
     Register a paste handler.

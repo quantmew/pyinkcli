@@ -4,8 +4,8 @@ useFocusManager hook for pyinkcli.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional
 
 from pyinkcli.components.FocusContext import _get_focus_context
 from pyinkcli.hooks._runtime import useEffect, useState
@@ -21,7 +21,7 @@ class _UseFocusManagerOutput:
     focus_next: Callable[[], None]
     focus_previous: Callable[[], None]
     focus: Callable[[str], None]
-    active_id: Optional[str]
+    active_id: str | None
 
 
 def useFocusManager() -> _UseFocusManagerOutput:

@@ -6,13 +6,11 @@ Provides terminal window size information.
 
 from __future__ import annotations
 
-from typing import Tuple
-
 from pyinkcli.hooks._runtime import useEffect, useState
 from pyinkcli.hooks.use_stdout import useStdout
 
 
-def useWindowSize() -> Tuple[int, int]:
+def useWindowSize() -> tuple[int, int]:
     """
     Hook to get the terminal window size.
 

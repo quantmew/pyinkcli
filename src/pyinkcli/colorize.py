@@ -6,7 +6,7 @@ Provides colorization using ANSI escape codes.
 
 from __future__ import annotations
 
-from typing import Literal, Union
+from typing import Literal
 
 # ANSI color codes
 COLORS: dict[str, int] = {
@@ -133,7 +133,7 @@ def _colorize_256(text: str, color_num: int, type: str) -> str:
         return f"\x1b[48;5;{color_num}m{text}\x1b[49m"
 
 
-def _parse_rgb(color: str) -> Optional[tuple[int, int, int]]:
+def _parse_rgb(color: str) -> tuple[int, int, int] | None:
     """Parse RGB color string."""
     import re
 

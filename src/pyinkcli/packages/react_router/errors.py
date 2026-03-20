@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+from typing import Any
 
 from pyinkcli.packages.react_router.router import (
     DataWithResponseInit,
@@ -23,7 +23,7 @@ def createRedirectErrorDigest(response: Response) -> str:
     )
 
 
-def decodeRedirectErrorDigest(digest: str) -> Optional[dict[str, Any]]:
+def decodeRedirectErrorDigest(digest: str) -> dict[str, Any] | None:
     prefix = f"{_ERROR_DIGEST_BASE}:{_ERROR_DIGEST_REDIRECT}:"
     if digest.startswith(f"{prefix}{{"):
         try:
@@ -64,7 +64,7 @@ def createRouteErrorResponseDigest(
     )
 
 
-def decodeRouteErrorResponseDigest(digest: str) -> Optional[ErrorResponseImpl]:
+def decodeRouteErrorResponseDigest(digest: str) -> ErrorResponseImpl | None:
     prefix = f"{_ERROR_DIGEST_BASE}:{_ERROR_DIGEST_ROUTE_ERROR_RESPONSE}:"
     if digest.startswith(f"{prefix}{{"):
         try:

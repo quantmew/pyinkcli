@@ -5,8 +5,7 @@ Demonstrates a table layout with user data.
 Port of js_source/ink/examples/table/table.tsx
 """
 
-from pyinkcli import render, Box, Text
-
+from pyinkcli import Box, Text, render
 
 USERS = [
     {"id": 0, "name": "john_doe", "email": "john@example.com"},

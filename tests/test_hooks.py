@@ -5,10 +5,10 @@ import threading
 from pyinkcli.components.CursorContext import _provide_cursor_context
 from pyinkcli.hooks._runtime import (
     _batched_updates_runtime,
-    _discrete_updates_runtime,
     _begin_component_render,
     _clear_hook_state,
     _consume_pending_rerender_priority,
+    _discrete_updates_runtime,
     _end_component_render,
     _finish_hook_state,
     _reset_hook_state,

@@ -2,17 +2,28 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from pyinkcli.packages.react_reconciler.ReactChildFiber import (
     appendDevtoolsNode as _append_devtools_node_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactChildFiber import (
     buildDevtoolsNodeID as _build_devtools_node_id_impl,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberComponentStack import (
     buildDevtoolsStack as _build_devtools_stack,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberComponentStack import (
     getCurrentOwnerSource as _get_current_owner_source,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberComponentStack import (
     getSourceForTarget as _get_source_for_target,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberComponentStack import (
     makeCallSite as _make_call_site,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberComponentStack import (
     serializeDevtoolsOwnerStack as _serialize_devtools_owner_stack,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberContainerUpdate import (
@@ -20,32 +31,80 @@ from pyinkcli.packages.react_reconciler.ReactFiberContainerUpdate import (
 )
 from pyinkcli.packages.react_reconciler.ReactFiberDevToolsInspection import (
     buildDevtoolsFingerprint as _build_devtools_fingerprint,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberDevToolsInspection import (
     cleanDevtoolsInspectedElementForBridge as _clean_devtools_inspected_element_for_bridge,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberDevToolsInspection import (
     cleanDevtoolsValueForBridge as _clean_devtools_value_for_bridge,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberDevToolsInspection import (
     cloneDevtoolsValue as _clone_devtools_value,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberDevToolsInspection import (
     deleteNestedValue as _delete_nested_value,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberDevToolsInspection import (
     finalizeDevtoolsTreeSnapshot as _finalize_devtools_tree_snapshot,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberDevToolsInspection import (
     fingerprintDevtoolsValue as _fingerprint_devtools_value_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberDevToolsInspection import (
     getDevtoolsElementValueByPath as _get_devtools_element_value_by_path,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberDevToolsInspection import (
     getNestedValue as _get_nested_value,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberDevToolsInspection import (
     getSerializedDevtoolsElementValueByPath as _get_serialized_devtools_element_value_by_path,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberDevToolsInspection import (
     inspectDevtoolsElement as _inspect_devtools_element,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberDevToolsInspection import (
     popNestedValue as _pop_nested_value,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberDevToolsInspection import (
     recordDevtoolsInspectedElement as _record_devtools_inspected_element,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberDevToolsInspection import (
     setNestedValue as _set_nested_value,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberTreeReflection import (
     findNearestDevtoolsAncestor as _find_nearest_devtools_ancestor_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberTreeReflection import (
     getDevtoolsDisplayName as _get_devtools_display_name_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberTreeReflection import (
     getDevtoolsElementIDForHostInstance as _get_devtools_element_id_for_host_instance_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberTreeReflection import (
     getDevtoolsNode as _get_devtools_node_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberTreeReflection import (
     getDevtoolsOwnersList as _get_devtools_owners_list_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberTreeReflection import (
     getDevtoolsPathForElement as _get_devtools_path_for_element_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberTreeReflection import (
     getDevtoolsProfilingData as _get_devtools_profiling_data_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberTreeReflection import (
     getDevtoolsSuspenseNodeIDForHostInstance as _get_devtools_suspense_node_id_for_host_instance_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberTreeReflection import (
     getDevtoolsTreeSnapshot as _get_devtools_tree_snapshot_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberTreeReflection import (
     hasDevtoolsNode as _has_devtools_node_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberTreeReflection import (
     isMostRecentlyInspectedElement as _is_most_recently_inspected_element_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberTreeReflection import (
     mergeDevtoolsInspectedPath as _merge_devtools_inspected_path_impl,
 )
 
@@ -54,14 +113,14 @@ class ReactFiberReconcilerInspection:
     def getTreeSnapshot(self) -> dict[str, Any]:
         return _get_devtools_tree_snapshot_impl(self)
 
-    def getDisplayNameForNode(self, node_id: str) -> Optional[str]:
+    def getDisplayNameForNode(self, node_id: str) -> str | None:
         return _get_devtools_display_name_impl(self, node_id)
 
     def inspectElement(
         self,
         request_id: int,
         node_id: str,
-        inspected_paths: Optional[Any] = None,
+        inspected_paths: Any | None = None,
         force_full_data: bool = False,
     ) -> dict[str, Any]:
         return _inspect_devtools_element(
@@ -75,10 +134,10 @@ class ReactFiberReconcilerInspection:
     def inspectScreen(
         self,
         request_id: int,
-        node_id: Optional[str] = None,
-        path: Optional[Any] = None,
+        node_id: str | None = None,
+        path: Any | None = None,
         force_full_data: bool = False,
-        renderer_id: Optional[int] = None,
+        renderer_id: int | None = None,
     ) -> dict[str, Any]:
         del renderer_id
         screen_id = node_id or self._devtools_tree_snapshot.get("rootID", "root")
@@ -93,7 +152,7 @@ class ReactFiberReconcilerInspection:
         self,
         node_id: str,
         path: list[Any],
-    ) -> Optional[str]:
+    ) -> str | None:
         return _get_serialized_devtools_element_value_by_path(self, node_id, path)
 
     def getElementValueByPath(
@@ -116,7 +175,7 @@ class ReactFiberReconcilerInspection:
     def getPathForElement(
         self,
         node_id: str,
-    ) -> Optional[list[dict[str, Any]]]:
+    ) -> list[dict[str, Any]] | None:
         return _get_devtools_path_for_element_impl(self, node_id)
 
     def getOwnersList(
@@ -128,13 +187,13 @@ class ReactFiberReconcilerInspection:
     def getElementIDForHostInstance(
         self,
         target: Any,
-    ) -> Optional[str]:
+    ) -> str | None:
         return _get_devtools_element_id_for_host_instance_impl(self, target)
 
     def getSuspenseNodeIDForHostInstance(
         self,
         target: Any,
-    ) -> Optional[str]:
+    ) -> str | None:
         return _get_devtools_suspense_node_id_for_host_instance_impl(self, target)
 
     def _has_tree_node(self, node_id: str) -> bool:
@@ -146,7 +205,7 @@ class ReactFiberReconcilerInspection:
     def _merge_inspected_path(self, path: list[Any]) -> None:
         _merge_devtools_inspected_path_impl(self, path)
 
-    def _get_tree_node(self, node_id: str) -> Optional[dict[str, Any]]:
+    def _get_tree_node(self, node_id: str) -> dict[str, Any] | None:
         return _get_devtools_node_impl(self, node_id)
 
     def _find_nearest_tree_ancestor(
@@ -154,7 +213,7 @@ class ReactFiberReconcilerInspection:
         node_id: str,
         *,
         predicate: Callable[[dict[str, Any]], bool],
-    ) -> Optional[str]:
+    ) -> str | None:
         return _find_nearest_devtools_ancestor_impl(
             self,
             node_id,
@@ -176,7 +235,7 @@ class ReactFiberReconcilerInspection:
         *,
         root_key: str,
         path: list[Any],
-        lookup_path: Optional[list[Any]] = None,
+        lookup_path: list[Any] | None = None,
     ) -> dict[str, Any]:
         return _clean_devtools_value_for_bridge(
             self,
@@ -212,7 +271,7 @@ class ReactFiberReconcilerInspection:
         self,
         display_name: str,
         path: tuple[Any, ...],
-        key: Optional[str],
+        key: str | None,
     ) -> str:
         return _build_devtools_node_id_impl(self, display_name, path, key)
 
@@ -225,7 +284,7 @@ class ReactFiberReconcilerInspection:
         parent_id: str,
         display_name: str,
         element_type: str,
-        key: Optional[str],
+        key: str | None,
         is_error_boundary: bool,
     ) -> str:
         return _append_devtools_node_impl(
@@ -243,23 +302,23 @@ class ReactFiberReconcilerInspection:
         *,
         node_id: str,
         element_type: str,
-        key: Optional[str],
-        props: Optional[dict[str, Any]] = None,
-        state: Optional[dict[str, Any]] = None,
-        hooks: Optional[list[dict[str, Any]]] = None,
-        context: Optional[dict[str, Any]] = None,
+        key: str | None,
+        props: dict[str, Any] | None = None,
+        state: dict[str, Any] | None = None,
+        hooks: list[dict[str, Any]] | None = None,
+        context: dict[str, Any] | None = None,
         can_edit_hooks: bool = False,
         can_edit_function_props: bool = False,
         can_toggle_error: bool = False,
         is_errored: bool = False,
         can_toggle_suspense: bool = False,
-        is_suspended: Optional[bool] = None,
-        nearest_error_boundary_id: Optional[str] = None,
-        nearest_suspense_boundary_id: Optional[str] = None,
-        owners: Optional[list[dict[str, Any]]] = None,
-        source: Optional[list[Any]] = None,
-        stack: Optional[list[list[Any]]] = None,
-        suspended_by: Optional[list[Any]] = None,
+        is_suspended: bool | None = None,
+        nearest_error_boundary_id: str | None = None,
+        nearest_suspense_boundary_id: str | None = None,
+        owners: list[dict[str, Any]] | None = None,
+        source: list[Any] | None = None,
+        stack: list[list[Any]] | None = None,
+        suspended_by: list[Any] | None = None,
     ) -> None:
         _record_devtools_inspected_element(
             self,
@@ -288,28 +347,28 @@ class ReactFiberReconcilerInspection:
         self,
         target: Any,
         display_name: str,
-    ) -> Optional[list[Any]]:
+    ) -> list[Any] | None:
         return _get_source_for_target(self, target, display_name)
 
     def _make_call_site(
         self,
         display_name: str,
-        source: Optional[list[Any]],
-    ) -> Optional[list[Any]]:
+        source: list[Any] | None,
+    ) -> list[Any] | None:
         return _make_call_site(self, display_name, source)
 
-    def _serialize_owner_stack(self) -> Optional[list[dict[str, Any]]]:
+    def _serialize_owner_stack(self) -> list[dict[str, Any]] | None:
         return _serialize_devtools_owner_stack(self)
 
     def _build_owner_stack(
         self,
         entries: list[dict[str, Any]],
         *,
-        current_entry: Optional[dict[str, Any]] = None,
-    ) -> Optional[list[list[Any]]]:
+        current_entry: dict[str, Any] | None = None,
+    ) -> list[list[Any]] | None:
         return _build_devtools_stack(self, entries, current_entry=current_entry)
 
-    def _get_current_owner_source(self) -> Optional[list[Any]]:
+    def _get_current_owner_source(self) -> list[Any] | None:
         return _get_current_owner_source(self)
 
     def _finalize_tree_snapshot(self) -> None:

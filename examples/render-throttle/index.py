@@ -3,7 +3,7 @@
 import threading
 import time
 
-from pyinkcli import render, Box, Text
+from pyinkcli import Box, Text, render
 from pyinkcli.hooks import useEffect, useState
 
 

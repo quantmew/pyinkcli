@@ -11,13 +11,13 @@ with actual terminal dimensions.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
+from pyinkcli.hooks._runtime import _clear_hook_state
 from pyinkcli.packages.ink.dom import DOMElement, createNode
 from pyinkcli.packages.ink.output import Output
 from pyinkcli.packages.ink.render_node_to_output import renderNodeToOutput
 from pyinkcli.packages.react_reconciler.ReactFiberReconciler import createReconciler
-from pyinkcli.hooks._runtime import _clear_hook_state
 
 if TYPE_CHECKING:
     from pyinkcli.component import RenderableNode
@@ -33,9 +33,9 @@ def create_root_node(columns: int, rows: int) -> DOMElement:
 
 
 def renderToString(
-    vnode: "RenderableNode",
-    columns: Optional[int] = None,
-    rows: Optional[int] = None,
+    vnode: RenderableNode,
+    columns: int | None = None,
+    rows: int | None = None,
 ) -> str:
     """
     Render a vnode to a string synchronously.

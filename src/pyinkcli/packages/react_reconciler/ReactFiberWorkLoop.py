@@ -23,8 +23,8 @@ def priorityRank(priority: UpdatePriority) -> int:
 
 
 def requestRerender(
-    reconciler: "_Reconciler",
-    container: "ReconcilerContainer",
+    reconciler: _Reconciler,
+    container: ReconcilerContainer,
     *,
     priority: UpdatePriority,
 ) -> None:
@@ -61,8 +61,8 @@ def requestRerender(
 
 
 def drainPendingRerenders(
-    reconciler: "_Reconciler",
-    container: "ReconcilerContainer",
+    reconciler: _Reconciler,
+    container: ReconcilerContainer,
 ) -> None:
     priority = consumePendingRerenderPriority()
     if priority is None:
@@ -72,8 +72,8 @@ def drainPendingRerenders(
 
 
 def dispatchCommitRender(
-    reconciler: "_Reconciler",
-    container: "ReconcilerContainer",
+    reconciler: _Reconciler,
+    container: ReconcilerContainer,
 ) -> None:
     reconciler._request_host_render(container.current_render_priority, immediate=False)
 

@@ -2,20 +2,33 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from pyinkcli.packages.ink.dom import DOMElement
 from pyinkcli.packages.ink.host_config import ReconcilerHostConfig
 from pyinkcli.packages.react_reconciler.ReactFiberContainerUpdate import (
     commitContainerUpdate as _commit_container_update_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberContainerUpdate import (
     createContainer as _create_container_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberContainerUpdate import (
     flushSyncWork as _flush_sync_work_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberContainerUpdate import (
     submitContainer as _submit_container_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberContainerUpdate import (
     updateContainer as _update_container_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberContainerUpdate import (
     updateContainerSync as _update_container_sync_impl,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberReconcilerState import (
     configureHost as _configure_host_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberReconcilerState import (
     setCommitHandlers as _set_commit_handlers_impl,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberRoot import ReconcilerContainer
@@ -36,8 +49,8 @@ class ReactFiberReconcilerRoot:
     def set_commit_handlers(
         self,
         *,
-        on_commit: Optional[Callable[[], None]] = None,
-        on_immediate_commit: Optional[Callable[[], None]] = None,
+        on_commit: Callable[[], None] | None = None,
+        on_immediate_commit: Callable[[], None] | None = None,
     ) -> None:
         _set_commit_handlers_impl(
             self,
@@ -47,16 +60,16 @@ class ReactFiberReconcilerRoot:
 
     def configure_host(
         self,
-        host_config: Optional[ReconcilerHostConfig],
+        host_config: ReconcilerHostConfig | None,
     ) -> None:
         _configure_host_impl(self, host_config)
 
     def update_container(
         self,
-        element: "RenderableNode",
+        element: RenderableNode,
         container: ReconcilerContainer,
-        parent_component: Optional[Any] = None,
-        callback: Optional[Callable[[], None]] = None,
+        parent_component: Any | None = None,
+        callback: Callable[[], None] | None = None,
     ) -> None:
         _update_container_impl(
             self,
@@ -68,10 +81,10 @@ class ReactFiberReconcilerRoot:
 
     def update_container_sync(
         self,
-        element: "RenderableNode",
+        element: RenderableNode,
         container: ReconcilerContainer,
-        parent_component: Optional[Any] = None,
-        callback: Optional[Callable[[], None]] = None,
+        parent_component: Any | None = None,
+        callback: Callable[[], None] | None = None,
     ) -> None:
         _update_container_sync_impl(
             self,
@@ -81,15 +94,15 @@ class ReactFiberReconcilerRoot:
             callback=callback,
         )
 
-    def flush_sync_work(self, container: Optional[ReconcilerContainer] = None) -> None:
+    def flush_sync_work(self, container: ReconcilerContainer | None = None) -> None:
         _flush_sync_work_impl(self, container)
 
     def submit_container(
         self,
-        element: "RenderableNode",
+        element: RenderableNode,
         container: ReconcilerContainer,
-        parent_component: Optional[Any] = None,
-        callback: Optional[Callable[[], None]] = None,
+        parent_component: Any | None = None,
+        callback: Callable[[], None] | None = None,
     ) -> None:
         _submit_container_impl(
             self,
@@ -101,10 +114,10 @@ class ReactFiberReconcilerRoot:
 
     def _commit_container_update(
         self,
-        element: "RenderableNode",
+        element: RenderableNode,
         container: ReconcilerContainer,
-        parent_component: Optional[Any] = None,
-        callback: Optional[Callable[[], None]] = None,
+        parent_component: Any | None = None,
+        callback: Callable[[], None] | None = None,
     ) -> None:
         _commit_container_update_impl(
             self,

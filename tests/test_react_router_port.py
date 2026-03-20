@@ -3,6 +3,8 @@ from io import StringIO
 
 from pyinkcli import render
 from pyinkcli.component import createElement
+from pyinkcli.components.Box import Box
+from pyinkcli.components.Text import Text
 from pyinkcli.packages.react_router import (
     DataWithResponseInit,
     ErrorResponseImpl,
@@ -13,38 +15,39 @@ from pyinkcli.packages.react_router import (
     Path,
     Response,
     Route,
-    Routes,
     RouterContextProvider,
+    Routes,
     Update,
-    createRedirectErrorDigest,
-    createRoutesFromChildren,
-    createRoutesFromElements,
-    createRouteErrorResponseDigest,
     compilePath,
-    convertRoutesToDataRoutes,
     convertRouteMatchToUiMatch,
+    convertRoutesToDataRoutes,
     createContext,
     createLocation,
     createPath,
+    createRedirectErrorDigest,
+    createRouteErrorResponseDigest,
+    createRoutesFromChildren,
+    createRoutesFromElements,
     data,
+    decodePath,
     decodeRedirectErrorDigest,
     decodeRouteErrorResponseDigest,
-    decodePath,
     generatePath,
     getPathContributingMatches,
-    getRoutePattern,
     getResolveToMatches,
+    getRoutePattern,
     href,
-    isBrowser,
+    hydrationRouteProperties,
     isAbsoluteUrl,
+    isBrowser,
     isRouteErrorResponse,
     isUnsupportedLazyRouteFunctionKey,
     isUnsupportedLazyRouteObjectKey,
     joinPaths,
+    mapRouteProperties,
     matchPath,
     matchRoutes,
     matchRoutesImpl,
-    mapRouteProperties,
     normalizeHash,
     normalizePathname,
     normalizeSearch,
@@ -55,7 +58,6 @@ from pyinkcli.packages.react_router import (
     replace,
     stripBasename,
     throwIfPotentialCSRFAttack,
-    hydrationRouteProperties,
     useHref,
     useMatch,
     useNavigationType,
@@ -66,8 +68,6 @@ from pyinkcli.packages.react_router import (
 )
 from pyinkcli.packages.react_router.router import RouteObject, createMemoryHistory, resolvePath
 from pyinkcli.render_to_string import renderToString
-from pyinkcli.components.Box import Box
-from pyinkcli.components.Text import Text
 
 
 def _home():

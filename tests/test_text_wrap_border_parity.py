@@ -4,7 +4,6 @@ import re
 
 from pyinkcli import Box, Text, renderToString
 
-
 ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 

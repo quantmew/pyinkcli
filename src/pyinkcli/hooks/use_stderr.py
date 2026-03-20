@@ -7,7 +7,8 @@ Provides access to the stderr stream and Ink-preserving writes.
 from __future__ import annotations
 
 import sys
-from typing import Callable, Optional, TextIO
+from collections.abc import Callable
+from typing import TextIO
 
 from pyinkcli.components.StderrContext import _get_stderr
 from pyinkcli.sanitize_ansi import sanitizeAnsi
@@ -16,9 +17,9 @@ from pyinkcli.sanitize_ansi import sanitizeAnsi
 class _StderrHandle:
     """Handle to stderr stream."""
 
-    def __init__(self, stream: Optional[TextIO] = None):
+    def __init__(self, stream: TextIO | None = None):
         self._stream = stream or sys.stderr
-        self._overlay_writer: Optional[Callable[[str], None]] = None
+        self._overlay_writer: Callable[[str], None] | None = None
 
     @property
     def stream(self) -> TextIO:
@@ -35,7 +36,7 @@ class _StderrHandle:
         """Check if stderr is a TTY."""
         return self._stream.isatty() if hasattr(self._stream, "isatty") else False
 
-    def bind_overlay_writer(self, writer: Optional[Callable[[str], None]]) -> None:
+    def bind_overlay_writer(self, writer: Callable[[str], None] | None) -> None:
         """Route write() through the Ink overlay writer when available."""
         self._overlay_writer = writer
 
@@ -62,7 +63,7 @@ class _StderrHandle:
 
 
 # Global stderr handle
-_stderr_handle: Optional[_StderrHandle] = None
+_stderr_handle: _StderrHandle | None = None
 
 
 def useStderr() -> _StderrHandle:

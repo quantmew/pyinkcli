@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from pyinkcli.hooks._runtime import _finish_hook_state
 from pyinkcli.packages.ink.dom import DOMElement
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
 
 
 def createContainer(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     container: DOMElement,
     tag: int = 0,
     hydrate: bool = False,
@@ -28,11 +29,11 @@ def createContainer(
 
 
 def updateContainer(
-    reconciler: "_Reconciler",
-    element: "RenderableNode",
+    reconciler: _Reconciler,
+    element: RenderableNode,
     container: ReconcilerContainer,
-    parent_component: Optional[Any] = None,
-    callback: Optional[Callable[[], None]] = None,
+    parent_component: Any | None = None,
+    callback: Callable[[], None] | None = None,
 ) -> None:
     if container.tag == 0:
         updateContainerSync(
@@ -76,18 +77,18 @@ def updateContainer(
 
 
 def updateContainerSync(
-    reconciler: "_Reconciler",
-    element: "RenderableNode",
+    reconciler: _Reconciler,
+    element: RenderableNode,
     container: ReconcilerContainer,
-    parent_component: Optional[Any] = None,
-    callback: Optional[Callable[[], None]] = None,
+    parent_component: Any | None = None,
+    callback: Callable[[], None] | None = None,
 ) -> None:
     commitContainerUpdate(reconciler, element, container, parent_component, callback)
 
 
 def flushSyncWork(
-    reconciler: "_Reconciler",
-    container: Optional[ReconcilerContainer] = None,
+    reconciler: _Reconciler,
+    container: ReconcilerContainer | None = None,
 ) -> None:
     if container is None:
         return
@@ -107,11 +108,11 @@ def flushSyncWork(
 
 
 def submitContainer(
-    reconciler: "_Reconciler",
-    element: "RenderableNode",
+    reconciler: _Reconciler,
+    element: RenderableNode,
     container: ReconcilerContainer,
-    parent_component: Optional[Any] = None,
-    callback: Optional[Callable[[], None]] = None,
+    parent_component: Any | None = None,
+    callback: Callable[[], None] | None = None,
 ) -> None:
     if container.tag == 0:
         updateContainerSync(
@@ -170,7 +171,7 @@ def _buildRootInspectedElement() -> dict[str, Any]:
     }
 
 
-def _prepareNextCommitState(reconciler: "_Reconciler") -> None:
+def _prepareNextCommitState(reconciler: _Reconciler) -> None:
     reconciler._visited_class_component_ids.clear()
     reconciler._pending_class_component_commit_callbacks.clear()
     reconciler._pending_component_did_catch.clear()
@@ -198,11 +199,11 @@ def _prepareNextCommitState(reconciler: "_Reconciler") -> None:
 
 
 def commitContainerUpdate(
-    reconciler: "_Reconciler",
-    element: "RenderableNode",
+    reconciler: _Reconciler,
+    element: RenderableNode,
     container: ReconcilerContainer,
-    parent_component: Optional[Any] = None,
-    callback: Optional[Callable[[], None]] = None,
+    parent_component: Any | None = None,
+    callback: Callable[[], None] | None = None,
 ) -> None:
     del parent_component
     dom_container = container.container
@@ -239,7 +240,7 @@ def commitContainerUpdate(
 
 
 def getEffectiveDevtoolsProps(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
     props: dict[str, Any],
 ) -> dict[str, Any]:
@@ -261,7 +262,7 @@ def getEffectiveDevtoolsProps(
 
 
 def calculateLayout(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     root: DOMElement,
 ) -> None:
     from pyinkcli import _yoga as yoga

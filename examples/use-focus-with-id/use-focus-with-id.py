@@ -1,6 +1,6 @@
 """use-focus-with-id example for pyinkcli."""
 
-from pyinkcli import render, Box, Text, useApp, useFocus, useFocusManager, useInput
+from pyinkcli import Box, Text, render, useApp, useFocus, useFocusManager, useInput
 from pyinkcli.component import createElement
 
 

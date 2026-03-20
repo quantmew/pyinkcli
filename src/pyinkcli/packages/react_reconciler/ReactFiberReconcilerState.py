@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from pyinkcli.packages.react_reconciler.ReactFiberHostContext import getRootHostContext
 
@@ -17,8 +18,8 @@ class DevtoolsForcedError(RuntimeError):
 
 
 def initializeReconcilerState(
-    reconciler: "_Reconciler",
-    root_node: "DOMElement",
+    reconciler: _Reconciler,
+    root_node: DOMElement,
 ) -> None:
     reconciler.root_node = root_node
     reconciler._current_fiber = None
@@ -76,27 +77,27 @@ def initializeReconcilerState(
 
 
 def setCommitHandlers(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     *,
-    on_commit: Optional[Callable[[], None]] = None,
-    on_immediate_commit: Optional[Callable[[], None]] = None,
+    on_commit: Callable[[], None] | None = None,
+    on_immediate_commit: Callable[[], None] | None = None,
 ) -> None:
     reconciler._on_commit = on_commit
     reconciler._on_immediate_commit = on_immediate_commit
 
 
 def configureHost(
-    reconciler: "_Reconciler",
-    host_config: Optional["ReconcilerHostConfig"],
+    reconciler: _Reconciler,
+    host_config: ReconcilerHostConfig | None,
 ) -> None:
     reconciler._host_config = host_config
 
 
 def normalizeHookEditPath(
-    _reconciler: "_Reconciler",
-    hook_id: Optional[int],
+    _reconciler: _Reconciler,
+    hook_id: int | None,
     path: list[Any],
-) -> Optional[list[Any]]:
+) -> list[Any] | None:
     if hook_id is None:
         return list(path) if path else None
     return [hook_id, *path]
@@ -107,7 +108,7 @@ def createDevtoolsForcedError() -> Exception:
 
 
 def getComponentInstanceID(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     component_type: Any,
     vnode: Any,
     path: tuple[Any, ...],
@@ -123,7 +124,7 @@ def getComponentInstanceID(
 
 
 def getComponentDisplayName(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     component_type: Any,
 ) -> str:
     display_name = getattr(component_type, "_component_name", None)
@@ -135,7 +136,7 @@ def getComponentDisplayName(
 
 
 def isComponentTypeErrorBoundary(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     component_type: type[Any],
 ) -> bool:
     return callable(getattr(component_type, "getDerivedStateFromError", None))

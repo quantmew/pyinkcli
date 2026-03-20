@@ -8,8 +8,8 @@ Appends completed tests to Static output and keeps a live counter below.
 import threading
 import time
 
-from pyinkcli import render, Box, Text, Static
-from pyinkcli.hooks import useState, useEffect
+from pyinkcli import Box, Static, Text, render
+from pyinkcli.hooks import useEffect, useState
 
 
 def static_example():
@@ -25,10 +25,12 @@ def static_example():
                 time.sleep(0.1)
                 completed += 1
                 test_id = completed - 1
-                set_tests(lambda previous: [
-                    *previous,
-                    {"id": test_id, "title": f"Test #{test_id + 1}"},
-                ])
+                set_tests(
+                    lambda previous, index=test_id: [
+                        *previous,
+                        {"id": index, "title": f"Test #{index + 1}"},
+                    ]
+                )
 
         thread = threading.Thread(target=run_tests, daemon=True)
         thread.start()

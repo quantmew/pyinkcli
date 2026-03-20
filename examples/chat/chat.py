@@ -5,8 +5,7 @@ Demonstrates a simple chat interface with message input and display.
 Port of js_source/ink/examples/chat/chat.tsx
 """
 
-from pyinkcli import render, Box, Text, useInput
-
+from pyinkcli import Box, Text, render, useInput
 
 message_id = 0
 

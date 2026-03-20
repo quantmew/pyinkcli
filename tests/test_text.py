@@ -2,7 +2,6 @@
 
 from pyinkcli import renderToString
 from pyinkcli.components.Text import Text
-from pyinkcli.component import createElement
 
 
 def test_text_creates_vnode():
@@ -54,7 +53,7 @@ def test_text_wrap_prop():
 def test_text_accepts_camel_case_background_color():
     """Test Text with JS-style backgroundColor prop."""
     output = renderToString(Text("Hello", backgroundColor="red"))
-    assert "\x1b[41mHello\x1b[49m" == output
+    assert output == "\x1b[41mHello\x1b[49m"
 
 
 def test_text_accepts_camel_case_dim_color():

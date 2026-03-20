@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from pyinkcli.packages.ink.dom import (
-    AccessibilityInfo,
     DOMElement,
     DOMNode,
     TextNode,
@@ -27,22 +26,22 @@ if TYPE_CHECKING:
 
 
 def getExistingChild(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     parent: DOMElement,
     dom_index: int,
-) -> Optional[DOMNode]:
+) -> DOMNode | None:
     if 0 <= dom_index < len(parent.childNodes):
         return parent.childNodes[dom_index]
     return None
 
 
 def findMatchingChild(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     parent: DOMElement,
     dom_index: int,
     actual_type: str,
-    vnode_key: Optional[str],
-) -> Optional[DOMNode]:
+    vnode_key: str | None,
+) -> DOMNode | None:
     existing = getExistingChild(reconciler, parent, dom_index)
     if (
         isinstance(existing, DOMElement)
@@ -65,7 +64,7 @@ def findMatchingChild(
     return existing
 
 
-def disposeNode(reconciler: "_Reconciler", node: DOMNode) -> None:
+def disposeNode(reconciler: _Reconciler, node: DOMNode) -> None:
     if isinstance(node, DOMElement):
         while node.childNodes:
             child = node.childNodes[0]
@@ -79,7 +78,7 @@ def disposeNode(reconciler: "_Reconciler", node: DOMNode) -> None:
 
 
 def insertOrReplaceChild(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     parent: DOMElement,
     child: DOMNode,
     dom_index: int,
@@ -102,10 +101,10 @@ def insertOrReplaceChild(
 
 
 def applyProps(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     dom_node: DOMElement,
     props: dict[str, Any],
-    vnode_key: Optional[str],
+    vnode_key: str | None,
 ) -> None:
     ref = props.pop("ref", None)
     style = props.pop("style", {})
@@ -153,7 +152,7 @@ def applyProps(
 
 
 def reconcileTextNode(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     parent: DOMElement,
     text: str,
     dom_index: int,
@@ -169,12 +168,12 @@ def reconcileTextNode(
 
 
 def reconcileElementNode(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     parent: DOMElement,
     actual_type: str,
     props: dict[str, Any],
     dom_index: int,
-    vnode_key: Optional[str],
+    vnode_key: str | None,
 ) -> DOMElement:
     current_existing = getExistingChild(reconciler, parent, dom_index)
     existing = findMatchingChild(reconciler, parent, dom_index, actual_type, vnode_key)
@@ -192,7 +191,7 @@ def reconcileElementNode(
 
 
 def removeExtraChildren(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     parent: DOMElement,
     start_index: int,
 ) -> None:

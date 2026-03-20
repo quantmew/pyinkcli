@@ -7,8 +7,9 @@ Public compatibility imports remain in `component.py`.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import AbstractContextManager
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Union
 
 
 class _Element:
@@ -26,16 +27,16 @@ class _ScopedNode:
 RenderableNode = Union["_Element", "_ScopedNode", str, None]
 
 
-def _normalize_props(props: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def _normalize_props(props: dict[str, Any] | None) -> dict[str, Any]:
     return props or {}
 
 
 def _create_element_record(
-    type: Union[str, Callable, type],
-    props: Optional[Dict[str, Any]],
-    children: List[RenderableNode],
-    key: Optional[str],
-) -> "_Element":
+    type: str | Callable | type,
+    props: dict[str, Any] | None,
+    children: list[RenderableNode],
+    key: str | None,
+) -> _Element:
     element = object.__new__(_Element)
     element.type = type
     element.props = _normalize_props(props)
@@ -72,8 +73,8 @@ def _normalize_child(child: Any) -> RenderableNode:
     return str(child)
 
 
-def _normalize_children(children: Any) -> List[RenderableNode]:
-    processed_children: List[RenderableNode] = []
+def _normalize_children(children: Any) -> list[RenderableNode]:
+    processed_children: list[RenderableNode] = []
     for child in children:
         if isinstance(child, (list, tuple)):
             for subchild in child:
@@ -120,8 +121,8 @@ def _coalesce_component_children(
 
 def _merge_component_props(
     children: tuple[RenderableNode, ...],
-    props: Dict[str, Any],
-) -> Dict[str, Any]:
+    props: dict[str, Any],
+) -> dict[str, Any]:
     merged_props = dict(props)
     if "children" not in merged_props:
         merged_props["children"] = _coalesce_component_children(children)
@@ -129,17 +130,17 @@ def _merge_component_props(
 
 
 def _create_component_instance(
-    component: type["_Component"],
+    component: type[_Component],
     children: tuple[RenderableNode, ...],
-    props: Dict[str, Any],
-) -> "_Component":
+    props: dict[str, Any],
+) -> _Component:
     return component(**_merge_component_props(children, props))
 
 
 def _invoke_component(
     component: Callable,
     children: tuple[RenderableNode, ...],
-    props: Dict[str, Any],
+    props: dict[str, Any],
 ) -> Any:
     if _is_component_class(component):
         instance = _create_component_instance(component, children, props)
@@ -148,9 +149,9 @@ def _invoke_component(
 
 
 def createElement(
-    type: Union[str, Callable, type],
+    type: str | Callable | type,
     *children: RenderableNode,
-    key: Optional[str] = None,
+    key: str | None = None,
     **props: Any,
 ) -> RenderableNode:
     return _create_element_record(
@@ -174,31 +175,26 @@ def scopeRender(
 class _Component:
     def __init__(self, **props: Any):
         self.props = props
-        self.state: Dict[str, Any] = {}
+        self.state: dict[str, Any] = {}
         self._state_version = 0
         self._is_unmounted = False
         self._is_mounted = False
         self._last_rendered_node: RenderableNode = None
-        self._pending_previous_state: Optional[Dict[str, Any]] = None
-        self._nearest_error_boundary: Optional["_Component"] = None
+        self._pending_previous_state: dict[str, Any] | None = None
+        self._nearest_error_boundary: _Component | None = None
 
     def render(self) -> RenderableNode:
         return None
 
     def set_state(
         self,
-        update: Optional[
-            Union[
-                Dict[str, Any],
-                Callable[[Dict[str, Any], Dict[str, Any]], Optional[Dict[str, Any]]],
-            ]
-        ] = None,
+        update: dict[str, Any] | Callable[[dict[str, Any], dict[str, Any]], dict[str, Any] | None] | None = None,
         **kwargs: Any,
     ) -> None:
         if self._is_unmounted:
             return
 
-        partial_state: Dict[str, Any] = {}
+        partial_state: dict[str, Any] = {}
         if callable(update):
             computed = update(dict(self.state), dict(self.props))
             if isinstance(computed, dict):
@@ -229,7 +225,7 @@ class _Component:
 
 
 def component(
-    func: Optional[Callable] = None, *, name: Optional[str] = None
+    func: Callable | None = None, *, name: str | None = None
 ) -> Callable:
     def wrapper(fn: Callable) -> Callable:
         fn._is_component = True
@@ -250,7 +246,7 @@ def isElement(obj: Any) -> bool:
 
 
 def renderComponent(
-    component: Union[Callable, _Component, RenderableNode],
+    component: Callable | _Component | RenderableNode,
     *children: RenderableNode,
     **props: Any,
 ) -> RenderableNode:

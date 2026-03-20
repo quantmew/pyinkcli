@@ -38,8 +38,8 @@ def test_render_to_string_sanitizes_text_before_layout():
 
 def test_screen_reader_output_sanitizes_control_sequences():
     vnode = Box(Text("Hello\x1b[2JWorld"))
-    from pyinkcli.render_to_string import create_root_node
     from pyinkcli.reconciler import createReconciler
+    from pyinkcli.render_to_string import create_root_node
 
     root_node = create_root_node(40, 5)
     reconciler = createReconciler(root_node)

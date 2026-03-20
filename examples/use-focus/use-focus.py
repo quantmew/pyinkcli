@@ -5,7 +5,7 @@ Demonstrates the useFocus hook for keyboard navigation.
 Press Tab to focus next element, Shift+Tab to focus previous, Esc to reset.
 """
 
-from pyinkcli import render, Box, Text, useFocus
+from pyinkcli import Box, Text, render, useFocus
 from pyinkcli.component import createElement
 
 

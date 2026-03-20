@@ -7,9 +7,8 @@ import shlex
 import shutil
 import subprocess
 import sys
+from contextlib import suppress
 from pathlib import Path
-from typing import Optional
-
 
 _COMMON_EDITORS = {
     "/Applications/Atom.app/Contents/MacOS/Atom": "atom",
@@ -26,7 +25,7 @@ _COMMON_EDITORS = {
 }
 
 _TERMINAL_EDITORS = {"vim", "emacs", "nano"}
-_child_process: Optional[subprocess.Popen[str]] = None
+_child_process: subprocess.Popen[str] | None = None
 
 
 def isTerminalEditor(editor: str) -> bool:
@@ -127,10 +126,8 @@ def launchEditor(
         args.append(file_path)
 
     if _child_process is not None and isTerminalEditor(editor):
-        try:
+        with suppress(OSError):
             _child_process.kill()
-        except OSError:
-            pass
         _child_process = None
 
     try:

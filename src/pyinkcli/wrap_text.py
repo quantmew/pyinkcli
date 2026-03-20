@@ -11,7 +11,7 @@ from typing import Literal
 
 from pyinkcli.packages.ink.styles import TextWrap
 from pyinkcli.sanitize_ansi import sanitizeAnsi
-from pyinkcli.utils.wrap_ansi import wrap_ansi, truncate_string
+from pyinkcli.utils.wrap_ansi import truncate_string, wrap_ansi
 
 
 @lru_cache(maxsize=1024)

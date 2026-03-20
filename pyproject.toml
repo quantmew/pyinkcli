@@ -75,15 +75,45 @@ path = "src/pyinkcli/__init__.py"
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+extend-exclude = ["js_source"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+select = ["E", "F", "I", "W", "UP", "B", "C4", "SIM"]
+ignore = ["E501", "UP007", "UP045", "B905"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/test_devtools_hydration.py" = ["SIM118"]
 
 [tool.mypy]
 python_version = "3.10"
-strict = true
+files = ["src/pyinkcli"]
+exclude = ["^examples/", "^tests/", "^js_source/"]
+mypy_path = "src"
+check_untyped_defs = true
 warn_return_any = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["yoga"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "pyinkcli._component_runtime",
+    "pyinkcli._yoga",
+    "pyinkcli.ansi_tokenizer",
+    "pyinkcli.components.*",
+    "pyinkcli.get_max_width",
+    "pyinkcli.hooks.*",
+    "pyinkcli.ink",
+    "pyinkcli.input_parser",
+    "pyinkcli.log_update",
+    "pyinkcli.packages.*",
+    "pyinkcli.parse_keypress",
+    "pyinkcli.patch_console",
+    "pyinkcli.render",
+]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

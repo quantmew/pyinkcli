@@ -1,8 +1,8 @@
 """pyinkcli public package surface."""
 
 from pyinkcli.index import (
-    DOMElement,
     Box,
+    DOMElement,
     Key,
     Newline,
     Spacer,

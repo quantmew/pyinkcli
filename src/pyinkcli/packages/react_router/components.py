@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
-from pyinkcli._component_runtime import RenderableNode, _Fragment, createElement, isElement, scopeRender
+from pyinkcli._component_runtime import (
+    RenderableNode,
+    _Fragment,
+    createElement,
+    isElement,
+    scopeRender,
+)
 from pyinkcli.hooks import useEffect, useRef, useState
 from pyinkcli.packages.react_router.context import (
     LocationContextObject,
@@ -13,9 +19,26 @@ from pyinkcli.packages.react_router.context import (
     _provide_location_context,
     _provide_navigation_context,
 )
-from pyinkcli.packages.react_router.hooks import useInRouterContext, useLocation, useNavigate, useOutlet, useRoutes
-from pyinkcli.packages.react_router.router.history import Action, Location, MemoryHistory, createMemoryHistory, parsePath
-from pyinkcli.packages.react_router.router.utils import RouteObject, getResolveToMatches, resolveTo, stripBasename
+from pyinkcli.packages.react_router.hooks import (
+    useInRouterContext,
+    useLocation,
+    useNavigate,
+    useOutlet,
+    useRoutes,
+)
+from pyinkcli.packages.react_router.router.history import (
+    Action,
+    Location,
+    MemoryHistory,
+    createMemoryHistory,
+    parsePath,
+)
+from pyinkcli.packages.react_router.router.utils import (
+    RouteObject,
+    getResolveToMatches,
+    resolveTo,
+    stripBasename,
+)
 
 
 def mapRouteProperties(route: RouteObject) -> dict[str, Any]:
@@ -50,10 +73,10 @@ hydrationRouteProperties = [
 
 def MemoryRouter(
     *children: RenderableNode,
-    basename: Optional[str] = None,
-    initialEntries: Optional[list[str | dict[str, Any]]] = None,
-    initialIndex: Optional[int] = None,
-    unstable_useTransitions: Optional[bool] = None,
+    basename: str | None = None,
+    initialEntries: list[str | dict[str, Any]] | None = None,
+    initialIndex: int | None = None,
+    unstable_useTransitions: bool | None = None,
 ) -> RenderableNode:
     historyRef = useRef(None)
     if historyRef.current is None:
@@ -108,9 +131,9 @@ def Route(**props: Any) -> RenderableNode:
 
 def Navigate(
     to: Any,
-    replace: Optional[bool] = None,
+    replace: bool | None = None,
     state: Any = None,
-    relative: Optional[str] = None,
+    relative: str | None = None,
 ) -> RenderableNode:
     if not useInRouterContext():
         raise RuntimeError("<Navigate> may be used only in the context of a <Router> component.")
@@ -146,7 +169,7 @@ def Router(
     navigationType: str = Action.Pop.value,
     navigator: Any = None,
     static: bool = False,
-    unstable_useTransitions: Optional[bool] = None,
+    unstable_useTransitions: bool | None = None,
 ) -> RenderableNode:
     if useInRouterContext():
         raise RuntimeError("You cannot render a <Router> inside another <Router>.")
@@ -214,7 +237,7 @@ def Router(
 def Routes(
     *route_children: RenderableNode,
     children: Any = None,
-    location: Optional[dict[str, Any] | str] = None,
+    location: dict[str, Any] | str | None = None,
 ) -> RenderableNode:
     resolved_children = _coalesce_route_children(route_children, children)
     return useRoutes(createRoutesFromChildren(resolved_children), location)
@@ -226,7 +249,7 @@ def Outlet(context: Any = None) -> RenderableNode:
 
 def createRoutesFromChildren(
     children: Any,
-    parentPath: Optional[list[int]] = None,
+    parentPath: list[int] | None = None,
 ) -> list[RouteObject]:
     parentPath = [] if parentPath is None else parentPath
     routes: list[RouteObject] = []
@@ -288,7 +311,7 @@ def createRoutesFromChildren(
 
 def createRoutesFromElements(
     children: Any,
-    parentPath: Optional[list[int]] = None,
+    parentPath: list[int] | None = None,
 ) -> list[RouteObject]:
     return createRoutesFromChildren(children, parentPath)
 

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import socketserver
 import threading
+from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass, field
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Literal
 
 from pyinkcli.packages.react_devtools_core.src.editor import (
     doesFilePathExist,
@@ -36,7 +38,7 @@ class _StandaloneState:
     disconnected_callback: DisconnectedCallback = _default_disconnected_callback
     bridge_socket: Any = None
     profiler_opened: bool = False
-    last_server: Optional[dict[str, Any]] = None
+    last_server: dict[str, Any] | None = None
 
 
 @dataclass
@@ -60,19 +62,19 @@ class _DevToolsUI:
     def __init__(self) -> None:
         self._state = _StandaloneState()
 
-    def setContentDOMNode(self, value: Any) -> "_DevToolsUI":
+    def setContentDOMNode(self, value: Any) -> _DevToolsUI:
         self._state.content_dom_node = value
         return self
 
-    def setProjectRoots(self, value: list[str]) -> "_DevToolsUI":
+    def setProjectRoots(self, value: list[str]) -> _DevToolsUI:
         self._state.project_roots = list(value)
         return self
 
-    def setStatusListener(self, value: StatusListener) -> "_DevToolsUI":
+    def setStatusListener(self, value: StatusListener) -> _DevToolsUI:
         self._state.status_listener = value
         return self
 
-    def setDisconnectedCallback(self, value: DisconnectedCallback) -> "_DevToolsUI":
+    def setDisconnectedCallback(self, value: DisconnectedCallback) -> _DevToolsUI:
         self._state.disconnected_callback = value
         return self
 
@@ -99,14 +101,10 @@ class _DevToolsUI:
         installDevtoolsWindowPolyfill()
         self._state.bridge_socket = socket
 
-        try:
-            setattr(socket, "onerror", lambda _error=None: self._on_disconnected())
-        except Exception:
-            pass
-        try:
-            setattr(socket, "onclose", lambda: self._on_disconnected())
-        except Exception:
-            pass
+        with suppress(Exception):
+            socket.onerror = lambda _error=None: self._on_disconnected()
+        with suppress(Exception):
+            socket.onclose = lambda: self._on_disconnected()
 
         self._state.status_listener("DevTools initialized.", "devtools-connected")
         return _CloseHandle(close=self._on_disconnected)
@@ -115,10 +113,10 @@ class _DevToolsUI:
         self,
         port: int = 8097,
         host: str = "localhost",
-        httpsOptions: Optional[dict[str, Any]] = None,
-        loggerOptions: Optional[dict[str, Any]] = None,
-        path: Optional[str] = None,
-        clientOptions: Optional[dict[str, Any]] = None,
+        httpsOptions: dict[str, Any] | None = None,
+        loggerOptions: dict[str, Any] | None = None,
+        path: str | None = None,
+        clientOptions: dict[str, Any] | None = None,
     ) -> _CloseHandle:
         del httpsOptions, loggerOptions, path, clientOptions
 

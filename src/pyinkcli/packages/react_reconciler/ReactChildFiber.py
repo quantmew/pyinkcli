@@ -3,11 +3,21 @@
 from __future__ import annotations
 
 from contextlib import ExitStack
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
-from pyinkcli._component_runtime import _Fragment, _is_component_class, isElement, is_component, renderComponent
+from pyinkcli._component_runtime import (
+    _Fragment,
+    _is_component_class,
+    is_component,
+    isElement,
+    renderComponent,
+)
 from pyinkcli._suspense_runtime import SuspendSignal
-from pyinkcli.hooks._runtime import _begin_component_render, _end_component_render, _get_hook_state_snapshot
+from pyinkcli.hooks._runtime import (
+    _begin_component_render,
+    _end_component_render,
+    _get_hook_state_snapshot,
+)
 from pyinkcli.packages.react_reconciler.ReactFiberHostContext import getChildHostContext
 
 if TYPE_CHECKING:
@@ -17,9 +27,9 @@ if TYPE_CHECKING:
 
 
 def reconcileChildren(
-    reconciler: "_Reconciler",
-    parent: "DOMElement",
-    children: list["RenderableNode"],
+    reconciler: _Reconciler,
+    parent: DOMElement,
+    children: list[RenderableNode],
     path: tuple[Any, ...],
     dom_index: int,
     devtools_parent_id: str,
@@ -38,9 +48,9 @@ def reconcileChildren(
 
 
 def reconcileChild(
-    reconciler: "_Reconciler",
-    vnode: "RenderableNode",
-    parent: "DOMElement",
+    reconciler: _Reconciler,
+    vnode: RenderableNode,
+    parent: DOMElement,
     path: tuple[Any, ...],
     dom_index: int,
     devtools_parent_id: str,
@@ -376,10 +386,10 @@ def reconcileChild(
 
 
 def buildDevtoolsNodeID(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     display_name: str,
     path: tuple[Any, ...],
-    key: Optional[str],
+    key: str | None,
 ) -> str:
     path_value = ".".join(str(part) for part in path)
     key_value = key or ""
@@ -387,13 +397,13 @@ def buildDevtoolsNodeID(
 
 
 def appendDevtoolsNode(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     *,
     node_id: str,
     parent_id: str,
     display_name: str,
     element_type: str,
-    key: Optional[str],
+    key: str | None,
     is_error_boundary: bool,
 ) -> str:
     snapshot = reconciler._next_devtools_tree_snapshot
@@ -417,8 +427,8 @@ def appendDevtoolsNode(
 
 
 def getChildPathToken(
-    _reconciler: "_Reconciler",
-    child: "RenderableNode",
+    _reconciler: _Reconciler,
+    child: RenderableNode,
     index: int,
 ) -> Any:
     if isElement(child) and child.key is not None:
@@ -427,9 +437,9 @@ def getChildPathToken(
 
 
 def getElementName(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     node_type: Any,
-) -> Optional[str]:
+) -> str | None:
     if isinstance(node_type, str):
         type_map = {
             "Box": "ink-box",

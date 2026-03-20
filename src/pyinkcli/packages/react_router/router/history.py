@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import random
 import string
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Union
 
 
 class Action(str, Enum):
@@ -26,18 +27,18 @@ class Path:
 class Location(Path):
     state: Any = None
     key: str = "default"
-    unstable_mask: Optional[Path] = None
+    unstable_mask: Path | None = None
 
 
 @dataclass
 class Update:
     action: Action
     location: Location
-    delta: Optional[int]
+    delta: int | None
 
 
 Listener = Callable[[Update], None]
-To = Union[str, Dict[str, Any], Path, Location]
+To = Union[str, dict[str, Any], Path, Location]
 
 
 def _warning(condition: bool, message: str) -> None:
@@ -82,8 +83,8 @@ def createLocation(
     current: str | Location,
     to: To,
     state: Any = None,
-    key: Optional[str] = None,
-    unstable_mask: Optional[Path] = None,
+    key: str | None = None,
+    unstable_mask: Path | None = None,
 ) -> Location:
     base_pathname = current if isinstance(current, str) else current.pathname
     if isinstance(to, Location):
@@ -120,8 +121,8 @@ class MemoryHistory:
     def __init__(
         self,
         *,
-        initialEntries: Optional[list[str | dict[str, Any]]] = None,
-        initialIndex: Optional[int] = None,
+        initialEntries: list[str | dict[str, Any]] | None = None,
+        initialIndex: int | None = None,
         v5Compat: bool = False,
     ) -> None:
         entries = initialEntries or ["/"]
@@ -156,8 +157,8 @@ class MemoryHistory:
         self,
         to: To,
         state: Any = None,
-        key: Optional[str] = None,
-        unstable_mask: Optional[Path] = None,
+        key: str | None = None,
+        unstable_mask: Path | None = None,
     ) -> Location:
         current_pathname = self.location.pathname if self._entries else "/"
         location = createLocation(current_pathname, to, state, key, unstable_mask)
@@ -219,13 +220,13 @@ class MemoryHistory:
 
         return unlisten
 
-    def _notify(self, location: Location, delta: Optional[int]) -> None:
+    def _notify(self, location: Location, delta: int | None) -> None:
         update = Update(action=self._action, location=location, delta=delta)
         for listener in list(self._listeners):
             listener(update)
 
 
-def createMemoryHistory(options: Optional[dict[str, Any]] = None) -> MemoryHistory:
+def createMemoryHistory(options: dict[str, Any] | None = None) -> MemoryHistory:
     options = options or {}
     return MemoryHistory(
         initialEntries=options.get("initialEntries"),

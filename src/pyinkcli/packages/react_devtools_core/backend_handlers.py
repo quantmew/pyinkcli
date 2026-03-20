@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
-from typing import Any, Callable
+from typing import Any
 
 from pyinkcli.packages.react_devtools_core.hydration import (
     make_bridge_call,

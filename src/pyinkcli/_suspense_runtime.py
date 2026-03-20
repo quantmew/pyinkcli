@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable, Hashable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Hashable
+from typing import Any
 
 from pyinkcli.hooks._runtime import _has_rerender_target, _request_rerender
 

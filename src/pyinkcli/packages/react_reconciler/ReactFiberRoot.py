@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Optional
 
 from pyinkcli.packages.ink.dom import DOMElement
 from pyinkcli.packages.react_reconciler.ReactEventPriorities import UpdatePriority
@@ -15,8 +15,8 @@ class ReconcilerContainer:
     container: DOMElement
     tag: int = 0
     hydrate: bool = False
-    pending_element: Optional[object] = None
-    pending_callback: Optional[Callable[[], None]] = None
+    pending_element: object | None = None
+    pending_callback: Callable[[], None] | None = None
     work_scheduled: bool = False
     lock: threading.Lock = field(default_factory=threading.Lock)
     rerender_requested: bool = False

@@ -4,7 +4,7 @@ Justify content example for pyinkcli.
 Demonstrates different justifyContent values in flexbox layout.
 """
 
-from pyinkcli import render, Box, Text, useApp, useInput
+from pyinkcli import Box, Text, render, useApp, useInput
 
 
 def justify_content_example():

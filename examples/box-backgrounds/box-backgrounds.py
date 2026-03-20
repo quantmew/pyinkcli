@@ -1,6 +1,6 @@
 """box-backgrounds example for pyinkcli."""
 
-from pyinkcli import render, Box, Text, useApp, useInput
+from pyinkcli import Box, Text, render, useApp, useInput
 
 
 def box_backgrounds_example():

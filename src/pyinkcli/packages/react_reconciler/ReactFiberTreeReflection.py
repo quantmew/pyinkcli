@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
 
 
-def getDevtoolsTreeSnapshot(reconciler: "_Reconciler") -> dict[str, Any]:
+def getDevtoolsTreeSnapshot(reconciler: _Reconciler) -> dict[str, Any]:
     nodes = [
         dict(node)
         for node in reconciler._devtools_tree_snapshot.get("nodes", [])
@@ -20,16 +21,16 @@ def getDevtoolsTreeSnapshot(reconciler: "_Reconciler") -> dict[str, Any]:
 
 
 def getDevtoolsDisplayName(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
-) -> Optional[str]:
+) -> str | None:
     for node in reconciler._devtools_tree_snapshot.get("nodes", []):
         if node.get("id") == node_id:
             return node.get("displayName")
     return None
 
 
-def getDevtoolsProfilingData(reconciler: "_Reconciler") -> dict[str, Any]:
+def getDevtoolsProfilingData(reconciler: _Reconciler) -> dict[str, Any]:
     return {
         "dataForRoots": [
             {
@@ -45,9 +46,9 @@ def getDevtoolsProfilingData(reconciler: "_Reconciler") -> dict[str, Any]:
 
 
 def getDevtoolsPathForElement(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
-) -> Optional[list[dict[str, Any]]]:
+) -> list[dict[str, Any]] | None:
     nodes = reconciler._devtools_tree_snapshot.get("nodes", [])
     nodes_by_id = {node.get("id"): node for node in nodes}
     current = nodes_by_id.get(node_id)
@@ -81,7 +82,7 @@ def getDevtoolsPathForElement(
 
 
 def getDevtoolsOwnersList(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
 ) -> list[dict[str, Any]]:
     element = reconciler._devtools_inspected_elements.get(node_id)
@@ -94,16 +95,16 @@ def getDevtoolsOwnersList(
 
 
 def getDevtoolsElementIDForHostInstance(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     target: Any,
-) -> Optional[str]:
+) -> str | None:
     return reconciler._devtools_host_instance_ids.get(id(target))
 
 
 def getDevtoolsSuspenseNodeIDForHostInstance(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     target: Any,
-) -> Optional[str]:
+) -> str | None:
     node_id = getDevtoolsElementIDForHostInstance(reconciler, target)
     if node_id is None:
         return None
@@ -111,7 +112,7 @@ def getDevtoolsSuspenseNodeIDForHostInstance(
 
 
 def hasDevtoolsNode(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
 ) -> bool:
     return any(
@@ -121,14 +122,14 @@ def hasDevtoolsNode(
 
 
 def isMostRecentlyInspectedElement(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
 ) -> bool:
     return reconciler._devtools_most_recently_inspected_id == node_id
 
 
 def mergeDevtoolsInspectedPath(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     path: list[Any],
 ) -> None:
     current = reconciler._devtools_currently_inspected_paths
@@ -137,9 +138,9 @@ def mergeDevtoolsInspectedPath(
 
 
 def getDevtoolsNode(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     for node in reconciler._devtools_tree_snapshot.get("nodes", []):
         if node.get("id") == node_id:
             return node
@@ -147,12 +148,12 @@ def getDevtoolsNode(
 
 
 def findNearestDevtoolsAncestor(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
     *,
     predicate: Callable[[dict[str, Any]], bool],
-) -> Optional[str]:
-    current_id: Optional[str] = node_id
+) -> str | None:
+    current_id: str | None = node_id
     while current_id is not None:
         node = getDevtoolsNode(reconciler, current_id)
         if node is None:

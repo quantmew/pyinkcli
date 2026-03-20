@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
 
 
-def injectIntoDevTools(reconciler: "_Reconciler", package_info: dict[str, str]) -> bool:
+def injectIntoDevTools(reconciler: _Reconciler, package_info: dict[str, str]) -> bool:
     """Register the renderer with the devtools bridge."""
     from pyinkcli.packages.react_devtools_core.backend import createBackend, initializeBackend
     from pyinkcli.packages.react_devtools_core.window_polyfill import installDevtoolsWindowPolyfill

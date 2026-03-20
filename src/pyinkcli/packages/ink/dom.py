@@ -6,11 +6,11 @@ Represents the virtual DOM nodes used by the renderer.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypedDict, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Literal, TypedDict, Union
 
 if TYPE_CHECKING:
     from pyinkcli._yoga import LayoutNode as YogaNode
-
     from pyinkcli.packages.ink.styles import Styles
 
 # Node name types
@@ -26,7 +26,7 @@ OutputTransformer = Callable[[str, int], str]
 
 
 class AccessibilityInfo(TypedDict, total=False):
-    role: Optional[str]
+    role: str | None
     state: dict[str, bool]
 
 
@@ -37,22 +37,22 @@ class DOMElement:
         self,
         nodeName: ElementName,
         *,
-        style: Optional["Styles"] = None,
-        attributes: Optional[dict[str, Any]] = None,
-        childNodes: Optional[list["DOMNode"]] = None,
-        parentNode: Optional["DOMElement"] = None,
-        yogaNode: Optional["YogaNode"] = None,
+        style: Styles | None = None,
+        attributes: dict[str, Any] | None = None,
+        childNodes: list[DOMNode] | None = None,
+        parentNode: DOMElement | None = None,
+        yogaNode: YogaNode | None = None,
         internal_ref: Any = None,
-        internal_transform: Optional[OutputTransformer] = None,
+        internal_transform: OutputTransformer | None = None,
         internal_static: bool = False,
-        key: Optional[str] = None,
-        internal_accessibility: Optional[AccessibilityInfo] = None,
+        key: str | None = None,
+        internal_accessibility: AccessibilityInfo | None = None,
         isStaticDirty: bool = False,
-        staticNode: Optional["DOMElement"] = None,
-        onComputeLayout: Optional[Callable[[], None]] = None,
-        onRender: Optional[Callable[[], None]] = None,
-        onImmediateRender: Optional[Callable[[], None]] = None,
-        internal_layoutListeners: Optional[set[Callable[[], None]]] = None,
+        staticNode: DOMElement | None = None,
+        onComputeLayout: Callable[[], None] | None = None,
+        onRender: Callable[[], None] | None = None,
+        onImmediateRender: Callable[[], None] | None = None,
+        internal_layoutListeners: set[Callable[[], None]] | None = None,
     ) -> None:
         self.nodeName = nodeName
         self.style = style or {}
@@ -81,9 +81,9 @@ class TextNode:
         *,
         nodeName: TextName = "#text",
         nodeValue: str = "",
-        style: Optional["Styles"] = None,
-        parentNode: Optional[DOMElement] = None,
-        yogaNode: Optional["YogaNode"] = None,
+        style: Styles | None = None,
+        parentNode: DOMElement | None = None,
+        yogaNode: YogaNode | None = None,
     ) -> None:
         self.nodeName = nodeName
         self.nodeValue = nodeValue
@@ -219,9 +219,12 @@ def removeChildNode(node: DOMElement, removeNode: DOMNode) -> None:
         node: The parent element.
         removeNode: The child node to remove.
     """
-    if removeNode.yogaNode is not None and removeNode.parentNode is not None:
-        if removeNode.parentNode.yogaNode is not None:
-            removeNode.parentNode.yogaNode.remove_child(removeNode.yogaNode)
+    if (
+        removeNode.yogaNode is not None
+        and removeNode.parentNode is not None
+        and removeNode.parentNode.yogaNode is not None
+    ):
+        removeNode.parentNode.yogaNode.remove_child(removeNode.yogaNode)
 
     removeNode.parentNode = None
 
@@ -248,7 +251,7 @@ def setAttribute(node: DOMElement, key: str, value: DOMNodeAttribute | Any) -> N
     node.attributes[key] = value
 
 
-def setStyle(node: DOMNode, style: Optional[Styles]) -> None:
+def setStyle(node: DOMNode, style: Styles | None) -> None:
     """
     Set the style on a node.
 
@@ -354,9 +357,10 @@ def _measure_text_node(
     Returns:
         Tuple of (width, height).
     """
+    import math
+
     from pyinkcli.measure_text import measureText
     from pyinkcli.wrap_text import wrapText
-    import math
 
     text = (
         node.nodeValue
@@ -380,14 +384,14 @@ def _measure_text_node(
     return measureText(wrappedText)
 
 
-def _find_closest_yoga_node(node: Optional[DOMNode]) -> Optional[yoga.Node]:
+def _find_closest_yoga_node(node: DOMNode | None) -> YogaNode | None:
     """Find the closest ancestor with a Yoga node."""
     if node is None or node.parentNode is None:
         return None
     return node.yogaNode or _find_closest_yoga_node(node.parentNode)
 
 
-def _mark_node_as_dirty(node: Optional[DOMNode]) -> None:
+def _mark_node_as_dirty(node: DOMNode | None) -> None:
     """Mark the closest Yoga node as dirty for re-measurement."""
     yogaNode = _find_closest_yoga_node(node)
     if yogaNode is not None:

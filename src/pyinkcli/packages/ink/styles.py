@@ -6,7 +6,7 @@ Maps CSS-like style properties to Yoga layout engine values.
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional, TypedDict, Union
+from typing import Literal, TypedDict
 
 from pyinkcli import _yoga as yoga
 
@@ -84,10 +84,10 @@ class Styles(TypedDict, total=False):
 
     # Position
     position: Position
-    top: Union[int, str]
-    right: Union[int, str]
-    bottom: Union[int, str]
-    left: Union[int, str]
+    top: int | str
+    right: int | str
+    bottom: int | str
+    left: int | str
 
     # Gap
     columnGap: int
@@ -116,7 +116,7 @@ class Styles(TypedDict, total=False):
     flexGrow: float
     flexShrink: float
     flexDirection: FlexDirection
-    flexBasis: Union[int, str]
+    flexBasis: int | str
     flexWrap: FlexWrap
     alignItems: AlignItems
     alignSelf: AlignSelf
@@ -124,19 +124,19 @@ class Styles(TypedDict, total=False):
     justifyContent: JustifyContent
 
     # Dimensions
-    width: Union[int, str]
-    height: Union[int, str]
-    minWidth: Union[int, str]
-    minHeight: Union[int, str]
-    maxWidth: Union[int, str]
-    maxHeight: Union[int, str]
+    width: int | str
+    height: int | str
+    minWidth: int | str
+    minHeight: int | str
+    maxWidth: int | str
+    maxHeight: int | str
     aspectRatio: float
 
     # Display
     display: Display
 
     # Border
-    borderStyle: Optional[BoxStyleName]
+    borderStyle: BoxStyleName | None
     borderTop: bool
     borderBottom: bool
     borderLeft: bool
@@ -164,7 +164,7 @@ class Styles(TypedDict, total=False):
 def apply_styles(
     yoga_node: yoga.Node,
     style: Styles,
-    current_style: Optional[Styles] = None,
+    current_style: Styles | None = None,
 ) -> None:
     """
     Apply style properties to a Yoga node.

@@ -8,7 +8,7 @@ Writes to stderr periodically while rendering normal UI.
 import threading
 import time
 
-from pyinkcli import render, Text, useStderr
+from pyinkcli import Text, render, useStderr
 from pyinkcli.hooks import useEffect
 
 

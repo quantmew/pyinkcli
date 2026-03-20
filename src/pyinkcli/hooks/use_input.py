@@ -6,15 +6,16 @@ Handles keyboard input from stdin.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     pass
 
 from pyinkcli.hooks._runtime import useEffect, useRef
-from pyinkcli.packages.react_reconciler.ReactFiberReconciler import discreteUpdates
 from pyinkcli.hooks.use_stdin import useStdin
+from pyinkcli.packages.react_reconciler.ReactFiberReconciler import discreteUpdates
 from pyinkcli.parse_keypress import parseKeypress
 
 
@@ -42,7 +43,7 @@ class Key:
     hyper: bool = False
     caps_lock: bool = False
     num_lock: bool = False
-    event_type: Optional[str] = None  # 'press', 'repeat', 'release'
+    event_type: str | None = None  # 'press', 'repeat', 'release'
 
     def __repr__(self) -> str:
         parts = []

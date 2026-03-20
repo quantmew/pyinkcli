@@ -6,9 +6,10 @@ Provides a consistent API matching the project's original yoga implementation.
 
 from __future__ import annotations
 
-import math
 import importlib
-from typing import TYPE_CHECKING, Callable, Optional
+import math
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import yoga
 from yoga import Config as YogaConfig
@@ -153,22 +154,22 @@ class LayoutNode:
     Wrapper around yoga.Node providing the project's original API.
     """
 
-    def __init__(self, config: Optional[YogaConfig] = None):
+    def __init__(self, config: YogaConfig | None = None):
         """Initialize a LayoutNode with optional config."""
         self._node = YogaNode(config or YogaConfig())
-        self._measure_func: Optional[Callable[[float, float], tuple[float, float]]] = None
+        self._measure_func: Callable[[float, float], tuple[float, float]] | None = None
 
     @staticmethod
-    def create(config: Optional[YogaConfig] = None) -> "LayoutNode":
+    def create(config: YogaConfig | None = None) -> LayoutNode:
         """Create a new LayoutNode."""
         return LayoutNode(config)
 
     # Child management
-    def insert_child(self, child: "LayoutNode", index: int) -> None:
+    def insert_child(self, child: LayoutNode, index: int) -> None:
         """Insert a child node at the given index."""
         yoga.YGNodeInsertChild(self._node, child._node, index)
 
-    def remove_child(self, child: "LayoutNode") -> None:
+    def remove_child(self, child: LayoutNode) -> None:
         """Remove a child node."""
         yoga.YGNodeRemoveChild(self._node, child._node)
 
@@ -182,7 +183,7 @@ class LayoutNode:
         self._node.markDirtyAndPropagate()
 
     # Measure function
-    def set_measure_func(self, func: Optional[Callable[[float, float], tuple[float, float]]]) -> None:
+    def set_measure_func(self, func: Callable[[float, float], tuple[float, float]] | None) -> None:
         """Set the measure function for this node."""
         self._measure_func = func
         if func is not None:
@@ -419,7 +420,7 @@ class NodeWrapper:
     """Factory for creating LayoutNode instances."""
 
     @staticmethod
-    def create(config: Optional[YogaConfig] = None) -> LayoutNode:
+    def create(config: YogaConfig | None = None) -> LayoutNode:
         """Create a new LayoutNode."""
         return LayoutNode.create(config)
 

@@ -41,7 +41,7 @@ def _collect_host_refs(node: Any, refs: dict[int, tuple[Any, Any]]) -> None:
         _collect_host_refs(child, refs)
 
 
-def _sync_host_refs(reconciler: "_Reconciler", root: Any) -> None:
+def _sync_host_refs(reconciler: _Reconciler, root: Any) -> None:
     previous_refs = getattr(reconciler, "_attached_host_refs", {})
     next_refs: dict[int, tuple[Any, Any]] = {}
     _collect_host_refs(root, next_refs)
@@ -60,7 +60,7 @@ def _sync_host_refs(reconciler: "_Reconciler", root: Any) -> None:
 
 
 def requestHostRender(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     priority: UpdatePriority,
     *,
     immediate: bool,
@@ -79,8 +79,8 @@ def requestHostRender(
 
 
 def resetAfterCommit(
-    reconciler: "_Reconciler",
-    container: "ReconcilerContainer",
+    reconciler: _Reconciler,
+    container: ReconcilerContainer,
 ) -> None:
     dom_container = container.container
     if callable(dom_container.onComputeLayout):

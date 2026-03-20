@@ -9,8 +9,8 @@ Displays an auto-incrementing counter.
 import threading
 import time
 
-from pyinkcli import render, Text
-from pyinkcli.hooks import useState, useEffect
+from pyinkcli import Text, render
+from pyinkcli.hooks import useEffect, useState
 
 
 def counter_example():

@@ -11,7 +11,7 @@ import json
 import re
 import traceback
 from collections import abc as collections_abc
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from pyinkcli._component_runtime import isElement
 from pyinkcli.packages.react_reconciler.ReactFiberReconciler import packageInfo
@@ -21,13 +21,13 @@ if TYPE_CHECKING:
 
 
 def inspectDevtoolsElement(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     request_id: int,
     node_id: str,
-    inspected_paths: Optional[Any] = None,
+    inspected_paths: Any | None = None,
     force_full_data: bool = False,
 ) -> dict[str, Any]:
-    path: Optional[list[Any]] = None
+    path: list[Any] | None = None
     if isinstance(inspected_paths, list):
         path = list(inspected_paths)
 
@@ -88,10 +88,10 @@ def inspectDevtoolsElement(
 
 
 def getSerializedDevtoolsElementValueByPath(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
     path: list[Any],
-) -> Optional[str]:
+) -> str | None:
     element = reconciler._devtools_inspected_elements.get(node_id)
     if element is None:
         return None
@@ -105,7 +105,7 @@ def getSerializedDevtoolsElementValueByPath(
 
 
 def getDevtoolsElementValueByPath(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     node_id: str,
     path: list[Any],
 ) -> Any:
@@ -118,7 +118,7 @@ def getDevtoolsElementValueByPath(
     return cloneDevtoolsValue(reconciler, value)
 
 
-def cloneDevtoolsValue(_reconciler: "_Reconciler", value: Any) -> Any:
+def cloneDevtoolsValue(_reconciler: _Reconciler, value: Any) -> Any:
     if type(value) is dict:
         return {
             key: cloneDevtoolsValue(_reconciler, item)
@@ -140,7 +140,7 @@ def cloneDevtoolsValue(_reconciler: "_Reconciler", value: Any) -> Any:
     return value
 
 
-def fingerprintDevtoolsValue(reconciler: "_Reconciler", value: Any) -> Any:
+def fingerprintDevtoolsValue(reconciler: _Reconciler, value: Any) -> Any:
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     if isinstance(value, dict):
@@ -171,7 +171,7 @@ def fingerprintDevtoolsValue(reconciler: "_Reconciler", value: Any) -> Any:
     return repr(value)
 
 
-def buildDevtoolsFingerprint(reconciler: "_Reconciler", value: Any) -> str:
+def buildDevtoolsFingerprint(reconciler: _Reconciler, value: Any) -> str:
     return json.dumps(
         fingerprintDevtoolsValue(reconciler, value),
         ensure_ascii=False,
@@ -179,7 +179,7 @@ def buildDevtoolsFingerprint(reconciler: "_Reconciler", value: Any) -> str:
     )
 
 
-def getDevtoolsDataType(_reconciler: "_Reconciler", value: Any) -> str:
+def getDevtoolsDataType(_reconciler: _Reconciler, value: Any) -> str:
     if value is None:
         return "null"
     if getattr(value, "__ink_devtools_react_lazy__", False):
@@ -225,7 +225,7 @@ def getDevtoolsDataType(_reconciler: "_Reconciler", value: Any) -> str:
         return "typed_array"
     if isinstance(value, (asyncio.Future, concurrent.futures.Future)):
         return "thenable"
-    if hasattr(value, "then") and callable(getattr(value, "then")):
+    if hasattr(value, "then") and callable(value.then):
         return "thenable"
     if isinstance(value, collections_abc.Iterator):
         return "opaque_iterator"
@@ -258,7 +258,7 @@ def getDevtoolsDataType(_reconciler: "_Reconciler", value: Any) -> str:
 
 
 def previewDevtoolsValue(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     value: Any,
     *,
     short: bool,
@@ -416,7 +416,7 @@ def previewDevtoolsValue(
     return repr(value)
 
 
-def getDevtoolsName(reconciler: "_Reconciler", value: Any) -> str:
+def getDevtoolsName(reconciler: _Reconciler, value: Any) -> str:
     data_type = getDevtoolsDataType(reconciler, value)
     if data_type == "react_lazy":
         return "lazy()"
@@ -462,7 +462,7 @@ def getDevtoolsName(reconciler: "_Reconciler", value: Any) -> str:
 
 
 def createDehydratedMetadata(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     value: Any,
     *,
     inspectable: bool,
@@ -497,7 +497,7 @@ def createDehydratedMetadata(
     return metadata
 
 
-def getTransportElementChildren(_reconciler: "_Reconciler", element: Any) -> Any:
+def getTransportElementChildren(_reconciler: _Reconciler, element: Any) -> Any:
     children = list(getattr(element, "children", []) or [])
     if not children:
         return None
@@ -506,7 +506,7 @@ def getTransportElementChildren(_reconciler: "_Reconciler", element: Any) -> Any
     return children
 
 
-def getDevtoolsEnumerableEntries(_reconciler: "_Reconciler", value: Any) -> list[tuple[str, Any]]:
+def getDevtoolsEnumerableEntries(_reconciler: _Reconciler, value: Any) -> list[tuple[str, Any]]:
     if isinstance(value, dict):
         return [(str(key), item) for key, item in value.items()]
     try:
@@ -515,13 +515,13 @@ def getDevtoolsEnumerableEntries(_reconciler: "_Reconciler", value: Any) -> list
         return []
 
 
-def getDevtoolsBufferSize(_reconciler: "_Reconciler", value: Any) -> int:
+def getDevtoolsBufferSize(_reconciler: _Reconciler, value: Any) -> int:
     if isinstance(value, memoryview):
         return value.nbytes
     return len(value)
 
 
-def getDevtoolsIteratorItems(_reconciler: "_Reconciler", value: Any) -> list[Any]:
+def getDevtoolsIteratorItems(_reconciler: _Reconciler, value: Any) -> list[Any]:
     if isinstance(value, collections_abc.Mapping):
         return [[key, item] for key, item in value.items()]
     if isinstance(value, collections_abc.ItemsView):
@@ -529,19 +529,19 @@ def getDevtoolsIteratorItems(_reconciler: "_Reconciler", value: Any) -> list[Any
     return list(value)
 
 
-def getDevtoolsIteratorSize(_reconciler: "_Reconciler", value: Any) -> Optional[int]:
+def getDevtoolsIteratorSize(_reconciler: _Reconciler, value: Any) -> int | None:
     try:
         return len(value)
     except TypeError:
         return None
 
 
-def getDevtoolsThenableDisplayName(_reconciler: "_Reconciler", value: Any) -> str:
+def getDevtoolsThenableDisplayName(_reconciler: _Reconciler, value: Any) -> str:
     constructor = getattr(type(value), "__name__", "")
     return constructor or "Thenable"
 
 
-def getDevtoolsThenableStatus(_reconciler: "_Reconciler", value: Any) -> str:
+def getDevtoolsThenableStatus(_reconciler: _Reconciler, value: Any) -> str:
     if isinstance(value, (asyncio.Future, concurrent.futures.Future)):
         if not value.done():
             return "pending"
@@ -554,13 +554,13 @@ def getDevtoolsThenableStatus(_reconciler: "_Reconciler", value: Any) -> str:
     return status if isinstance(status, str) else "pending"
 
 
-def getDevtoolsThenableValue(_reconciler: "_Reconciler", value: Any) -> Any:
+def getDevtoolsThenableValue(_reconciler: _Reconciler, value: Any) -> Any:
     if isinstance(value, (asyncio.Future, concurrent.futures.Future)):
         return value.result()
     return getattr(value, "value", None)
 
 
-def getDevtoolsThenableReason(_reconciler: "_Reconciler", value: Any) -> Any:
+def getDevtoolsThenableReason(_reconciler: _Reconciler, value: Any) -> Any:
     if isinstance(value, (asyncio.Future, concurrent.futures.Future)):
         try:
             value.result()
@@ -570,7 +570,7 @@ def getDevtoolsThenableReason(_reconciler: "_Reconciler", value: Any) -> Any:
     return getattr(value, "reason", None)
 
 
-def getDevtoolsLazyStatus(_reconciler: "_Reconciler", payload: Any) -> Optional[str]:
+def getDevtoolsLazyStatus(_reconciler: _Reconciler, payload: Any) -> str | None:
     if payload is None:
         return None
     raw_status = getattr(payload, "_status", None)
@@ -584,7 +584,7 @@ def getDevtoolsLazyStatus(_reconciler: "_Reconciler", payload: Any) -> Optional[
     return status if isinstance(status, str) else None
 
 
-def getDevtoolsLazyResolvedValue(_reconciler: "_Reconciler", payload: Any) -> Any:
+def getDevtoolsLazyResolvedValue(_reconciler: _Reconciler, payload: Any) -> Any:
     if payload is None:
         return None
     if getattr(payload, "_status", None) == 1:
@@ -594,7 +594,7 @@ def getDevtoolsLazyResolvedValue(_reconciler: "_Reconciler", payload: Any) -> An
     return getattr(payload, "value", None)
 
 
-def getDevtoolsLazyRejectedValue(_reconciler: "_Reconciler", payload: Any) -> Any:
+def getDevtoolsLazyRejectedValue(_reconciler: _Reconciler, payload: Any) -> Any:
     if payload is None:
         return None
     if getattr(payload, "_status", None) == 2:
@@ -603,7 +603,7 @@ def getDevtoolsLazyRejectedValue(_reconciler: "_Reconciler", payload: Any) -> An
 
 
 def createUnserializableTransportValue(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     value: Any,
     *,
     root_key: str,
@@ -776,7 +776,7 @@ def createUnserializableTransportValue(
     return metadata
 
 
-def isDevtoolsPathInspected(reconciler: "_Reconciler", path: list[Any]) -> bool:
+def isDevtoolsPathInspected(reconciler: _Reconciler, path: list[Any]) -> bool:
     current: Any = reconciler._devtools_currently_inspected_paths
     for key in path:
         if not isinstance(current, dict) or key not in current:
@@ -786,7 +786,7 @@ def isDevtoolsPathInspected(reconciler: "_Reconciler", path: list[Any]) -> bool:
 
 
 def shouldExpandDevtoolsPath(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     root_key: str,
     lookup_path: list[Any],
 ) -> bool:
@@ -812,7 +812,7 @@ def shouldExpandDevtoolsPath(
 
 
 def dehydrateDevtoolsValueForBridge(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     value: Any,
     *,
     root_key: str,
@@ -928,12 +928,12 @@ def dehydrateDevtoolsValueForBridge(
 
 
 def cleanDevtoolsValueForBridge(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     value: Any,
     *,
     root_key: str,
     path: list[Any],
-    lookup_path: Optional[list[Any]] = None,
+    lookup_path: list[Any] | None = None,
 ) -> dict[str, Any]:
     cleaned: list[list[Any]] = []
     unserializable: list[list[Any]] = []
@@ -955,7 +955,7 @@ def cleanDevtoolsValueForBridge(
 
 
 def cleanDevtoolsInspectedElementForBridge(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     element: dict[str, Any],
 ) -> dict[str, Any]:
     cleaned = cloneDevtoolsValue(reconciler, element)
@@ -970,7 +970,7 @@ def cleanDevtoolsInspectedElementForBridge(
     return cleaned
 
 
-def getDevtoolsErrorStack(_reconciler: "_Reconciler", value: BaseException) -> Optional[str]:
+def getDevtoolsErrorStack(_reconciler: _Reconciler, value: BaseException) -> str | None:
     stack = "".join(
         traceback.format_exception(
             type(value),
@@ -982,7 +982,7 @@ def getDevtoolsErrorStack(_reconciler: "_Reconciler", value: BaseException) -> O
 
 
 def getDevtoolsNamedValue(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     target: Any,
     key: Any,
 ) -> tuple[Any, bool]:
@@ -1031,9 +1031,8 @@ def getDevtoolsNamedValue(
             return (getDevtoolsThenableReason(reconciler, target), True)
     if target_type == "react_lazy" and key == "_payload":
         return (getattr(target, "_payload", None), True)
-    if target_type == "typed_array":
-        if isinstance(key, int) and 0 <= key < len(target):
-            return (target[key], True)
+    if target_type == "typed_array" and isinstance(key, int) and 0 <= key < len(target):
+        return (target[key], True)
     if target_type in {"iterator", "html_all_collection"}:
         items = getDevtoolsIteratorItems(reconciler, target)
         if isinstance(key, int) and 0 <= key < len(items):
@@ -1043,7 +1042,7 @@ def getDevtoolsNamedValue(
 
 
 def getNestedValue(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     target: Any,
     path: list[Any],
 ) -> tuple[Any, bool]:
@@ -1056,7 +1055,7 @@ def getNestedValue(
 
 
 def setNestedValue(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     target: Any,
     path: list[Any],
     value: Any,
@@ -1100,7 +1099,7 @@ def setNestedValue(
 
 
 def deleteNestedValue(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     target: dict[str, Any],
     path: list[Any],
 ) -> bool:
@@ -1119,7 +1118,7 @@ def deleteNestedValue(
 
 
 def popNestedValue(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     target: dict[str, Any],
     path: list[Any],
 ) -> tuple[Any, bool]:
@@ -1136,7 +1135,7 @@ def popNestedValue(
 
 
 def resolveNestedParent(
-    _reconciler: "_Reconciler",
+    _reconciler: _Reconciler,
     target: dict[str, Any],
     path: list[Any],
 ) -> tuple[Any, Any, bool]:
@@ -1154,27 +1153,27 @@ def resolveNestedParent(
 
 
 def recordDevtoolsInspectedElement(
-    reconciler: "_Reconciler",
+    reconciler: _Reconciler,
     *,
     node_id: str,
     element_type: str,
-    key: Optional[str],
-    props: Optional[dict[str, Any]] = None,
-    state: Optional[dict[str, Any]] = None,
-    hooks: Optional[list[dict[str, Any]]] = None,
-    context: Optional[dict[str, Any]] = None,
+    key: str | None,
+    props: dict[str, Any] | None = None,
+    state: dict[str, Any] | None = None,
+    hooks: list[dict[str, Any]] | None = None,
+    context: dict[str, Any] | None = None,
     can_edit_hooks: bool = False,
     can_edit_function_props: bool = False,
     can_toggle_error: bool = False,
     is_errored: bool = False,
     can_toggle_suspense: bool = False,
-    is_suspended: Optional[bool] = None,
-    nearest_error_boundary_id: Optional[str] = None,
-    nearest_suspense_boundary_id: Optional[str] = None,
-    owners: Optional[list[dict[str, Any]]] = None,
-    source: Optional[list[Any]] = None,
-    stack: Optional[list[list[Any]]] = None,
-    suspended_by: Optional[list[Any]] = None,
+    is_suspended: bool | None = None,
+    nearest_error_boundary_id: str | None = None,
+    nearest_suspense_boundary_id: str | None = None,
+    owners: list[dict[str, Any]] | None = None,
+    source: list[Any] | None = None,
+    stack: list[list[Any]] | None = None,
+    suspended_by: list[Any] | None = None,
 ) -> None:
     target = reconciler._next_devtools_inspected_elements
     if target is None:
@@ -1233,7 +1232,7 @@ def recordDevtoolsInspectedElement(
             fingerprints["root"] = buildDevtoolsFingerprint(reconciler, root_element)
 
 
-def finalizeDevtoolsTreeSnapshot(reconciler: "_Reconciler") -> None:
+def finalizeDevtoolsTreeSnapshot(reconciler: _Reconciler) -> None:
     if reconciler._next_devtools_tree_snapshot is None:
         return
 

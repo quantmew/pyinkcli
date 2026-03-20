@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from pyinkcli._component_runtime import RenderableNode
 from pyinkcli.components.Box import Box
 from pyinkcli.components.Text import Text

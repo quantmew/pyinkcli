@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Callable, Optional, TypedDict
+from collections.abc import Callable
+from typing import TYPE_CHECKING, TypedDict
 
 from pyinkcli import _yoga as yoga
 from pyinkcli.get_max_width import getMaxWidth
-
-from pyinkcli.packages.ink.dom import DOMElement, TextNode, DOMNode, squashTextNodes
-from pyinkcli.wrap_text import wrapText
-from pyinkcli.utils.string_width import widest_line
+from pyinkcli.packages.ink.dom import DOMElement, squashTextNodes
 from pyinkcli.packages.ink.output import Output
 from pyinkcli.packages.ink.render_background import renderBackground
 from pyinkcli.packages.ink.render_border import renderBorder
+from pyinkcli.utils.string_width import widest_line
+from pyinkcli.wrap_text import wrapText
 
 if TYPE_CHECKING:
     pass
@@ -30,15 +30,15 @@ class RenderNodeToOutputOptions(TypedDict, total=False):
 
 
 class RenderNodeToScreenReaderOutputOptions(TypedDict, total=False):
-    parentRole: Optional[str]
+    parentRole: str | None
     skipStaticElements: bool
 
 
 def _format_accessibility_output(
-    role: Optional[str],
-    state: Optional[dict[str, bool]],
+    role: str | None,
+    state: dict[str, bool] | None,
     output: str,
-    parent_role: Optional[str],
+    parent_role: str | None,
 ) -> str:
     """Format screen reader output for ARIA role/state metadata."""
     if not role and not state:
@@ -86,7 +86,7 @@ def _clamped_max_width(yoga_node: yoga.LayoutNode) -> int:
 def renderNodeToOutput(
     node: DOMElement,
     output: Output,
-    options: Optional[RenderNodeToOutputOptions] = None,
+    options: RenderNodeToOutputOptions | None = None,
 ) -> None:
     """
     Render a DOM node to the output buffer.
@@ -201,7 +201,7 @@ def renderNodeToOutput(
 
 def renderNodeToScreenReaderOutput(
     node: DOMElement,
-    options: Optional[RenderNodeToScreenReaderOutputOptions] = None,
+    options: RenderNodeToScreenReaderOutputOptions | None = None,
 ) -> str:
     """
     Render a DOM node for screen reader output.

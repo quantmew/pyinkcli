@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import sys
 from collections import defaultdict
-from typing import Any, Callable, Optional, TextIO
+from collections.abc import Callable
+from contextlib import suppress
+from typing import Any, TextIO
 
 from pyinkcli.components.StdinContext import _get_stdin
 
@@ -18,8 +20,8 @@ class _StdinHandle:
 
     def __init__(
         self,
-        stream: Optional[TextIO] = None,
-        output_stream: Optional[TextIO] = None,
+        stream: TextIO | None = None,
+        output_stream: TextIO | None = None,
     ):
         self._stream = stream or sys.stdin
         self._output_stream = output_stream or self._stream
@@ -118,10 +120,8 @@ class _StdinHandle:
         """Remove an event handler."""
 
         handlers = self._event_handlers.get(event, [])
-        try:
+        with suppress(ValueError):
             handlers.remove(handler)
-        except ValueError:
-            pass
 
     def listener_count(self, event: str) -> int:
         """Return the number of listeners currently attached to an event."""
@@ -137,10 +137,8 @@ class _StdinHandle:
         """Emit an event to registered handlers."""
 
         for handler in list(self._event_handlers.get(event, [])):
-            try:
+            with suppress(Exception):
                 handler(*args)
-            except Exception:
-                pass
 
     def cleanup_runtime_modes(self) -> None:
         """Restore terminal runtime modes managed by this handle."""
@@ -172,7 +170,7 @@ class _StdinHandle:
 
 
 # Global stdin handle
-_stdin_handle: Optional[_StdinHandle] = None
+_stdin_handle: _StdinHandle | None = None
 
 
 def useStdin() -> _StdinHandle:
@@ -192,7 +190,7 @@ def useStdin() -> _StdinHandle:
     return _stdin_handle
 
 
-def _set_stdin(stream: TextIO, output_stream: Optional[TextIO] = None) -> None:
+def _set_stdin(stream: TextIO, output_stream: TextIO | None = None) -> None:
     """Internal: Set the stdin stream."""
     global _stdin_handle
     _stdin_handle = _StdinHandle(stream, output_stream)

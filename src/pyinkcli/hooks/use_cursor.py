@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Mapping, Optional, Union
+from collections.abc import Mapping
 
 from pyinkcli.components._app_context_runtime import _get_app_context
 from pyinkcli.components.CursorContext import _get_cursor_context
 from pyinkcli.hooks._runtime import Ref, useEffect, useRef
 from pyinkcli.hooks.use_stdout import useStdout
-from pyinkcli.utils.ansi_escapes import cursor_show, cursor_hide
+from pyinkcli.utils.ansi_escapes import cursor_hide, cursor_show
 
 
 class _CursorHandle:
@@ -19,7 +19,7 @@ class _CursorHandle:
 
     def setCursorPosition(
         self,
-        position: Optional[Union[tuple[int, int], Mapping[str, int]]],
+        position: tuple[int, int] | Mapping[str, int] | None,
     ) -> None:
         if position is None:
             self._position_ref.current = None
@@ -39,7 +39,7 @@ class _CursorHandle:
 
 
 def useCursor(
-    visible: Optional[bool] = None,
+    visible: bool | None = None,
     *,
     enabled: bool = True,
 ) -> _CursorHandle:

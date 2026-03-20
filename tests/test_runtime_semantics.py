@@ -8,16 +8,15 @@ from unittest.mock import Mock
 
 from pyinkcli import Box, Text, measureElement, render
 from pyinkcli.component import createElement
-from pyinkcli.dom import addLayoutListener
-from pyinkcli.packages.ink.dom import createNode
 from pyinkcli.components._accessibility_runtime import _provide_accessibility
-from pyinkcli.ink import Ink, Options
-from pyinkcli.hooks.use_cursor import useCursor
+from pyinkcli.dom import addLayoutListener
 from pyinkcli.hooks import useState
+from pyinkcli.hooks.use_cursor import useCursor
+from pyinkcli.ink import Ink, Options
+from pyinkcli.packages.ink.dom import createNode
+from pyinkcli.reconciler import createReconciler
 from pyinkcli.render_node_to_output import render_node_to_screen_reader_output
 from pyinkcli.render_to_string import create_root_node
-from pyinkcli.reconciler import createReconciler
-from pyinkcli.utils.string_width import string_width
 from pyinkcli.suspense_runtime import (
     invalidateResource,
     peekResource,
@@ -26,6 +25,7 @@ from pyinkcli.suspense_runtime import (
     resetAllResources,
     resetResource,
 )
+from pyinkcli.utils.string_width import string_width
 
 
 class FakeStdout(StringIO):

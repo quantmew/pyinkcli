@@ -1,6 +1,6 @@
 """aria example for pyinkcli."""
 
-from pyinkcli import render, Box, Text, useInput
+from pyinkcli import Box, Text, render, useInput
 from pyinkcli.hooks import useState
 
 

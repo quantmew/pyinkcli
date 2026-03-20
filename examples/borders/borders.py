@@ -4,7 +4,7 @@ Borders example for pyinkcli.
 Demonstrates different border styles available in pyinkcli.
 """
 
-from pyinkcli import render, Box, Text, useApp, useInput
+from pyinkcli import Box, Text, render, useApp, useInput
 
 
 def borders_example():

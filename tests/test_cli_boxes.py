@@ -1,6 +1,7 @@
 """Tests for CLI boxes utility."""
 
 import pytest
+
 from pyinkcli.utils.cli_boxes import BOXES, BoxStyle, get_box_style
 
 

@@ -7,7 +7,8 @@ Provides access to the stdout stream and Ink-preserving writes.
 from __future__ import annotations
 
 import sys
-from typing import Any, Callable, Optional, TextIO
+from collections.abc import Callable
+from typing import TextIO
 
 from pyinkcli.components.StdoutContext import _get_stdout
 from pyinkcli.sanitize_ansi import sanitizeAnsi
@@ -16,9 +17,9 @@ from pyinkcli.sanitize_ansi import sanitizeAnsi
 class _StdoutHandle:
     """Handle to stdout stream."""
 
-    def __init__(self, stream: Optional[TextIO] = None):
+    def __init__(self, stream: TextIO | None = None):
         self._stream = stream or sys.stdout
-        self._overlay_writer: Optional[Callable[[str], None]] = None
+        self._overlay_writer: Callable[[str], None] | None = None
         self._resize_handlers: list[Callable[[], None]] = []
 
     @property
@@ -64,7 +65,7 @@ class _StdoutHandle:
         """Check if stdout is a TTY."""
         return self._stream.isatty() if hasattr(self._stream, "isatty") else False
 
-    def bind_overlay_writer(self, writer: Optional[Callable[[str], None]]) -> None:
+    def bind_overlay_writer(self, writer: Callable[[str], None] | None) -> None:
         """Route write() through the Ink overlay writer when available."""
         self._overlay_writer = writer
 
@@ -114,7 +115,7 @@ class _StdoutHandle:
 
 
 # Global stdout handle
-_stdout_handle: Optional[_StdoutHandle] = None
+_stdout_handle: _StdoutHandle | None = None
 
 
 def useStdout() -> _StdoutHandle:

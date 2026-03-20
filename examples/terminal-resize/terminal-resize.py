@@ -4,7 +4,7 @@ Terminal resize example for pyinkcli.
 Demonstrates the useWindowSize hook to track terminal dimensions.
 """
 
-from pyinkcli import render, Box, Text, useWindowSize
+from pyinkcli import Box, Text, render, useWindowSize
 
 
 def terminal_resize_example():

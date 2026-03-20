@@ -1,16 +1,17 @@
 """Parity checks for the JS-like public surfaces."""
 
 import pyinkcli
-from pyinkcli import cursor_helpers
-from pyinkcli import dom
+from pyinkcli import (
+    component,
+    cursor_helpers,
+    dom,
+    log_update,
+    render_node_to_output,
+    styles,
+    suspense_runtime,
+    yoga_compat,
+)
 from pyinkcli import index as ink_index
-from pyinkcli import log_update
-from pyinkcli import render_node_to_output
-from pyinkcli import suspense_runtime
-from pyinkcli import styles
-from pyinkcli import yoga_compat
-from pyinkcli import component
-from pyinkcli.hooks import state as hooks_state
 from pyinkcli.components import (
     AccessibilityContext,
     AppContext,
@@ -21,6 +22,7 @@ from pyinkcli.components import (
     StdinContext,
     StdoutContext,
 )
+from pyinkcli.hooks import state as hooks_state
 
 
 def test_index_exports_match_js_surface() -> None:

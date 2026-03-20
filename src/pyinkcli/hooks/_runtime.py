@@ -5,11 +5,14 @@ Public compatibility imports remain in `hooks/state.py`.
 """
 
 from __future__ import annotations
+
 import math
 import threading
 import time
+from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass, field
-from typing import Any, Callable, Generic, Literal, Optional, TypeVar, Union
+from typing import Any, Generic, Literal, TypeVar
 
 T = TypeVar("T")
 Deps = tuple[Any, ...]
@@ -18,8 +21,8 @@ UpdatePriority = Literal["default", "discrete", "render_phase"]
 
 @dataclass
 class EffectRecord:
-    deps: Optional[Deps] = None
-    cleanup: Optional[Callable[[], None]] = None
+    deps: Deps | None = None
+    cleanup: Callable[[], None] | None = None
 
 
 @dataclass
@@ -37,8 +40,8 @@ class HookState:
 class PendingEffect:
     instance_id: str
     hook_index: int
-    effect: Callable[[], Optional[Callable[[], None]]]
-    deps: Optional[Deps]
+    effect: Callable[[], Callable[[], None] | None]
+    deps: Deps | None
 
 
 @dataclass
@@ -51,22 +54,22 @@ class RuntimeState:
     batch_depth: int = 0
     rerender_pending: bool = False
     current_update_priority: UpdatePriority = "default"
-    pending_update_priority: Optional[UpdatePriority] = None
+    pending_update_priority: UpdatePriority | None = None
     after_batch_callbacks: list[Callable[[], None]] = field(default_factory=list)
     scheduled_rerender: bool = False
 
 
 @dataclass
 class Ref(Generic[T]):
-    current: Optional[T] = None
+    current: T | None = None
 
 
 _runtime = RuntimeState()
-_rerender_callback: Optional[Callable[[], None]] = None
+_rerender_callback: Callable[[], None] | None = None
 _UNSET = object()
 _scheduler_lock = threading.Lock()
 _scheduler_event = threading.Event()
-_scheduler_thread: Optional[threading.Thread] = None
+_scheduler_thread: threading.Thread | None = None
 
 
 def _ensure_scheduler_thread() -> None:
@@ -105,7 +108,7 @@ def _schedule_scheduled_rerender() -> None:
 
 
 def _flush_scheduled_rerender() -> bool:
-    callback: Optional[Callable[[], None]]
+    callback: Callable[[], None] | None
     with _scheduler_lock:
         if not _runtime.scheduled_rerender:
             return False
@@ -234,18 +237,21 @@ def _pop_nested_value(target: Any, path: list[Any]) -> tuple[Any, bool]:
     return (parent.pop(key), True)
 
 
-def _normalize_deps(deps: Optional[Deps]) -> Optional[Deps]:
+def _normalize_deps(deps: Deps | None) -> Deps | None:
     if deps is None:
         return None
     return tuple(deps)
 
 
-def _deps_changed(old_deps: Optional[Deps], new_deps: Optional[Deps]) -> bool:
+def _deps_changed(old_deps: Deps | None, new_deps: Deps | None) -> bool:
     if old_deps is None or new_deps is None:
         return True
     if len(old_deps) != len(new_deps):
         return True
-    return any(old is not new and old != new for old, new in zip(old_deps, new_deps))
+    return any(
+        old is not new and old != new
+        for old, new in zip(old_deps, new_deps)
+    )
 
 
 def _get_current_instance_id() -> str:
@@ -284,13 +290,11 @@ def _end_component_render() -> None:
         _runtime.instance_stack.pop()
 
 
-def _run_cleanup(cleanup: Optional[Callable[[], None]]) -> None:
+def _run_cleanup(cleanup: Callable[[], None] | None) -> None:
     if cleanup is None:
         return
-    try:
+    with suppress(Exception):
         cleanup()
-    except Exception:
-        pass
 
 
 def _flush_pending_effects() -> None:
@@ -351,7 +355,7 @@ def _clear_hook_state() -> None:
     _scheduler_event.clear()
 
 
-def _set_rerender_callback(callback: Optional[Callable[[], None]]) -> None:
+def _set_rerender_callback(callback: Callable[[], None] | None) -> None:
     global _rerender_callback
     _rerender_callback = callback
     if callback is None:
@@ -375,7 +379,7 @@ def _queue_pending_rerender(priority: UpdatePriority) -> None:
         _runtime.pending_update_priority = priority
 
 
-def _consume_pending_rerender_priority() -> Optional[UpdatePriority]:
+def _consume_pending_rerender_priority() -> UpdatePriority | None:
     if not _runtime.rerender_pending:
         return None
     _runtime.rerender_pending = False
@@ -412,7 +416,7 @@ def _override_hook_state(
     return _set_nested_value(target, path[1:], value)
 
 
-def _get_hook_state_snapshot(instance_id: str) -> Optional[list[dict[str, Any]]]:
+def _get_hook_state_snapshot(instance_id: str) -> list[dict[str, Any]] | None:
     state = _runtime.instances.get(instance_id)
     if state is None:
         return None
@@ -520,10 +524,8 @@ def _run_after_batch_callbacks() -> None:
     callbacks = _runtime.after_batch_callbacks[:]
     _runtime.after_batch_callbacks.clear()
     for callback in callbacks:
-        try:
+        with suppress(Exception):
             callback()
-        except Exception:
-            pass
 
 
 def _queue_after_current_batch(callback: Callable[[], None]) -> None:
@@ -555,8 +557,8 @@ def _discrete_updates_runtime(callback: Callable[[], T]) -> T:
 
 
 def useState(
-    initial_value: Union[T, Callable[[], T]],
-) -> tuple[T, Callable[[Union[T, Callable[[T], T]]], None]]:
+    initial_value: T | Callable[[], T],
+) -> tuple[T, Callable[[T | Callable[[T], T]], None]]:
     state = _get_current_state()
     index = state.index
     state.index += 1
@@ -570,12 +572,9 @@ def useState(
     current_value = state.states[index]
 
     if index not in state.state_setters:
-        def set_value(new_value: Union[T, Callable[[T], T]]) -> None:
+        def set_value(new_value: T | Callable[[T], T]) -> None:
             previous_value = state.states[index]
-            if callable(new_value):
-                next_value = new_value(previous_value)
-            else:
-                next_value = new_value
+            next_value = new_value(previous_value) if callable(new_value) else new_value
 
             if _state_values_equal(previous_value, next_value):
                 return
@@ -589,8 +588,8 @@ def useState(
 
 
 def useEffect(
-    effect: Callable[[], Optional[Callable[[], None]]],
-    deps: Optional[Deps] = None,
+    effect: Callable[[], Callable[[], None] | None],
+    deps: Deps | None = None,
 ) -> None:
     state = _get_current_state()
     index = state.index
@@ -615,7 +614,7 @@ def useEffect(
     state.effects[index] = EffectRecord(deps=normalized_deps, cleanup=cleanup)
 
 
-def useRef(initial_value: Optional[T] = None) -> Ref[T]:
+def useRef(initial_value: T | None = None) -> Ref[T]:
     state = _get_current_state()
     index = state.index
     state.index += 1
@@ -651,7 +650,7 @@ def useCallback(callback: Callable, deps: Deps) -> Callable:
 def useReducer(
     reducer: Callable[[T, Any], T],
     initial_state: T,
-    init: Optional[Callable[[T], T]] = None,
+    init: Callable[[T], T] | None = None,
 ) -> tuple[T, Callable[[Any], None]]:
     if init is not None:
         initial_state = init(initial_state)

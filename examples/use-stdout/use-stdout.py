@@ -8,7 +8,7 @@ Based on js_source/ink/examples/use-stdout/use-stdout.tsx
 import threading
 import time
 
-from pyinkcli import render, Box, Text, useStdout
+from pyinkcli import Box, Text, render, useStdout
 from pyinkcli.hooks import useEffect
 
 

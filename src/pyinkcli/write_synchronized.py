@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from typing import TextIO
 
-
 bsu = "\u001b[?2026h"
 esu = "\u001b[?2026l"
 

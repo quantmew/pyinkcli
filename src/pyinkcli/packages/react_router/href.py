@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any
 
 
-def href(path: str, params: Optional[dict[str, Any]] = None) -> str:
+def href(path: str, params: dict[str, Any] | None = None) -> str:
     parameters = params or {}
     result = re.sub(
         r"/:([\w-]+)(\?)?",
@@ -26,7 +26,7 @@ def _replace_path_param(
     path: str,
     params: dict[str, Any],
     param: str,
-    question_mark: Optional[str],
+    question_mark: str | None,
 ) -> str:
     is_required = question_mark is None
     value = params.get(param)

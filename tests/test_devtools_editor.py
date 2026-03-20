@@ -45,10 +45,12 @@ def test_launch_editor_passes_line_number_arguments(tmp_path: Path) -> None:
     source = tmp_path / "main.py"
     source.write_text("print('ok')\n")
 
-    with patch.dict("os.environ", {"REACT_EDITOR": "code"}, clear=False):
-        with patch("shutil.which", return_value="/usr/bin/code"):
-            with patch("subprocess.Popen") as popen:
-                assert launchEditor("main.py", 7, [str(tmp_path)]) is True
+    with (
+        patch.dict("os.environ", {"REACT_EDITOR": "code"}, clear=False),
+        patch("shutil.which", return_value="/usr/bin/code"),
+        patch("subprocess.Popen") as popen,
+    ):
+        assert launchEditor("main.py", 7, [str(tmp_path)]) is True
 
     popen.assert_called_once_with(
         ["code", "-g", f"{source}:7"],

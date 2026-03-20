@@ -8,7 +8,6 @@ Uses wcwidth for proper Unicode width calculation.
 from __future__ import annotations
 
 import re
-from typing import Literal
 
 from wcwidth import wcwidth
 

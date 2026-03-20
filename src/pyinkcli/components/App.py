@@ -6,27 +6,32 @@ Canonical component module matching JS basename.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-from typing import Any, Optional, TextIO
+from typing import Any, TextIO
 
-from pyinkcli._component_runtime import RenderableNode, _Fragment, createElement, isElement, scopeRender
+from pyinkcli._component_runtime import (
+    RenderableNode,
+    _Fragment,
+    createElement,
+    isElement,
+    scopeRender,
+)
 from pyinkcli.components._app_context_runtime import _provide_app_context
+from pyinkcli.components.CursorContext import _provide_cursor_context
 from pyinkcli.components.ErrorBoundary import ErrorBoundary
+from pyinkcli.components.FocusContext import _provide_focus_context
+from pyinkcli.components.StderrContext import _provide_stderr
 from pyinkcli.components.StdinContext import _provide_stdin
 from pyinkcli.components.StdoutContext import _provide_stdout
-from pyinkcli.components.StderrContext import _provide_stderr
-from pyinkcli.components.FocusContext import _provide_focus_context
-from pyinkcli.components.CursorContext import _provide_cursor_context
 from pyinkcli.hooks._runtime import useEffect
 from pyinkcli.hooks.use_focus import _focus_runtime, focusNext, focusPrev
 from pyinkcli.hooks.use_input import useInput
+from pyinkcli.hooks.use_stderr import useStderr
 from pyinkcli.hooks.use_stdin import useStdin
 from pyinkcli.hooks.use_stdout import useStdout
-from pyinkcli.hooks.use_stderr import useStderr
 
 
 class _CursorContextValue:
-    def __init__(self, set_cursor_position: Optional[Any]) -> None:
+    def __init__(self, set_cursor_position: Any | None) -> None:
         self._set_cursor_position = set_cursor_position
 
     def setCursorPosition(self, position: Any) -> None:
@@ -36,7 +41,7 @@ class _CursorContextValue:
 
 class _FocusContextValue:
     @property
-    def active_id(self) -> Optional[str]:
+    def active_id(self) -> str | None:
         return _focus_runtime.active_id
 
     def add(self, id: str, options: dict[str, bool]) -> None:
@@ -69,17 +74,17 @@ class _FocusContextValue:
 
 def App(
     *children: RenderableNode,
-    app_context: Optional[Any] = None,
-    stdin: Optional[TextIO] = None,
-    stdout: Optional[TextIO] = None,
-    stderr: Optional[TextIO] = None,
+    app_context: Any | None = None,
+    stdin: TextIO | None = None,
+    stdout: TextIO | None = None,
+    stderr: TextIO | None = None,
     exit_on_ctrl_c: bool = True,
     interactive: bool = True,
     debug: bool = False,
-    write_to_stdout: Optional[Any] = None,
-    write_to_stderr: Optional[Any] = None,
-    on_exit: Optional[Any] = None,
-    set_cursor_position: Optional[Any] = None,
+    write_to_stdout: Any | None = None,
+    write_to_stderr: Any | None = None,
+    on_exit: Any | None = None,
+    set_cursor_position: Any | None = None,
 ) -> RenderableNode:
     stdin_handle = useStdin()
     stdout_handle = useStdout()
@@ -133,7 +138,7 @@ def App(
 
     useEffect(sync_runtime, (interactive, stdin, stdout, stderr, set_cursor_position))
 
-    def handle_exit(error_or_result: Optional[Any] = None) -> None:
+    def handle_exit(error_or_result: Any | None = None) -> None:
         stdin_handle.cleanup_runtime_modes()
         if callable(on_exit):
             on_exit(error_or_result)

@@ -1,6 +1,5 @@
 """Tests for string_width utility."""
 
-import pytest
 from pyinkcli.utils.string_width import string_width, widest_line
 
 

@@ -2,7 +2,7 @@
 
 from pyinkcli import Box, Text, render, useApp, useInput
 from pyinkcli.component import createElement
-from pyinkcli.packages.react_router import MemoryRouter, Routes, Route, useNavigate
+from pyinkcli.packages.react_router import MemoryRouter, Route, Routes, useNavigate
 
 
 def Home():

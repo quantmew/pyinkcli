@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Iterable, Optional
+from collections.abc import Callable, Iterable
+from typing import Any
 
 from pyinkcli._component_runtime import RenderableNode, createElement
 from pyinkcli.hooks._runtime import useRef
@@ -9,7 +10,7 @@ from pyinkcli.hooks._runtime import useRef
 def _StaticComponent(
     *,
     items: list[Any],
-    render_item: Optional[Callable[[Any, int], RenderableNode]],
+    render_item: Callable[[Any, int], RenderableNode] | None,
     box_style: dict[str, Any],
 ) -> RenderableNode:
     index_ref = useRef(0)
@@ -36,8 +37,8 @@ def _StaticComponent(
 
 def Static(
     *children: Any,
-    items: Optional[Iterable[Any]] = None,
-    renderItem: Optional[Callable[[Any, int], RenderableNode]] = None,
+    items: Iterable[Any] | None = None,
+    renderItem: Callable[[Any, int], RenderableNode] | None = None,
     **props: Any,
 ) -> RenderableNode:
     actual_children = list(children)

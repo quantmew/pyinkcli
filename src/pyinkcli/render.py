@@ -5,7 +5,8 @@ Public render entry split from `ink.py`.
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, Any, Callable, Optional, TextIO, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, TextIO
 
 from pyinkcli.ink import Ink
 
@@ -14,11 +15,11 @@ if TYPE_CHECKING:
 
 
 def render(
-    node: "RenderableNode | Callable",
+    node: RenderableNode | Callable,
     *,
-    stdout: Optional[TextIO] = None,
-    stdin: Optional[TextIO] = None,
-    stderr: Optional[TextIO] = None,
+    stdout: TextIO | None = None,
+    stdin: TextIO | None = None,
+    stderr: TextIO | None = None,
     **kwargs: Any,
 ) -> Any:
     return Ink.mount(

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import inspect as inspect_module
+from collections.abc import Callable, Iterable
 from copy import deepcopy
 from itertools import count
-import inspect as inspect_module
-from typing import Any, Callable, Iterable
-
+from typing import Any
 
 META_KEY = "__devtools_meta__"
 INSPECTED_KEY = "__devtools_inspected__"
@@ -117,7 +117,7 @@ class HydratedDict(_DevtoolsMetadataMixin, dict):
             return True
         return super().__contains__(key)
 
-    def __deepcopy__(self, memo: dict[int, Any]) -> "HydratedDict":
+    def __deepcopy__(self, memo: dict[int, Any]) -> HydratedDict:
         copied = HydratedDict(deepcopy(dict(self), memo))
         copied._init_devtools_metadata(
             metadata=deepcopy(self._devtools_meta, memo),
@@ -144,7 +144,7 @@ class HydratedList(_DevtoolsMetadataMixin, list):
             return True
         return super().__contains__(item)
 
-    def __deepcopy__(self, memo: dict[int, Any]) -> "HydratedList":
+    def __deepcopy__(self, memo: dict[int, Any]) -> HydratedList:
         copied = HydratedList(deepcopy(list(self), memo))
         copied._init_devtools_metadata(
             metadata=deepcopy(self._devtools_meta, memo),
@@ -339,7 +339,7 @@ def _restore_special_cleaned_value(node: Any) -> Any:
 
 
 def _is_array_like_payload(payload: dict[str, Any]) -> bool:
-    int_keys = sorted(key for key in payload.keys() if isinstance(key, int))
+    int_keys = sorted(key for key in payload if isinstance(key, int))
     if not int_keys:
         return False
     return int_keys == list(range(len(int_keys))) and len(int_keys) == len(payload)
@@ -411,9 +411,7 @@ def hydrate(
             continue
         parent = get_in_object(hydrated, path_list[:-1]) if len(path_list) > 1 else hydrated
         key = path_list[-1]
-        if isinstance(parent, dict) and key in parent:
-            parent[key] = _upgrade_cleaned_value(parent[key], inspected=False)
-        elif isinstance(parent, list) and isinstance(key, int) and 0 <= key < len(parent):
+        if isinstance(parent, dict) and key in parent or isinstance(parent, list) and isinstance(key, int) and 0 <= key < len(parent):
             parent[key] = _upgrade_cleaned_value(parent[key], inspected=False)
 
     for path in unserializable:
@@ -422,9 +420,7 @@ def hydrate(
             continue
         parent = get_in_object(hydrated, path_list[:-1]) if len(path_list) > 1 else hydrated
         key = path_list[-1]
-        if isinstance(parent, dict) and key in parent:
-            parent[key] = _upgrade_unserializable_value(parent[key], inspected=False)
-        elif isinstance(parent, list) and isinstance(key, int) and 0 <= key < len(parent):
+        if isinstance(parent, dict) and key in parent or isinstance(parent, list) and isinstance(key, int) and 0 <= key < len(parent):
             parent[key] = _upgrade_unserializable_value(parent[key], inspected=False)
 
     return hydrated

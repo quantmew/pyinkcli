@@ -7,7 +7,6 @@ import time
 from pyinkcli import Box, Text, render, useApp, useInput, useWindowSize
 from pyinkcli.hooks import useEffect, useRef, useState
 
-
 HEAD = "🦄"
 BODY = "✨"
 FOOD = "🌈"
