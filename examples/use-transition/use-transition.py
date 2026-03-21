@@ -5,8 +5,7 @@ from __future__ import annotations
 import time
 
 from pyinkcli import Box, Text, render, useInput
-from pyinkcli.components._app_context_runtime import _get_app_context
-from pyinkcli.hooks import useMemo, useState
+from pyinkcli.hooks import useMemo, useState, useTransition
 
 
 def _generate_items(filter_text: str) -> list[str]:
@@ -28,67 +27,39 @@ def _generate_items(filter_text: str) -> list[str]:
     ][:10]
 
 
-def useTransition():
-    is_pending, set_is_pending = useState(False)
-    app_context = _get_app_context()
-
-    def start_transition(callback):
-        is_concurrent = bool(
-            app_context is not None
-            and getattr(getattr(app_context, "app", None), "is_concurrent", False)
-        )
-        if not is_concurrent:
-            callback()
-            return
-
-        set_is_pending(True)
-        scheduler = getattr(app_context, "schedule_transition", None) if app_context else None
-        if callable(scheduler):
-            scheduler(
-                callback,
-                lambda is_latest: set_is_pending(False) if is_latest else None,
-                0.05,
-            )
-            return
-
-        callback()
-        set_is_pending(False)
-
-    return is_pending, start_transition
-
-
-def use_transition_example():
+def SearchApp():
     query, set_query = useState("")
-    deferred_query, set_deferred_query = useState("")
     is_pending, start_transition = useTransition()
+    deferred_query, set_deferred_query = useState("")
 
     filtered_items = useMemo(
         lambda: _generate_items(deferred_query),
         (deferred_query,),
     )
 
-    def on_input(char, key):
-        if key.ctrl and char == "c":
-            raise KeyboardInterrupt
-
+    def handle_input(input_char, key) -> None:
         if key.backspace or key.delete:
             set_query(lambda previous: previous[:-1])
-            start_transition(lambda: set_deferred_query(lambda previous: previous[:-1]))
+            start_transition(
+                lambda: set_deferred_query(lambda previous: previous[:-1])
+            )
             return
 
-        if char and not key.ctrl and not key.meta:
-            set_query(lambda previous: previous + char)
-            start_transition(lambda: set_deferred_query(lambda previous: previous + char))
+        if input_char and not key.ctrl and not key.meta:
+            set_query(lambda previous: previous + input_char)
+            start_transition(
+                lambda: set_deferred_query(lambda previous: previous + input_char)
+            )
 
-    useInput(on_input)
+    useInput(handle_input)
 
     result_children = [
         Text(
             item,
             dimColor=is_pending,
-            key=f"item-{index}",
+            key=item,
         )
-        for index, item in enumerate(filtered_items)
+        for item in filtered_items
     ]
 
     if not result_children:
@@ -103,7 +74,7 @@ def use_transition_example():
     return Box(
         Text("useTransition Demo", bold=True, underline=True),
         Text("(Type to search - input stays responsive while list updates)", dimColor=True),
-        Box(),
+        Box(marginTop=1),
         Box(
             Text("Search: "),
             Text(query or "(type something)", color="cyan"),
@@ -121,4 +92,4 @@ def use_transition_example():
 
 
 if __name__ == "__main__":
-    render(use_transition_example, concurrent=True).wait_until_exit()
+    render(SearchApp, concurrent=True).wait_until_exit()

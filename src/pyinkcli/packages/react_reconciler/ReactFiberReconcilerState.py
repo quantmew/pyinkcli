@@ -6,6 +6,8 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from pyinkcli.packages.react_reconciler.ReactFiberHostContext import getRootHostContext
+from pyinkcli.hooks._runtime import HookFiber
+from pyinkcli.packages.react_reconciler.ReactWorkTags import HostRoot
 
 if TYPE_CHECKING:
     from pyinkcli.packages.ink.dom import DOMElement
@@ -22,7 +24,15 @@ def initializeReconcilerState(
     root_node: DOMElement,
 ) -> None:
     reconciler.root_node = root_node
+    reconciler._root_fiber = HookFiber(
+        component_id="root",
+        tag=HostRoot,
+        element_type="root",
+        state_node=root_node,
+    )
+    reconciler._fiber_nodes = {"root": reconciler._root_fiber}
     reconciler._current_fiber = None
+    reconciler._current_fiber_stack = []
     reconciler._host_context_stack = [getRootHostContext()]
     reconciler._owner_component_stack = []
     reconciler._error_boundary_stack = []
@@ -74,6 +84,8 @@ def initializeReconcilerState(
     reconciler._on_commit = None
     reconciler._on_immediate_commit = None
     reconciler._attached_host_refs = {}
+    reconciler._render_suspended = False
+    reconciler._suspended_lanes_this_render = 0
 
 
 def setCommitHandlers(
@@ -84,6 +96,28 @@ def setCommitHandlers(
 ) -> None:
     reconciler._on_commit = on_commit
     reconciler._on_immediate_commit = on_immediate_commit
+
+
+def pushCurrentFiber(
+    reconciler: _Reconciler,
+    fiber: HookFiber,
+) -> None:
+    reconciler._fiber_nodes[fiber.component_id] = fiber
+    reconciler._current_fiber_stack.append(fiber)
+    reconciler._current_fiber = fiber
+
+
+def popCurrentFiber(
+    reconciler: _Reconciler,
+) -> HookFiber | None:
+    if not reconciler._current_fiber_stack:
+        reconciler._current_fiber = None
+        return None
+    popped = reconciler._current_fiber_stack.pop()
+    reconciler._current_fiber = (
+        reconciler._current_fiber_stack[-1] if reconciler._current_fiber_stack else None
+    )
+    return popped
 
 
 def configureHost(
@@ -151,5 +185,7 @@ __all__ = [
     "initializeReconcilerState",
     "isComponentTypeErrorBoundary",
     "normalizeHookEditPath",
+    "popCurrentFiber",
+    "pushCurrentFiber",
     "setCommitHandlers",
 ]

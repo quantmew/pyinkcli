@@ -93,10 +93,10 @@ def resetAfterCommit(
 
     if dom_container.isStaticDirty:
         dom_container.isStaticDirty = False
-        requestHostRender(reconciler, container.current_render_priority, immediate=True)
+        requestHostRender(reconciler, container.current_update_priority, immediate=True)
         return
 
-    requestHostRender(reconciler, container.current_render_priority, immediate=False)
+    requestHostRender(reconciler, container.current_update_priority, immediate=False)
 
 
 __all__ = ["requestHostRender", "resetAfterCommit"]

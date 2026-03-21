@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pyinkcli.component import RenderableNode
 
-UpdatePriority = Literal["default", "discrete", "render_phase"]
+UpdatePriority = int
 
 
 @dataclass

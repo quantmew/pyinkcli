@@ -1,6 +1,13 @@
 """Hooks for pyinkcli."""
 
-from pyinkcli.hooks._runtime import useCallback, useEffect, useMemo, useRef, useState
+from pyinkcli.hooks._runtime import (
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    useTransition,
+)
 from pyinkcli.hooks.use_app import useApp
 from pyinkcli.hooks.use_box_metrics import useBoxMetrics
 from pyinkcli.hooks.use_cursor import useCursor
@@ -28,6 +35,7 @@ __all__ = [
     "useRef",
     "useMemo",
     "useCallback",
+    "useTransition",
     # New hooks
     "usePaste",
     "useFocusManager",

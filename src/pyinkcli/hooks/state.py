@@ -9,6 +9,7 @@ from pyinkcli.hooks._runtime import (
     useReducer,
     useRef,
     useState,
+    useTransition,
 )
 
 _begin_component_render = _runtime._begin_component_render
@@ -18,6 +19,7 @@ _end_component_render = _runtime._end_component_render
 _finish_hook_state = _runtime._finish_hook_state
 _reset_hook_state = _runtime._reset_hook_state
 _set_rerender_callback = _runtime._set_rerender_callback
+_set_schedule_update_callback = _runtime._set_schedule_update_callback
 
 __all__ = [
     "useState",
@@ -26,5 +28,6 @@ __all__ = [
     "useMemo",
     "useCallback",
     "useReducer",
+    "useTransition",
     "Ref",
 ]

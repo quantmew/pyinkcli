@@ -8,6 +8,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from pyinkcli.hooks._runtime import _has_rerender_target, _request_rerender
+from pyinkcli.packages.react_reconciler.ReactEventPriorities import (
+    DefaultEventPriority,
+    NoEventPriority,
+    higherEventPriority,
+)
+from pyinkcli.packages.react_reconciler.ReactSharedInternals import shared_internals
 
 
 class SuspendSignal(Exception):
@@ -22,6 +28,7 @@ class _ResourceRecord:
     value: Any = None
     error: Exception | None = None
     started: bool = False
+    wake_priority: int = NoEventPriority
     lock: threading.Lock = field(default_factory=threading.Lock)
 
 
@@ -54,7 +61,8 @@ def _resolve_resource(
             record.value = value
 
     if _has_rerender_target():
-        _request_rerender()
+        wake_priority = record.wake_priority or DefaultEventPriority
+        _request_rerender(priority=wake_priority)
 
 
 def readResource(key: Hashable, loader: Callable[[], Any]) -> Any:
@@ -69,6 +77,10 @@ def readResource(key: Hashable, loader: Callable[[], Any]) -> Any:
             return record.value
         if record.status == "rejected":
             raise record.error  # type: ignore[misc]
+        render_priority = (
+            shared_internals.current_render_priority or DefaultEventPriority
+        )
+        record.wake_priority = higherEventPriority(record.wake_priority, render_priority)
         if not record.started:
             record.started = True
             threading.Thread(

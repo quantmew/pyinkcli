@@ -244,5 +244,6 @@ def test_hooks_state_module_is_now_thin_compat_surface() -> None:
         "useMemo",
         "useCallback",
         "useReducer",
+        "useTransition",
         "Ref",
     ]

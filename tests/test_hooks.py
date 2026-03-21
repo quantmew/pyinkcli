@@ -18,6 +18,7 @@ from pyinkcli.hooks._runtime import (
     useMemo,
     useRef,
     useState,
+    useTransition,
 )
 from pyinkcli.hooks.use_cursor import useCursor
 from pyinkcli.hooks.use_input import _clear_input_handlers, _dispatch_input, useInput
@@ -114,6 +115,20 @@ def test_use_callback():
 
     result = render_component("callback", lambda: useCallback(my_callback, (1,)))
     assert result() == "hello"
+
+
+def test_use_transition_runs_callback_immediately_without_concurrent_app() -> None:
+    calls: list[str] = []
+
+    def component():
+        is_pending, start_transition = useTransition()
+        start_transition(lambda: calls.append("ran"))
+        return is_pending
+
+    first = render_component("transition-sync", component)
+
+    assert first is False
+    assert calls == ["ran"]
 
 
 def test_use_effect_runs_after_render_and_cleans_up():

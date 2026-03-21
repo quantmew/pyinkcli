@@ -7,7 +7,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from pyinkcli.packages.ink.dom import DOMElement
-from pyinkcli.packages.react_reconciler.ReactEventPriorities import UpdatePriority
+from pyinkcli.packages.react_reconciler.ReactEventPriorities import (
+    NoEventPriority,
+    UpdatePriority,
+)
 
 
 @dataclass
@@ -15,14 +18,20 @@ class ReconcilerContainer:
     container: DOMElement
     tag: int = 0
     hydrate: bool = False
-    pending_element: object | None = None
-    pending_callback: Callable[[], None] | None = None
-    work_scheduled: bool = False
+    pending_updates: list[tuple[object | None, Callable[[], None] | None]] = field(
+        default_factory=list
+    )
+    update_scheduled: bool = False
     lock: threading.Lock = field(default_factory=threading.Lock)
-    rerender_requested: bool = False
-    rerender_running: bool = False
-    pending_rerender_priority: UpdatePriority = "default"
-    current_render_priority: UpdatePriority = "default"
+    pending_lanes: int = NoEventPriority
+    suspended_lanes: int = NoEventPriority
+    pinged_lanes: int = NoEventPriority
+    finished_lanes: int = NoEventPriority
+    callback_priority: UpdatePriority = NoEventPriority
+    update_requested: bool = False
+    update_running: bool = False
+    pending_update_priority: UpdatePriority = NoEventPriority
+    current_update_priority: UpdatePriority = NoEventPriority
 
 
 __all__ = ["ReconcilerContainer"]

@@ -357,11 +357,16 @@ def scheduleDevtoolsUpdate(
     reconciler: _Reconciler,
     node_id: str,
 ) -> bool:
+    from pyinkcli.packages.react_reconciler.ReactEventPriorities import DefaultEventPriority
+
     if not reconciler._has_tree_node(node_id):
         return False
     if reconciler._devtools_container is None:
         return False
-    reconciler.request_rerender(reconciler._devtools_container, priority="default")
+    reconciler.schedule_update_on_fiber(
+        reconciler._devtools_container,
+        DefaultEventPriority,
+    )
     return True
 
 
@@ -369,11 +374,16 @@ def scheduleDevtoolsRetry(
     reconciler: _Reconciler,
     node_id: str,
 ) -> bool:
+    from pyinkcli.packages.react_reconciler.ReactEventPriorities import DefaultEventPriority
+
     if not reconciler._has_tree_node(node_id):
         return False
     if reconciler._devtools_container is None:
         return False
-    reconciler.request_rerender(reconciler._devtools_container, priority="default")
+    reconciler.schedule_update_on_fiber(
+        reconciler._devtools_container,
+        DefaultEventPriority,
+    )
     return True
 
 

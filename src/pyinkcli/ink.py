@@ -25,10 +25,11 @@ from pyinkcli._component_runtime import createElement, scopeRender
 from pyinkcli.components._accessibility_runtime import _provide_accessibility
 from pyinkcli.components._app_context_runtime import Props as AppContextProps
 from pyinkcli.hooks._runtime import (
+    HookFiber,
     _clear_hook_state,
     _flush_scheduled_rerender,
     _reset_hook_state,
-    _set_rerender_callback,
+    _set_schedule_update_callback,
 )
 from pyinkcli.hooks.use_app import _set_app_ink
 from pyinkcli.hooks.use_input import _clear_input_handlers, _dispatch_input
@@ -43,6 +44,11 @@ from pyinkcli.packages.ink.host_config import ReconcilerHostConfig
 from pyinkcli.packages.ink.renderer import RenderResult
 from pyinkcli.packages.ink.renderer import render as render_dom
 from pyinkcli.packages.react_reconciler.ReactFiberReconciler import createReconciler
+from pyinkcli.packages.react_reconciler.ReactEventPriorities import (
+    DefaultEventPriority,
+    DiscreteEventPriority,
+    UpdatePriority,
+)
 from pyinkcli.patch_console import patch_console
 from pyinkcli.sanitize_ansi import sanitizeAnsi
 from pyinkcli.utils import getWindowSize
@@ -211,7 +217,7 @@ class Ink:
         self._current_component: RenderableNode | Callable | None = None
         self._full_static_output = ""
         self._has_pending_throttled_render = False
-        self._pending_commit_priority = "default"
+        self._pending_commit_priority = DefaultEventPriority
 
         # Exit handling
         self._exit_promise: threading.Event = threading.Event()
@@ -223,7 +229,7 @@ class Ink:
         self._exit_error: Exception | None = None
         self._before_exit_handler: Callable[[], None] | None = None
         self._on_unmount_callbacks: list[Callable[[], None]] = []
-        self._transition_generation = 0
+        self._pending_transition_count = 0
         self._transition_lock = threading.Lock()
         self._restore_console: Callable[[], None] | None = None
         self._stdin_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
@@ -254,7 +260,7 @@ class Ink:
                 get_current_component=lambda: (
                     None if self._is_unmounted else self._current_component
                 ),
-                perform_render=self.render,
+                perform_render=self._perform_scheduled_render,
                 wait_for_render_flush=self._wait_for_render_flush,
                 request_render=self._request_commit_render,
             )
@@ -285,7 +291,7 @@ class Ink:
         _set_stdin(self._stdin, self._stdout)
         _set_stdout(self._stdout)
         _set_stderr(self._stderr)
-        _set_rerender_callback(self._rerender)
+        _set_schedule_update_callback(self._schedule_hook_update)
 
         # Set up exit signal handler
         self._setup_exit_handler()
@@ -318,6 +324,17 @@ class Ink:
         Args:
             node: The root component or virtual node to render.
         """
+        self._render_component(node, sync=False)
+
+    def _perform_scheduled_render(self, node: RenderableNode | Callable) -> None:
+        self._render_component(node, sync=True)
+
+    def _render_component(
+        self,
+        node: RenderableNode | Callable,
+        *,
+        sync: bool,
+    ) -> None:
         if self._is_unmounted:
             return
 
@@ -329,12 +346,18 @@ class Ink:
 
         # Set context
         _reset_hook_state()
-        self._reconciler.submit_container(
-            wrapped,
-            self._container,
-        )
+        if sync:
+            self._reconciler.update_container_sync(
+                wrapped,
+                self._container,
+            )
+        else:
+            self._reconciler.submit_container(
+                wrapped,
+                self._container,
+            )
 
-        if not self._container.rerender_running:
+        if not self._container.update_running:
             self._drain_pending_hook_rerenders()
 
     def _normalize_render_node(
@@ -714,11 +737,19 @@ class Ink:
         self._drain_pending_hook_rerenders()
 
     def _drain_pending_hook_rerenders(self) -> None:
-        self._reconciler.drain_pending_rerenders(self._container)
+        self._reconciler.flush_scheduled_updates()
+
+    def _schedule_hook_update(
+        self,
+        fiber: HookFiber | None,
+        priority: UpdatePriority,
+    ) -> None:
+        self._reconciler._current_fiber = fiber
+        self._reconciler.schedule_update_on_fiber(self._container, priority)
 
     def _request_commit_render(
         self,
-        priority: str,
+        priority: UpdatePriority,
         immediate: bool,
     ) -> None:
         self._pending_commit_priority = priority
@@ -753,7 +784,7 @@ class Ink:
             self._on_render_callback()
             return
 
-        if priority == "discrete":
+        if priority <= DiscreteEventPriority:
             self._on_render_callback()
             return
 
@@ -775,40 +806,33 @@ class Ink:
                 on_complete(False)
             return
 
-        current_generation = self._begin_transition()
+        self._begin_transition()
 
         def run() -> None:
-            is_latest = False
+            did_run = False
             try:
-                time.sleep(delay)
-                is_latest = self._is_active_transition(current_generation)
-
-                if is_latest:
+                if delay > 0:
+                    time.sleep(delay)
+                if not self._is_unmounted and not self._is_unmounting:
                     callback()
+                    did_run = True
             finally:
                 if on_complete is not None:
-                    on_complete(is_latest)
-                self._finish_transition(is_latest)
+                    on_complete(did_run)
+                self._finish_transition()
 
         self._start_background_thread(run)
 
-    def _begin_transition(self) -> int:
+    def _begin_transition(self) -> None:
         with self._transition_lock:
-            self._transition_generation += 1
+            self._pending_transition_count += 1
             self._transition_idle_event.clear()
-            return self._transition_generation
 
-    def _is_active_transition(self, generation: int) -> bool:
+    def _finish_transition(self) -> None:
         with self._transition_lock:
-            return (
-                not self._is_unmounted
-                and not self._is_unmounting
-                and generation == self._transition_generation
-            )
-
-    def _finish_transition(self, is_latest: bool) -> None:
-        if is_latest:
-            self._transition_idle_event.set()
+            self._pending_transition_count = max(0, self._pending_transition_count - 1)
+            if self._pending_transition_count == 0:
+                self._transition_idle_event.set()
 
     def _start_background_thread(self, target: Callable[[], None]) -> None:
         thread = threading.Thread(target=target, daemon=True)
@@ -1066,7 +1090,7 @@ class Ink:
         """Clean up resources."""
         self._run_unmount_callbacks()
 
-        _set_rerender_callback(None)
+        _set_schedule_update_callback(None)
         self._reconciler.cleanup_class_component_instances()
         _clear_hook_state()
         _clear_input_handlers()

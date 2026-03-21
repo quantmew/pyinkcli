@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from pyinkcli.hooks._runtime import _finish_hook_state
 from pyinkcli.packages.ink.dom import DOMElement
+from pyinkcli.packages.react_reconciler.ReactEventPriorities import DefaultEventPriority
 from pyinkcli.packages.react_reconciler.ReactFiberReconciler import packageInfo
 from pyinkcli.packages.react_reconciler.ReactFiberRoot import ReconcilerContainer
 
@@ -46,20 +47,20 @@ def updateContainer(
         return
 
     with container.lock:
-        container.pending_element = element
-        container.pending_callback = callback
-        if container.work_scheduled:
+        container.pending_updates.append((element, callback))
+        if container.update_scheduled:
             return
-        container.work_scheduled = True
+        container.update_scheduled = True
 
     def run() -> None:
         while True:
-            with container.lock:
-                next_element = container.pending_element
-                next_callback = container.pending_callback
-                container.pending_element = None
-                container.pending_callback = None
+            next_update = _dequeue_pending_update(container)
+            if next_update is None:
+                with container.lock:
+                    container.update_scheduled = False
+                return
 
+            next_element, next_callback = next_update
             commitContainerUpdate(
                 reconciler,
                 next_element,
@@ -67,11 +68,6 @@ def updateContainer(
                 parent_component=parent_component,
                 callback=next_callback,
             )
-
-            with container.lock:
-                if container.pending_element is None:
-                    container.work_scheduled = False
-                    return
 
     threading.Thread(target=run, daemon=True).start()
 
@@ -86,6 +82,16 @@ def updateContainerSync(
     commitContainerUpdate(reconciler, element, container, parent_component, callback)
 
 
+def _dequeue_pending_update(
+    container: ReconcilerContainer,
+) -> tuple[RenderableNode | None, Callable[[], None] | None] | None:
+    with container.lock:
+        if not container.pending_updates:
+            return None
+        element, callback = container.pending_updates.pop(0)
+    return element, callback
+
+
 def flushSyncWork(
     reconciler: _Reconciler,
     container: ReconcilerContainer | None = None,
@@ -94,16 +100,13 @@ def flushSyncWork(
         return
 
     while True:
-        with container.lock:
-            element = container.pending_element
-            callback = container.pending_callback
-            container.pending_element = None
-            container.pending_callback = None
-            container.work_scheduled = False
-
-        if element is None:
+        next_update = _dequeue_pending_update(container)
+        if next_update is None:
+            with container.lock:
+                container.update_scheduled = False
             return
 
+        element, callback = next_update
         commitContainerUpdate(reconciler, element, container, callback=callback)
 
 
@@ -191,6 +194,8 @@ def _prepareNextCommitState(reconciler: _Reconciler) -> None:
     }
     reconciler._next_devtools_effective_props = {}
     reconciler._next_devtools_host_instance_ids = {id(reconciler.root_node): "root"}
+    reconciler._render_suspended = False
+    reconciler._suspended_lanes_this_render = 0
     root_inspected_element = _buildRootInspectedElement()
     reconciler._next_devtools_inspected_elements = {"root": root_inspected_element}
     reconciler._next_devtools_inspected_element_fingerprints = {
@@ -209,8 +214,12 @@ def commitContainerUpdate(
     dom_container = container.container
     _prepareNextCommitState(reconciler)
     commit_phase_recovery_needed = False
+    root_fiber = reconciler._root_fiber
+    root_fiber.child = None
+    root_fiber.sibling = None
 
     try:
+        reconciler.push_current_fiber(root_fiber)
         next_index = 0
         if element is not None:
             next_index = reconciler._reconcile_children(
@@ -223,6 +232,7 @@ def commitContainerUpdate(
 
         reconciler._remove_extra_children(dom_container, next_index)
     finally:
+        reconciler.pop_current_fiber()
         _finish_hook_state()
     reconciler._finalize_tree_snapshot()
     reconciler._dispose_stale_class_component_instances()
@@ -233,7 +243,7 @@ def commitContainerUpdate(
     )
 
     if commit_phase_recovery_needed:
-        reconciler.request_rerender(container, priority="default")
+        reconciler.schedule_update_on_fiber(container, DefaultEventPriority)
 
     if callback:
         callback()

@@ -10,10 +10,22 @@ from pyinkcli import Box, Text, measureElement, render
 from pyinkcli.component import createElement
 from pyinkcli.components._accessibility_runtime import _provide_accessibility
 from pyinkcli.dom import addLayoutListener
-from pyinkcli.hooks import useState
+from pyinkcli.hooks import useState, useTransition
+from pyinkcli.hooks.use_input import _dispatch_input, useInput
 from pyinkcli.hooks.use_cursor import useCursor
 from pyinkcli.ink import Ink, Options
 from pyinkcli.packages.ink.dom import createNode
+from pyinkcli.packages.react_reconciler.ReactEventPriorities import (
+    DefaultEventPriority,
+    DiscreteEventPriority,
+    TransitionEventPriority,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberWorkLoop import (
+    getHighestPriorityLane,
+    laneToMask,
+    mergeLanes,
+    removeLanes,
+)
 from pyinkcli.reconciler import createReconciler
 from pyinkcli.render_node_to_output import render_node_to_screen_reader_output
 from pyinkcli.render_to_string import create_root_node
@@ -40,6 +52,16 @@ class FakeStdin(StringIO):
 
 def Suspense(*children, fallback=None):
     return createElement("__ink-suspense__", *children, fallback=fallback)
+
+
+def _wait_for_output(app: Ink, stdout: StringIO, expected: str, timeout: float = 0.5) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        app.wait_until_render_flush(timeout=0.05)
+        if expected in stdout.getvalue():
+            return
+        time.sleep(0.01)
+    raise AssertionError(f"Expected {expected!r} in output {stdout.getvalue()!r}")
 
 
 def test_screen_reader_checkbox_output_mentions_role_and_state() -> None:
@@ -218,6 +240,122 @@ def test_suspense_runtime_supports_preload_peek_and_invalidate() -> None:
 
     resetAllResources()
 
+
+def test_use_transition_marks_pending_then_applies_latest_transition() -> None:
+    stdout = FakeStdout()
+    stdin = FakeStdin()
+
+    def Example():
+        query, set_query = useState("")
+        is_pending, start_transition = useTransition()
+        deferred_query, set_deferred_query = useState("")
+
+        if deferred_query:
+            time.sleep(0.05)
+
+        def on_input(input_char: str, key) -> None:
+            if not input_char or key.ctrl or key.meta:
+                return
+
+            set_query(lambda previous: previous + input_char)
+            start_transition(
+                lambda: set_deferred_query(lambda previous: previous + input_char)
+            )
+
+        useInput(on_input)
+
+        return Text(f"{query}|{deferred_query}|{is_pending}")
+
+    app = render(createElement(Example), stdout=stdout, stdin=stdin, concurrent=True, debug=True)
+    try:
+        app.wait_until_render_flush(timeout=0.2)
+        _dispatch_input("a")
+        time.sleep(0.05)
+        _wait_for_output(app, stdout, "a||True")
+        _wait_for_output(app, stdout, "a|a|False")
+    finally:
+        app.unmount()
+
+
+def test_use_transition_requests_transition_priority_lane() -> None:
+    from pyinkcli.packages.react_reconciler.ReactSharedInternals import shared_internals
+    from pyinkcli.packages.react_reconciler.ReactFiberWorkLoop import requestUpdateLane
+
+    previous_priority = shared_internals.current_update_priority
+    previous_transition = shared_internals.current_transition
+    try:
+        shared_internals.current_update_priority = DiscreteEventPriority
+        shared_internals.current_transition = object()
+        assert requestUpdateLane() == TransitionEventPriority
+
+        shared_internals.current_transition = None
+        assert requestUpdateLane() == DiscreteEventPriority
+
+        shared_internals.current_update_priority = 0
+        assert requestUpdateLane() == DefaultEventPriority
+    finally:
+        shared_internals.current_update_priority = previous_priority
+        shared_internals.current_transition = previous_transition
+
+
+def test_lane_helpers_merge_and_consume_highest_priority_first() -> None:
+    lanes = mergeLanes(
+        laneToMask(TransitionEventPriority),
+        laneToMask(DiscreteEventPriority),
+    )
+    lanes = mergeLanes(lanes, laneToMask(DefaultEventPriority))
+
+    assert getHighestPriorityLane(lanes) == DiscreteEventPriority
+    lanes = removeLanes(lanes, DiscreteEventPriority)
+    assert getHighestPriorityLane(lanes) == DefaultEventPriority
+    lanes = removeLanes(lanes, DefaultEventPriority)
+    assert getHighestPriorityLane(lanes) == TransitionEventPriority
+
+
+def test_transition_update_rebases_on_same_state_queue() -> None:
+    stdout = FakeStdout()
+    stdin = FakeStdin()
+
+    def Example():
+        count, set_count = useState(0)
+        is_pending, start_transition = useTransition()
+
+        def on_input(input_char: str, key) -> None:
+            if not input_char or key.ctrl or key.meta:
+                return
+            start_transition(lambda: set_count(lambda previous: previous + 1))
+            set_count(lambda previous: previous + 1)
+
+        useInput(on_input)
+        return Text(f"{count}|{is_pending}")
+
+    app = render(createElement(Example), stdout=stdout, stdin=stdin, concurrent=True, debug=True)
+    try:
+        app.wait_until_render_flush(timeout=0.2)
+        _dispatch_input("a")
+        time.sleep(0.05)
+        _wait_for_output(app, stdout, "1|True")
+        _wait_for_output(app, stdout, "2|False")
+    finally:
+        app.unmount()
+
+
+def test_suspense_resource_resolution_pings_original_lane() -> None:
+    key = "tests:suspense:lane-ping"
+    resetResource(key)
+
+    try:
+        readResource(key, lambda: (time.sleep(0.02), "ready")[1])
+    except Exception:
+        pass
+
+    time.sleep(0.05)
+
+    from pyinkcli._suspense_runtime import _records
+
+    assert _records[key].wake_priority == DefaultEventPriority
+    resetResource(key)
+
 def test_use_cursor_normalizes_negative_positions() -> None:
     def Example():
         cursor = useCursor()
@@ -254,7 +392,7 @@ def test_cursor_ime_style_position_uses_string_width_for_cjk_input() -> None:
         app.unmount()
 
 
-def test_app_transition_scheduler_commits_only_latest_callback() -> None:
+def test_app_transition_scheduler_runs_all_callbacks() -> None:
     stdout = FakeStdout()
     stdin = FakeStdin()
     ink = Ink(Options(stdout=stdout, stdin=stdin, stderr=stdout, concurrent=True))
@@ -265,6 +403,6 @@ def test_app_transition_scheduler_commits_only_latest_callback() -> None:
         ink._schedule_transition(lambda: values.append("fresh"), delay=0.01)
         ink.wait_until_render_flush(timeout=0.2)
 
-        assert values == ["fresh"]
+        assert values == ["stale", "fresh"]
     finally:
         ink.unmount()

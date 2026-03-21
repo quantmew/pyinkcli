@@ -7,13 +7,16 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pyinkcli.hooks._runtime import (
-    _batched_updates_runtime,
-    _consume_pending_rerender_priority,
-    _discrete_updates_runtime,
-)
 from pyinkcli.packages.ink.dom import DOMElement
-from pyinkcli.packages.react_reconciler.ReactEventPriorities import UpdatePriority
+from pyinkcli.packages.react_reconciler.ReactFiberWorkLoop import (
+    batchedUpdates as _batched_updates_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberWorkLoop import (
+    discreteUpdates as _discrete_updates_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberWorkLoop import (
+    flushSyncFromReconciler as _flush_sync_from_reconciler_impl,
+)
 
 if TYPE_CHECKING:
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
@@ -85,24 +88,31 @@ def createReconciler(root_node: DOMElement) -> _Reconciler:
 
 
 def batchedUpdates(callback: Callable[[], Any]) -> Any:
-    return _batched_updates_runtime(callback)
+    return _batched_updates_impl(callback)
 
 
 def discreteUpdates(callback: Callable[[], Any]) -> Any:
-    return _discrete_updates_runtime(callback)
+    return _discrete_updates_impl(callback)
 
 
-def consumePendingRerenderPriority() -> UpdatePriority | None:
-    return _consume_pending_rerender_priority()
+def flushSyncFromReconciler(callback: Callable[[], Any] | None = None) -> Any:
+    return _flush_sync_from_reconciler_impl(callback)
+
+
+def flushScheduledUpdates() -> bool:
+    from pyinkcli.hooks._runtime import _flush_scheduled_rerender
+
+    return _flush_scheduled_rerender()
 
 
 __all__ = [
     "batchedUpdates",
     "cleanupYogaNode",
-    "consumePendingRerenderPriority",
     "createReconciler",
     "diff",
     "discreteUpdates",
+    "flushSyncFromReconciler",
+    "flushScheduledUpdates",
     "getReconciler",
     "loadPackageJson",
     "packageInfo",

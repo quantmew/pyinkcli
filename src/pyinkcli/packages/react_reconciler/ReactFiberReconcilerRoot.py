@@ -29,12 +29,19 @@ from pyinkcli.packages.react_reconciler.ReactFiberReconcilerState import (
     configureHost as _configure_host_impl,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberReconcilerState import (
+    popCurrentFiber as _pop_current_fiber_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberReconcilerState import (
+    pushCurrentFiber as _push_current_fiber_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberReconcilerState import (
     setCommitHandlers as _set_commit_handlers_impl,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberRoot import ReconcilerContainer
 
 if TYPE_CHECKING:
     from pyinkcli.component import RenderableNode
+    from pyinkcli.hooks._runtime import HookFiber
 
 
 class ReactFiberReconcilerRoot:
@@ -63,6 +70,12 @@ class ReactFiberReconcilerRoot:
         host_config: ReconcilerHostConfig | None,
     ) -> None:
         _configure_host_impl(self, host_config)
+
+    def push_current_fiber(self, fiber: HookFiber) -> None:
+        _push_current_fiber_impl(self, fiber)
+
+    def pop_current_fiber(self) -> HookFiber | None:
+        return _pop_current_fiber_impl(self)
 
     def update_container(
         self,

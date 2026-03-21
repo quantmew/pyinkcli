@@ -7,6 +7,32 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
+    from pyinkcli.hooks._runtime import HookFiber
+
+
+def getFiberNode(
+    reconciler: _Reconciler,
+    node_id: str,
+) -> HookFiber | None:
+    fiber_nodes = getattr(reconciler, "_fiber_nodes", None)
+    if not isinstance(fiber_nodes, dict):
+        return None
+    return fiber_nodes.get(node_id)
+
+
+def _get_fiber_display_name(fiber: HookFiber) -> str:
+    element_type = getattr(fiber, "element_type", None)
+    if element_type == "root":
+        return "Root"
+    if element_type == "host":
+        pending_props = getattr(fiber, "pending_props", None) or {}
+        node_name = pending_props.get("nodeName")
+        if isinstance(node_name, str) and node_name:
+            return node_name
+    component_id = getattr(fiber, "component_id", "")
+    if isinstance(component_id, str) and ":" in component_id:
+        return component_id.split(":", 1)[0]
+    return str(element_type or component_id or "Unknown")
 
 
 def getDevtoolsTreeSnapshot(reconciler: _Reconciler) -> dict[str, Any]:
@@ -24,6 +50,9 @@ def getDevtoolsDisplayName(
     reconciler: _Reconciler,
     node_id: str,
 ) -> str | None:
+    fiber = getFiberNode(reconciler, node_id)
+    if fiber is not None:
+        return _get_fiber_display_name(fiber)
     for node in reconciler._devtools_tree_snapshot.get("nodes", []):
         if node.get("id") == node_id:
             return node.get("displayName")
@@ -49,6 +78,29 @@ def getDevtoolsPathForElement(
     reconciler: _Reconciler,
     node_id: str,
 ) -> list[dict[str, Any]] | None:
+    fiber = getFiberNode(reconciler, node_id)
+    if fiber is not None:
+        path: list[dict[str, Any]] = []
+        current = fiber
+        while current is not None and getattr(current, "component_id", None) != "root":
+            parent = getattr(current, "return_fiber", None)
+            index = 0
+            if parent is not None:
+                sibling = parent.child
+                while sibling is not None and sibling is not current:
+                    index += 1
+                    sibling = sibling.sibling
+            path.append(
+                {
+                    "displayName": _get_fiber_display_name(current),
+                    "key": getattr(current, "key", None),
+                    "index": index,
+                }
+            )
+            current = parent
+        path.reverse()
+        return path
+
     nodes = reconciler._devtools_tree_snapshot.get("nodes", [])
     nodes_by_id = {node.get("id"): node for node in nodes}
     current = nodes_by_id.get(node_id)
@@ -115,6 +167,8 @@ def hasDevtoolsNode(
     reconciler: _Reconciler,
     node_id: str,
 ) -> bool:
+    if getFiberNode(reconciler, node_id) is not None:
+        return True
     return any(
         node.get("id") == node_id
         for node in reconciler._devtools_tree_snapshot.get("nodes", [])
@@ -141,6 +195,17 @@ def getDevtoolsNode(
     reconciler: _Reconciler,
     node_id: str,
 ) -> dict[str, Any] | None:
+    fiber = getFiberNode(reconciler, node_id)
+    if fiber is not None:
+        parent = getattr(fiber, "return_fiber", None)
+        return {
+            "id": getattr(fiber, "component_id", node_id),
+            "parentID": getattr(parent, "component_id", None),
+            "displayName": _get_fiber_display_name(fiber),
+            "elementType": getattr(fiber, "element_type", None),
+            "key": getattr(fiber, "key", None),
+            "isErrorBoundary": False,
+        }
     for node in reconciler._devtools_tree_snapshot.get("nodes", []):
         if node.get("id") == node_id:
             return node
@@ -166,6 +231,7 @@ def findNearestDevtoolsAncestor(
 
 __all__ = [
     "findNearestDevtoolsAncestor",
+    "getFiberNode",
     "getDevtoolsDisplayName",
     "getDevtoolsElementIDForHostInstance",
     "getDevtoolsNode",

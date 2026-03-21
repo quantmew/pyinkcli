@@ -8,32 +8,80 @@ from __future__ import annotations
 
 import math
 import threading
-import time
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Generic, TypeVar
+
+from pyinkcli.components._app_context_runtime import _get_app_context
+from pyinkcli.packages.react_reconciler.ReactEventPriorities import (
+    DefaultEventPriority,
+    DiscreteEventPriority,
+    EventPriority,
+    NoEventPriority,
+    RenderPhaseUpdatePriority,
+    TransitionEventPriority,
+    higherEventPriority,
+)
+from pyinkcli.packages.react_reconciler.ReactSharedInternals import shared_internals
 
 T = TypeVar("T")
 Deps = tuple[Any, ...]
-UpdatePriority = Literal["default", "discrete", "render_phase"]
+UpdatePriority = EventPriority
+BasicStateAction = Any
+_UNSET = object()
+
+@dataclass
+class Update(Generic[T]):
+    action: Any
+    priority: UpdatePriority = NoEventPriority
+    has_eager_state: bool = False
+    eager_state: T | None = None
 
 
 @dataclass
-class EffectRecord:
+class UpdateQueue(Generic[T]):
+    pending: list[Update[T]] = field(default_factory=list)
+    dispatch: Callable[[Any], None] | None = None
+    last_rendered_reducer: Callable[[T, Any], T] | None = None
+    last_rendered_state: T | None = None
+
+
+@dataclass
+class HookNode:
+    index: int
+    kind: str = "Unknown"
+    memoized_state: Any = _UNSET
+    base_state: Any = _UNSET
+    base_queue: list[Update[Any]] = field(default_factory=list)
+    queue: UpdateQueue[Any] | None = None
     deps: Deps | None = None
     cleanup: Callable[[], None] | None = None
+    ref: Any = None
+    memoized_value: Any = _UNSET
+    memoized_deps: Deps | None = None
+    next: HookNode | None = None
 
 
 @dataclass
-class HookState:
+class HookFiber:
+    component_id: str
+    element_type: str
+    tag: int = 0
+    key: str | None = None
+    path: tuple[Any, ...] = ()
+    pending_props: dict[str, Any] | None = None
+    memoized_props: dict[str, Any] | None = None
+    return_fiber: HookFiber | None = None
+    child: HookFiber | None = None
+    sibling: HookFiber | None = None
+    state_node: Any = None
     index: int = 0
-    states: list[Any] = field(default_factory=list)
-    state_setters: dict[int, Callable[[Any], None]] = field(default_factory=dict)
-    effects: dict[int, EffectRecord] = field(default_factory=dict)
-    refs: dict[int, Any] = field(default_factory=dict)
-    memos: dict[int, tuple[Any, Deps]] = field(default_factory=dict)
-    kinds: dict[int, str] = field(default_factory=dict)
+    hook_head: HookNode | None = None
+    hook_tail: HookNode | None = None
+    current_hook: HookNode | None = None
+    alternate: HookFiber | None = None
+    is_work_in_progress: bool = False
 
 
 @dataclass
@@ -46,17 +94,18 @@ class PendingEffect:
 
 @dataclass
 class RuntimeState:
-    instances: dict[str, HookState] = field(default_factory=dict)
-    instance_stack: list[str] = field(default_factory=list)
+    fibers: dict[str, HookFiber] = field(default_factory=dict)
+    fiber_stack: list[HookFiber] = field(default_factory=list)
     visited_instances: set[str] = field(default_factory=set)
     pending_effects: list[PendingEffect] = field(default_factory=list)
     render_cycle_active: bool = False
     batch_depth: int = 0
     rerender_pending: bool = False
-    current_update_priority: UpdatePriority = "default"
-    pending_update_priority: UpdatePriority | None = None
+    pending_update_lanes: int = NoEventPriority
+    pending_update_priority: UpdatePriority = NoEventPriority
+    pending_update_source: str | None = None
+    pending_fiber: HookFiber | None = None
     after_batch_callbacks: list[Callable[[], None]] = field(default_factory=list)
-    scheduled_rerender: bool = False
 
 
 @dataclass
@@ -65,68 +114,36 @@ class Ref(Generic[T]):
 
 
 _runtime = RuntimeState()
-_rerender_callback: Callable[[], None] | None = None
-_UNSET = object()
-_scheduler_lock = threading.Lock()
-_scheduler_event = threading.Event()
-_scheduler_thread: threading.Thread | None = None
-
-
-def _ensure_scheduler_thread() -> None:
-    global _scheduler_thread
-
-    with _scheduler_lock:
-        if _scheduler_thread is not None and _scheduler_thread.is_alive():
-            return
-
-        thread = threading.Thread(
-            target=_scheduled_rerender_loop,
-            name="pyinkcli-hooks-rerender",
-            daemon=True,
-        )
-        thread.start()
-        _scheduler_thread = thread
-
-
-def _scheduled_rerender_loop() -> None:
-    while True:
-        _scheduler_event.wait()
-        _scheduler_event.clear()
-        # Match JS-style end-of-tick batching: defer dispatch until the current
-        # Python thread yields so adjacent setter calls collapse into one render.
-        time.sleep(0)
-        _flush_scheduled_rerender()
-
-
-def _schedule_scheduled_rerender() -> None:
-    _ensure_scheduler_thread()
-    with _scheduler_lock:
-        if _runtime.scheduled_rerender:
-            return
-        _runtime.scheduled_rerender = True
-        _scheduler_event.set()
+_schedule_update_callback: Callable[[HookFiber | None, UpdatePriority], None] | None = None
+_compat_rerender_callback: Callable[[], None] | None = None
+_compat_rerender_scheduled = False
 
 
 def _flush_scheduled_rerender() -> bool:
-    callback: Callable[[], None] | None
-    with _scheduler_lock:
-        if not _runtime.scheduled_rerender:
-            return False
-        _runtime.scheduled_rerender = False
-        callback = _rerender_callback
-
+    callback = _schedule_update_callback
     if callback is None:
         return False
-
-    callback()
+    priority = _consume_pending_rerender_priority_numeric()
+    fiber = _runtime.pending_fiber
+    _runtime.pending_fiber = None
+    if priority is None:
+        return False
+    callback(fiber, priority)
     return True
 
 
-def _has_initialized_state_slot(state: HookState, hook_index: int) -> bool:
-    return (
-        0 <= hook_index < len(state.states)
-        and state.states[hook_index] is not _UNSET
-    )
+def _get_hook_node_by_index(fiber: HookFiber, hook_index: int) -> HookNode | None:
+    current = fiber.hook_head
+    while current is not None:
+        if current.index == hook_index:
+            return current
+        current = current.next
+    return None
+
+
+def _has_initialized_state_slot(fiber: HookFiber, hook_index: int) -> bool:
+    node = _get_hook_node_by_index(fiber, hook_index)
+    return node is not None and node.memoized_state is not _UNSET
 
 
 def _clone_hook_value(value: Any) -> Any:
@@ -255,18 +272,304 @@ def _deps_changed(old_deps: Deps | None, new_deps: Deps | None) -> bool:
 
 
 def _get_current_instance_id() -> str:
-    if _runtime.instance_stack:
-        return _runtime.instance_stack[-1]
+    if _runtime.fiber_stack:
+        return _runtime.fiber_stack[-1].component_id
     return "__global__"
 
 
-def _get_current_state() -> HookState:
-    instance_id = _get_current_instance_id()
-    state = _runtime.instances.get(instance_id)
-    if state is None:
-        state = HookState()
-        _runtime.instances[instance_id] = state
-    return state
+def _get_or_create_fiber(
+    component_id: str,
+    *,
+    tag: int = 0,
+    element_type: str = "function",
+    key: str | None = None,
+    path: tuple[Any, ...] = (),
+    pending_props: dict[str, Any] | None = None,
+    memoized_props: dict[str, Any] | None = None,
+    return_fiber: HookFiber | None = None,
+) -> HookFiber:
+    fiber = _runtime.fibers.get(component_id)
+    if fiber is None:
+        fiber = HookFiber(
+            component_id=component_id,
+            tag=tag,
+            element_type=element_type,
+            key=key,
+            path=path,
+            pending_props=pending_props,
+            memoized_props=memoized_props,
+            return_fiber=return_fiber,
+        )
+        _runtime.fibers[component_id] = fiber
+    else:
+        fiber.tag = tag
+        fiber.element_type = element_type
+        fiber.key = key
+        fiber.path = path
+        fiber.pending_props = pending_props
+        fiber.memoized_props = memoized_props if memoized_props is not None else fiber.memoized_props
+        fiber.return_fiber = return_fiber
+    return fiber
+
+
+def _get_current_fiber() -> HookFiber:
+    if _runtime.fiber_stack:
+        return _runtime.fiber_stack[-1]
+    component_id = _get_current_instance_id()
+    return _get_or_create_fiber(component_id)
+
+
+def _clone_hook_chain(head: HookNode | None) -> tuple[HookNode | None, HookNode | None]:
+    if head is None:
+        return (None, None)
+
+    cloned_head: HookNode | None = None
+    cloned_tail: HookNode | None = None
+    current = head
+    while current is not None:
+        cloned = HookNode(
+            index=current.index,
+            kind=current.kind,
+            memoized_state=current.memoized_state,
+            base_state=current.base_state,
+            base_queue=list(current.base_queue),
+            queue=current.queue,
+            deps=current.deps,
+            cleanup=current.cleanup,
+            ref=current.ref,
+            memoized_value=current.memoized_value,
+            memoized_deps=current.memoized_deps,
+        )
+        if cloned_head is None:
+            cloned_head = cloned
+            cloned_tail = cloned
+        else:
+            assert cloned_tail is not None
+            cloned_tail.next = cloned
+            cloned_tail = cloned
+        current = current.next
+    return (cloned_head, cloned_tail)
+
+
+def _create_work_in_progress_fiber(current: HookFiber) -> HookFiber:
+    work_in_progress = current.alternate
+    if work_in_progress is None:
+        work_in_progress = HookFiber(
+            component_id=current.component_id,
+            tag=current.tag,
+            element_type=current.element_type,
+            key=current.key,
+            path=current.path,
+            pending_props=current.pending_props,
+            memoized_props=current.memoized_props,
+            return_fiber=current.return_fiber,
+            child=None,
+            sibling=None,
+            state_node=current.state_node,
+            is_work_in_progress=True,
+        )
+        work_in_progress.alternate = current
+        current.alternate = work_in_progress
+    work_in_progress.tag = current.tag
+    work_in_progress.element_type = current.element_type
+    work_in_progress.key = current.key
+    work_in_progress.path = current.path
+    work_in_progress.pending_props = current.pending_props
+    work_in_progress.memoized_props = current.memoized_props
+    work_in_progress.return_fiber = current.return_fiber
+    work_in_progress.child = None
+    work_in_progress.sibling = None
+    work_in_progress.state_node = current.state_node
+    work_in_progress.index = 0
+    work_in_progress.is_work_in_progress = True
+    (
+        work_in_progress.hook_head,
+        work_in_progress.hook_tail,
+    ) = _clone_hook_chain(current.hook_head)
+    work_in_progress.current_hook = work_in_progress.hook_head
+    return work_in_progress
+
+
+def _commit_completed_fiber(
+    work_in_progress: HookFiber,
+    registry: dict[str, HookFiber] | None = None,
+) -> HookFiber:
+    current = work_in_progress.alternate
+    if current is not None:
+        current.alternate = work_in_progress
+    work_in_progress.memoized_props = work_in_progress.pending_props
+    work_in_progress.current_hook = None
+    work_in_progress.is_work_in_progress = False
+    if registry is not None:
+        registry[work_in_progress.component_id] = work_in_progress
+    return work_in_progress
+
+
+def _append_hook_node(fiber: HookFiber, node: HookNode) -> HookNode:
+    if fiber.hook_head is None:
+        fiber.hook_head = node
+        fiber.hook_tail = node
+    else:
+        assert fiber.hook_tail is not None
+        fiber.hook_tail.next = node
+        fiber.hook_tail = node
+    return node
+
+
+def _advance_current_hook(fiber: HookFiber) -> HookNode | None:
+    current = fiber.current_hook
+    if current is not None:
+        fiber.current_hook = current.next
+    return current
+
+
+def _get_or_create_hook(fiber: HookFiber, kind: str) -> HookNode:
+    index = fiber.index
+    fiber.index += 1
+    existing = _advance_current_hook(fiber)
+    if existing is not None:
+        existing.kind = kind
+        return existing
+    return _append_hook_node(fiber, HookNode(index=index, kind=kind))
+
+
+def _basic_state_reducer(state: T, action: BasicStateAction) -> T:
+    return action(state) if callable(action) else action
+
+
+def _enqueue_hook_update(queue: UpdateQueue[T], update: Update[T]) -> None:
+    queue.pending.append(update)
+
+
+def _get_current_update_priority() -> UpdatePriority:
+    if _runtime.render_cycle_active:
+        return RenderPhaseUpdatePriority
+    if shared_internals.current_transition is not None:
+        return TransitionEventPriority
+    if shared_internals.current_update_priority != NoEventPriority:
+        return shared_internals.current_update_priority
+    return DefaultEventPriority
+
+
+def _get_current_update_source() -> str:
+    if _runtime.render_cycle_active:
+        return "render_phase"
+    if shared_internals.current_transition is not None:
+        return "transition"
+    if shared_internals.current_update_priority == DiscreteEventPriority:
+        return "discrete"
+    return "default"
+
+
+def _should_process_update(
+    update_priority: UpdatePriority,
+    render_priority: UpdatePriority,
+) -> bool:
+    if render_priority == NoEventPriority:
+        return True
+    return update_priority <= render_priority
+
+
+def _process_hook_queue(
+    hook: HookNode,
+    reducer: Callable[[T, Any], T],
+    initial_value: T,
+    fiber: HookFiber | None = None,
+) -> tuple[T, UpdateQueue[T]]:
+    queue = hook.queue
+    if queue is None:
+        queue = UpdateQueue[T]()
+        hook.queue = queue
+
+    current_value: T
+    if hook.memoized_state is _UNSET:
+        hook.memoized_state = initial_value
+        hook.base_state = initial_value
+        current_value = initial_value
+    else:
+        current_value = hook.memoized_state
+
+    if queue.pending:
+        hook.base_queue.extend(queue.pending)
+        queue.pending.clear()
+
+    if hook.base_queue:
+        next_value = hook.base_state if hook.base_state is not _UNSET else current_value
+        new_base_state = next_value
+        new_base_queue: list[Update[T]] = []
+        did_skip_update = False
+        highest_remaining_priority = NoEventPriority
+        render_priority = shared_internals.current_render_priority or DefaultEventPriority
+
+        for update in hook.base_queue:
+            if not _should_process_update(update.priority, render_priority):
+                if not did_skip_update:
+                    new_base_state = next_value
+                    did_skip_update = True
+                new_base_queue.append(update)
+                highest_remaining_priority = higherEventPriority(
+                    highest_remaining_priority,
+                    update.priority,
+                )
+                continue
+
+            next_value = reducer(next_value, update.action)
+
+            if did_skip_update:
+                new_base_queue.append(
+                    Update(
+                        action=update.action,
+                        priority=NoEventPriority,
+                    )
+                )
+
+        hook.memoized_state = next_value
+        hook.base_state = new_base_state if did_skip_update else next_value
+        hook.base_queue = new_base_queue
+        current_value = next_value
+        if highest_remaining_priority != NoEventPriority:
+            _queue_pending_rerender(
+                highest_remaining_priority,
+                fiber=fiber,
+                source="transition" if highest_remaining_priority == TransitionEventPriority else "default",
+            )
+
+    queue.last_rendered_reducer = reducer
+    queue.last_rendered_state = current_value
+    return current_value, queue
+
+
+def _create_hook_dispatch(
+    hook: HookNode,
+    queue: UpdateQueue[T],
+    fiber: HookFiber | None,
+) -> Callable[[Any], None]:
+    def dispatch(action: Any) -> None:
+        previous_value = (
+            queue.last_rendered_state
+            if queue.last_rendered_reducer is not None
+            else hook.memoized_state
+        )
+        update = Update[T](
+            action=action,
+            priority=_get_current_update_priority(),
+        )
+
+        if not queue.pending and queue.last_rendered_reducer is not None:
+            try:
+                eager_state = queue.last_rendered_reducer(previous_value, action)
+                update.has_eager_state = True
+                update.eager_state = eager_state
+                if _state_values_equal(previous_value, eager_state):
+                    _enqueue_hook_update(queue, update)
+                    return
+            except Exception:
+                pass
+
+        _enqueue_hook_update(queue, update)
+        _request_rerender(fiber)
+
+    return dispatch
 
 
 def _reset_hook_state() -> None:
@@ -275,19 +578,43 @@ def _reset_hook_state() -> None:
     _runtime.pending_effects.clear()
 
 
-def _begin_component_render(instance_id: str) -> None:
-    state = _runtime.instances.get(instance_id)
-    if state is None:
-        state = HookState()
-        _runtime.instances[instance_id] = state
-    state.index = 0
-    _runtime.instance_stack.append(instance_id)
-    _runtime.visited_instances.add(instance_id)
+def _begin_component_render(fiber_or_instance_id: HookFiber | str) -> HookFiber:
+    if isinstance(fiber_or_instance_id, HookFiber):
+        existing = _runtime.fibers.get(fiber_or_instance_id.component_id)
+        if existing is None:
+            fiber = fiber_or_instance_id
+            _runtime.fibers[fiber.component_id] = fiber
+        else:
+            fiber = _get_or_create_fiber(
+                fiber_or_instance_id.component_id,
+                element_type=fiber_or_instance_id.element_type,
+                key=fiber_or_instance_id.key,
+                path=fiber_or_instance_id.path,
+            )
+    else:
+        fiber = _get_or_create_fiber(fiber_or_instance_id)
+    work_in_progress = _create_work_in_progress_fiber(fiber)
+    _runtime.fiber_stack.append(work_in_progress)
+    _runtime.visited_instances.add(work_in_progress.component_id)
+    return work_in_progress
 
 
-def _end_component_render() -> None:
-    if _runtime.instance_stack:
-        _runtime.instance_stack.pop()
+def _set_current_hook_fiber(fiber: HookFiber | None) -> None:
+    if not _runtime.fiber_stack:
+        return
+    current = _runtime.fiber_stack[-1]
+    if fiber is None:
+        return
+    current.element_type = fiber.element_type
+    current.key = fiber.key
+    current.path = fiber.path
+
+
+def _end_component_render() -> HookFiber | None:
+    if not _runtime.fiber_stack:
+        return None
+    work_in_progress = _runtime.fiber_stack.pop()
+    return _commit_completed_fiber(work_in_progress, registry=_runtime.fibers)
 
 
 def _run_cleanup(cleanup: Callable[[], None] | None) -> None:
@@ -299,32 +626,36 @@ def _run_cleanup(cleanup: Callable[[], None] | None) -> None:
 
 def _flush_pending_effects() -> None:
     for pending in _runtime.pending_effects:
-        state = _runtime.instances.get(pending.instance_id)
-        if state is None:
+        fiber = _runtime.fibers.get(pending.instance_id)
+        if fiber is None:
             continue
-        previous = state.effects.get(pending.hook_index)
+        previous = _get_hook_node_by_index(fiber, pending.hook_index)
         if previous is not None:
             _run_cleanup(previous.cleanup)
         cleanup = pending.effect()
-        state.effects[pending.hook_index] = EffectRecord(
-            deps=pending.deps,
-            cleanup=cleanup,
+        hook = previous or _append_hook_node(
+            fiber,
+            HookNode(index=pending.hook_index, kind="Effect"),
         )
+        hook.deps = pending.deps
+        hook.cleanup = cleanup
     _runtime.pending_effects.clear()
 
 
 def _cleanup_unmounted_instances() -> None:
     removed_ids = [
         instance_id
-        for instance_id in _runtime.instances
+        for instance_id in _runtime.fibers
         if instance_id != "__global__" and instance_id not in _runtime.visited_instances
     ]
     for instance_id in removed_ids:
-        state = _runtime.instances.pop(instance_id, None)
-        if state is None:
+        fiber = _runtime.fibers.pop(instance_id, None)
+        if fiber is None:
             continue
-        for effect in state.effects.values():
-            _run_cleanup(effect.cleanup)
+        current = fiber.hook_head
+        while current is not None:
+            _run_cleanup(current.cleanup)
+            current = current.next
 
 
 def _finish_hook_state() -> None:
@@ -338,54 +669,157 @@ def _finish_hook_state() -> None:
 
 
 def _clear_hook_state() -> None:
-    for state in _runtime.instances.values():
-        for effect in state.effects.values():
-            _run_cleanup(effect.cleanup)
-    _runtime.instances.clear()
-    _runtime.instance_stack.clear()
+    for fiber in _runtime.fibers.values():
+        current = fiber.hook_head
+        while current is not None:
+            _run_cleanup(current.cleanup)
+            current = current.next
+    _runtime.fibers.clear()
+    _runtime.fiber_stack.clear()
     _runtime.visited_instances.clear()
     _runtime.pending_effects.clear()
     _runtime.render_cycle_active = False
     _runtime.batch_depth = 0
     _runtime.rerender_pending = False
-    _runtime.current_update_priority = "default"
-    _runtime.pending_update_priority = None
+    _runtime.pending_update_lanes = NoEventPriority
+    _runtime.pending_update_priority = NoEventPriority
+    _runtime.pending_update_source = None
+    _runtime.pending_fiber = None
     _runtime.after_batch_callbacks.clear()
-    _runtime.scheduled_rerender = False
-    _scheduler_event.clear()
+
+
+def _set_schedule_update_callback(
+    callback: Callable[[HookFiber | None, UpdatePriority], None] | None,
+) -> None:
+    global _schedule_update_callback
+    _schedule_update_callback = callback
 
 
 def _set_rerender_callback(callback: Callable[[], None] | None) -> None:
-    global _rerender_callback
-    _rerender_callback = callback
+    global _compat_rerender_callback, _compat_rerender_scheduled
+    _compat_rerender_callback = callback
+    _compat_rerender_scheduled = False
+
+
+def _notify_compat_rerender_callback() -> None:
+    global _compat_rerender_scheduled
+    callback = _compat_rerender_callback
     if callback is None:
-        with _scheduler_lock:
-            _runtime.scheduled_rerender = False
-        _scheduler_event.clear()
+        return
+    if _runtime.render_cycle_active and _runtime.batch_depth == 0:
+        callback()
+        return
+    if _compat_rerender_scheduled:
+        return
+    _compat_rerender_scheduled = True
+
+    def run_callback() -> None:
+        global _compat_rerender_scheduled
+        _compat_rerender_scheduled = False
+        current_callback = _compat_rerender_callback
+        if current_callback is not None:
+            current_callback()
+
+    if _runtime.render_cycle_active or _runtime.batch_depth > 0:
+        _runtime.after_batch_callbacks.append(run_callback)
+        return
+
+    threading.Timer(0.001, run_callback).start()
 
 
 def _priority_rank(priority: UpdatePriority) -> int:
-    if priority == "render_phase":
-        return 2
-    if priority == "discrete":
-        return 1
-    return 0
+    if priority == NoEventPriority:
+        return 0
+    return 1000 - priority
 
 
-def _queue_pending_rerender(priority: UpdatePriority) -> None:
+def _lane_to_mask(priority: UpdatePriority) -> int:
+    if priority == DiscreteEventPriority:
+        return 1 << 0
+    if priority == DefaultEventPriority:
+        return 1 << 1
+    if priority == TransitionEventPriority:
+        return 1 << 2
+    return 1 << 3
+
+
+def _merge_lanes(a: int, b: int) -> int:
+    return a | b
+
+
+def _get_highest_priority_lane(lanes: int) -> UpdatePriority:
+    if (
+        shared_internals.current_transition is not None
+        and lanes & _lane_to_mask(TransitionEventPriority)
+    ):
+        return TransitionEventPriority
+    if lanes & _lane_to_mask(DiscreteEventPriority):
+        return DiscreteEventPriority
+    if lanes & _lane_to_mask(DefaultEventPriority):
+        return DefaultEventPriority
+    if lanes & _lane_to_mask(TransitionEventPriority):
+        return TransitionEventPriority
+    return DefaultEventPriority if lanes != NoEventPriority else NoEventPriority
+
+
+def _remove_lane(lanes: int, priority: UpdatePriority) -> int:
+    return lanes & ~_lane_to_mask(priority)
+
+
+def _queue_pending_rerender(
+    priority: UpdatePriority,
+    fiber: HookFiber | None = None,
+    source: str | None = None,
+) -> None:
+    _notify_compat_rerender_callback()
     _runtime.rerender_pending = True
-    current = _runtime.pending_update_priority
-    if current is None or _priority_rank(priority) > _priority_rank(current):
-        _runtime.pending_update_priority = priority
+    _runtime.pending_update_lanes = _merge_lanes(
+        _runtime.pending_update_lanes,
+        _lane_to_mask(priority),
+    )
+    if fiber is not None and (
+        _runtime.pending_fiber is None
+        or _priority_rank(priority) >= _priority_rank(_runtime.pending_update_priority)
+    ):
+        _runtime.pending_fiber = fiber
+    should_update_source = (
+        _runtime.pending_update_source is None
+        or _priority_rank(priority) >= _priority_rank(_runtime.pending_update_priority)
+    )
+    _runtime.pending_update_priority = higherEventPriority(
+        priority,
+        _runtime.pending_update_priority,
+    )
+    if should_update_source:
+        _runtime.pending_update_source = source
 
 
-def _consume_pending_rerender_priority() -> UpdatePriority | None:
+def _consume_pending_rerender_priority_numeric() -> UpdatePriority | None:
     if not _runtime.rerender_pending:
         return None
-    _runtime.rerender_pending = False
-    priority = _runtime.pending_update_priority or "default"
-    _runtime.pending_update_priority = None
+    priority = _get_highest_priority_lane(_runtime.pending_update_lanes)
+    _runtime.pending_update_lanes = _remove_lane(_runtime.pending_update_lanes, priority)
+    _runtime.rerender_pending = _runtime.pending_update_lanes != NoEventPriority
+    _runtime.pending_update_priority = _get_highest_priority_lane(_runtime.pending_update_lanes)
+    if not _runtime.rerender_pending:
+        _runtime.pending_update_source = None
     return priority
+
+
+def _consume_pending_rerender_priority() -> str | None:
+    source = _runtime.pending_update_source
+    priority = _consume_pending_rerender_priority_numeric()
+    if priority is None:
+        return None
+    if source is not None:
+        return source
+    if priority == RenderPhaseUpdatePriority:
+        return "render_phase"
+    if priority == DefaultEventPriority:
+        return "default"
+    if priority == TransitionEventPriority:
+        return "transition"
+    return "default"
 
 
 def _has_pending_rerender() -> bool:
@@ -393,7 +827,11 @@ def _has_pending_rerender() -> bool:
 
 
 def _has_rerender_target() -> bool:
-    return _rerender_callback is not None or _runtime.render_cycle_active or _runtime.batch_depth > 0
+    return (
+        _schedule_update_callback is not None
+        or _runtime.render_cycle_active
+        or _runtime.batch_depth > 0
+    )
 
 
 def _override_hook_state(
@@ -403,50 +841,54 @@ def _override_hook_state(
 ) -> bool:
     if not path:
         return False
-    state = _runtime.instances.get(instance_id)
-    if state is None:
+    fiber = _runtime.fibers.get(instance_id)
+    if fiber is None:
         return False
     hook_index = path[0]
-    if not isinstance(hook_index, int) or not _has_initialized_state_slot(state, hook_index):
+    hook = _get_hook_node_by_index(fiber, hook_index) if isinstance(hook_index, int) else None
+    if hook is None or hook.memoized_state is _UNSET:
         return False
     if len(path) == 1:
-        state.states[hook_index] = _clone_hook_value(value)
+        hook.memoized_state = _clone_hook_value(value)
+        queue = hook.queue
+        if queue is not None:
+            queue.last_rendered_state = hook.memoized_state
         return True
-    target = state.states[hook_index]
+    target = hook.memoized_state
     return _set_nested_value(target, path[1:], value)
 
 
 def _get_hook_state_snapshot(instance_id: str) -> list[dict[str, Any]] | None:
-    state = _runtime.instances.get(instance_id)
-    if state is None:
+    fiber = next(
+        (item for item in reversed(_runtime.fiber_stack) if item.component_id == instance_id),
+        None,
+    )
+    if fiber is None:
+        fiber = _runtime.fibers.get(instance_id)
+    if fiber is None:
         return None
 
-    hook_indexes = set(state.kinds.keys())
-    hook_indexes.update(range(len(state.states)))
-    hook_indexes.update(state.effects.keys())
-    hook_indexes.update(state.refs.keys())
-    hook_indexes.update(state.memos.keys())
-
     snapshot: list[dict[str, Any]] = []
-    for hook_index in sorted(hook_indexes):
-        kind = state.kinds.get(hook_index, "Unknown")
+    current = fiber.hook_head
+    while current is not None:
+        kind = current.kind
         value: Any = None
-        if _has_initialized_state_slot(state, hook_index):
-            value = _clone_hook_value(state.states[hook_index])
-        elif hook_index in state.refs:
-            ref = state.refs[hook_index]
-            value = {"current": _clone_hook_value(getattr(ref, "current", None))}
-        elif hook_index in state.memos:
-            value = _clone_hook_value(state.memos[hook_index][0])
+        if current.memoized_state is not _UNSET:
+            value = _clone_hook_value(current.memoized_state)
+        elif current.ref is not None:
+            value = {"current": _clone_hook_value(getattr(current.ref, "current", None))}
+        elif current.memoized_value is not _UNSET:
+            value = _clone_hook_value(current.memoized_value)
 
         snapshot.append(
             {
-                "id": hook_index,
+                "id": current.index,
                 "name": kind,
                 "value": value,
                 "isStateEditable": kind in ("State", "Reducer"),
             }
         )
+        current = current.next
 
     return snapshot
 
@@ -457,13 +899,14 @@ def _delete_hook_state_path(
 ) -> bool:
     if len(path) < 2:
         return False
-    state = _runtime.instances.get(instance_id)
-    if state is None:
+    fiber = _runtime.fibers.get(instance_id)
+    if fiber is None:
         return False
     hook_index = path[0]
-    if not isinstance(hook_index, int) or not _has_initialized_state_slot(state, hook_index):
+    hook = _get_hook_node_by_index(fiber, hook_index) if isinstance(hook_index, int) else None
+    if hook is None or hook.memoized_state is _UNSET:
         return False
-    return _delete_nested_value(state.states[hook_index], path[1:])
+    return _delete_nested_value(hook.memoized_state, path[1:])
 
 
 def _rename_hook_state_path(
@@ -477,47 +920,48 @@ def _rename_hook_state_path(
         return False
     if len(old_path) < 2 or len(new_path) < 2:
         return False
-    state = _runtime.instances.get(instance_id)
-    if state is None:
+    fiber = _runtime.fibers.get(instance_id)
+    if fiber is None:
         return False
     hook_index = old_path[0]
-    if not isinstance(hook_index, int) or not _has_initialized_state_slot(state, hook_index):
+    hook = _get_hook_node_by_index(fiber, hook_index) if isinstance(hook_index, int) else None
+    if hook is None or hook.memoized_state is _UNSET:
         return False
-    target = state.states[hook_index]
+    target = hook.memoized_state
     value, found = _pop_nested_value(target, old_path[1:])
     if not found:
         return False
     return _set_nested_value(target, new_path[1:], value)
 
 
-def _request_rerender() -> None:
-    priority: UpdatePriority = (
-        "render_phase" if _runtime.render_cycle_active else _runtime.current_update_priority
+def _request_rerender(
+    fiber: HookFiber | None = None,
+    *,
+    priority: UpdatePriority | None = None,
+) -> None:
+    resolved_priority = priority or _get_current_update_priority()
+
+    _queue_pending_rerender(
+        resolved_priority,
+        fiber=fiber,
+        source=_get_current_update_source() if priority is None else None,
     )
 
-    _queue_pending_rerender(priority)
-
     if _runtime.render_cycle_active:
-        if _runtime.batch_depth == 0 and _rerender_callback is not None:
-            _runtime.after_batch_callbacks.append(_rerender_callback)
         return
 
     if _runtime.batch_depth > 0:
         return
 
-    if _rerender_callback is not None:
-        _schedule_scheduled_rerender()
+    _flush_scheduled_rerender()
 
 
 def _flush_batched_rerender() -> None:
     if not _has_pending_rerender():
         return
     if _runtime.render_cycle_active:
-        if _rerender_callback is not None:
-            _runtime.after_batch_callbacks.append(_rerender_callback)
         return
-    if _rerender_callback is not None:
-        _rerender_callback()
+    _flush_scheduled_rerender()
 
 
 def _run_after_batch_callbacks() -> None:
@@ -548,102 +992,86 @@ def _batched_updates_runtime(callback: Callable[[], T]) -> T:
 
 
 def _discrete_updates_runtime(callback: Callable[[], T]) -> T:
-    previous = _runtime.current_update_priority
-    _runtime.current_update_priority = "discrete"
+    previous = shared_internals.current_update_priority
+    shared_internals.current_update_priority = DiscreteEventPriority
     try:
         return _batched_updates_runtime(callback)
     finally:
-        _runtime.current_update_priority = previous
+        shared_internals.current_update_priority = previous
 
 
 def useState(
     initial_value: T | Callable[[], T],
 ) -> tuple[T, Callable[[T | Callable[[T], T]], None]]:
-    state = _get_current_state()
-    index = state.index
-    state.index += 1
-    state.kinds[index] = "State"
-    if index >= len(state.states):
-        state.states.extend([_UNSET] * (index + 1 - len(state.states)))
+    fiber = _get_current_fiber()
+    hook = _get_or_create_hook(fiber, "State")
+    value = initial_value() if callable(initial_value) else initial_value
+    current_value, queue = _process_hook_queue(
+        hook,
+        _basic_state_reducer,
+        value,
+        fiber,
+    )
 
-    if state.states[index] is _UNSET:
-        value = initial_value() if callable(initial_value) else initial_value
-        state.states[index] = value
-    current_value = state.states[index]
-
-    if index not in state.state_setters:
-        def set_value(new_value: T | Callable[[T], T]) -> None:
-            previous_value = state.states[index]
-            next_value = new_value(previous_value) if callable(new_value) else new_value
-
-            if _state_values_equal(previous_value, next_value):
-                return
-
-            state.states[index] = next_value
-            _request_rerender()
-
-        state.state_setters[index] = set_value
-
-    return (current_value, state.state_setters[index])
+    if queue.dispatch is None:
+        queue.dispatch = _create_hook_dispatch(hook, queue, fiber)
+    return (current_value, queue.dispatch)
 
 
 def useEffect(
     effect: Callable[[], Callable[[], None] | None],
     deps: Deps | None = None,
 ) -> None:
-    state = _get_current_state()
-    index = state.index
-    state.index += 1
-    state.kinds[index] = "Effect"
+    fiber = _get_current_fiber()
+    hook = _get_or_create_hook(fiber, "Effect")
     normalized_deps = _normalize_deps(deps)
-    previous = state.effects.get(index)
-    if previous is not None and not _deps_changed(previous.deps, normalized_deps):
+    if hook.deps is not None and not _deps_changed(hook.deps, normalized_deps):
         return
-    if _runtime.render_cycle_active and _runtime.instance_stack:
+    if _runtime.render_cycle_active and _runtime.fiber_stack:
         _runtime.pending_effects.append(
             PendingEffect(
                 instance_id=_get_current_instance_id(),
-                hook_index=index,
+                hook_index=hook.index,
                 effect=effect,
                 deps=normalized_deps,
             )
         )
         return
-    _run_cleanup(previous.cleanup if previous else None)
+    _run_cleanup(hook.cleanup)
     cleanup = effect()
-    state.effects[index] = EffectRecord(deps=normalized_deps, cleanup=cleanup)
+    hook.deps = normalized_deps
+    hook.cleanup = cleanup
 
 
 def useRef(initial_value: T | None = None) -> Ref[T]:
-    state = _get_current_state()
-    index = state.index
-    state.index += 1
-    state.kinds[index] = "Ref"
-    if index not in state.refs:
-        state.refs[index] = Ref(initial_value)
-    return state.refs[index]
+    fiber = _get_current_fiber()
+    hook = _get_or_create_hook(fiber, "Ref")
+    if hook.ref is None:
+        hook.ref = Ref(initial_value)
+    return hook.ref
 
 
 def useMemo(factory: Callable[[], T], deps: Deps) -> T:
-    state = _get_current_state()
-    index = state.index
-    state.index += 1
-    state.kinds[index] = "Memo"
+    fiber = _get_current_fiber()
+    hook = _get_or_create_hook(fiber, "Memo")
     normalized_deps = tuple(deps)
-    if index in state.memos:
-        old_value, old_deps = state.memos[index]
-        if not _deps_changed(old_deps, normalized_deps):
-            return old_value
+    if hook.memoized_value is not _UNSET and not _deps_changed(
+        hook.memoized_deps,
+        normalized_deps,
+    ):
+        return hook.memoized_value
     new_value = factory()
-    state.memos[index] = (new_value, normalized_deps)
+    hook.memoized_value = new_value
+    hook.memoized_deps = normalized_deps
     return new_value
 
 
 def useCallback(callback: Callable, deps: Deps) -> Callable:
-    state = _get_current_state()
-    index = state.index
     value = useMemo(lambda: callback, deps)
-    state.kinds[index] = "Callback"
+    fiber = _get_current_fiber()
+    hook = _get_hook_node_by_index(fiber, fiber.index - 1)
+    if hook is not None:
+        hook.kind = "Callback"
     return value
 
 
@@ -652,26 +1080,76 @@ def useReducer(
     initial_state: T,
     init: Callable[[T], T] | None = None,
 ) -> tuple[T, Callable[[Any], None]]:
-    if init is not None:
-        initial_state = init(initial_state)
-    index = _get_current_state().index
-    state, set_state = useState(initial_state)
-    _get_current_state().kinds[index] = "Reducer"
+    fiber = _get_current_fiber()
+    hook = _get_or_create_hook(fiber, "Reducer")
+    resolved_initial_state = init(initial_state) if init is not None else initial_state
+    current_value, queue = _process_hook_queue(
+        hook,
+        reducer,
+        resolved_initial_state,
+        fiber,
+    )
 
-    def dispatch(action: Any) -> None:
-        set_state(lambda current: reducer(current, action))
+    if queue.dispatch is None:
+        queue.dispatch = _create_hook_dispatch(hook, queue, fiber)
+    return (current_value, queue.dispatch)
 
-    return (state, dispatch)
+
+def useTransition() -> tuple[bool, Callable[[Callable[[], None]], None]]:
+    is_pending, set_is_pending = useState(False)
+    pending_count_ref = useRef(0)
+    app_context = _get_app_context()
+
+    def complete_transition() -> None:
+        pending_count = pending_count_ref.current or 0
+        pending_count = max(0, pending_count - 1)
+        pending_count_ref.current = pending_count
+        if pending_count == 0:
+            set_is_pending(False)
+
+    def run_transition(callback: Callable[[], None]) -> None:
+        previous_transition = shared_internals.current_transition
+        shared_internals.current_transition = object()
+        try:
+            _batched_updates_runtime(callback)
+        finally:
+            shared_internals.current_transition = previous_transition
+
+    def start_transition(callback: Callable[[], None]) -> None:
+        is_concurrent = bool(
+            app_context is not None
+            and getattr(getattr(app_context, "app", None), "is_concurrent", False)
+        )
+        if not is_concurrent:
+            run_transition(callback)
+            return
+
+        pending_count_ref.current = (pending_count_ref.current or 0) + 1
+        set_is_pending(True)
+
+        def run_scheduled_transition() -> None:
+            try:
+                run_transition(callback)
+            finally:
+                complete_transition()
+
+        _queue_after_current_batch(run_scheduled_transition)
+
+    return (is_pending, start_transition)
 
 
 __all__ = [
+    "HookFiber",
     "useState",
     "useEffect",
     "useRef",
     "useMemo",
     "useCallback",
     "useReducer",
+    "useTransition",
     "Ref",
+    "_set_current_hook_fiber",
+    "_set_rerender_callback",
     "_get_hook_state_snapshot",
     "_override_hook_state",
     "_delete_hook_state_path",
