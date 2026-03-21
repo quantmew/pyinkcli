@@ -4,17 +4,48 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from pyinkcli.hooks._runtime import _finish_hook_state
-from pyinkcli.packages.ink.dom import DOMElement
+from pyinkcli.packages.react_reconciler.ReactFiberFlags import NoFlags
+from pyinkcli.packages.ink.dom import DOMElement, cloneNodeTree
 from pyinkcli.packages.react_reconciler.ReactEventPriorities import DefaultEventPriority
+from pyinkcli.packages.react_reconciler.ReactChildFiber import WorkBudget
+from pyinkcli.packages.react_reconciler.ReactFiberCommitWork import (
+    buildCommitListFromFiberTree,
+    PreparedCommit,
+    runPreparedCommitEffects,
+)
 from pyinkcli.packages.react_reconciler.ReactFiberReconciler import packageInfo
 from pyinkcli.packages.react_reconciler.ReactFiberRoot import ReconcilerContainer
 
 if TYPE_CHECKING:
     from pyinkcli.component import RenderableNode
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
+
+
+def _bubble_root_subtree_flags(root_fiber: Any) -> None:
+    subtree_flags = NoFlags
+    child = root_fiber.child
+    while child is not None:
+        subtree_flags |= getattr(child, "flags", NoFlags)
+        subtree_flags |= getattr(child, "subtree_flags", NoFlags)
+        child = child.sibling
+    root_fiber.subtree_flags = subtree_flags
+
+
+@dataclass
+class ConcurrentRenderState:
+    element: RenderableNode
+    priority: int
+    version: int
+    work_root: DOMElement
+    status: str = "active"
+    abort_reason: str | None = None
+    continuation: Callable[[], int] | None = None
+    callback: Callable[[], None] | None = None
+    prepared_commit: PreparedCommit | None = None
 
 
 def createContainer(
@@ -196,6 +227,11 @@ def _prepareNextCommitState(reconciler: _Reconciler) -> None:
     reconciler._next_devtools_host_instance_ids = {id(reconciler.root_node): "root"}
     reconciler._render_suspended = False
     reconciler._suspended_lanes_this_render = 0
+    reconciler._prepared_effects = {
+        "mutation": [],
+        "layout": [],
+        "passive": [],
+    }
     root_inspected_element = _buildRootInspectedElement()
     reconciler._next_devtools_inspected_elements = {"root": root_inspected_element}
     reconciler._next_devtools_inspected_element_fingerprints = {
@@ -212,6 +248,12 @@ def commitContainerUpdate(
 ) -> None:
     del parent_component
     dom_container = container.container
+    host_config = reconciler._host_config
+    should_defer_sync_passive_effects_to_commit = bool(
+        host_config is not None
+        and callable(host_config.should_defer_sync_passive_effects_to_commit)
+        and host_config.should_defer_sync_passive_effects_to_commit()
+    )
     _prepareNextCommitState(reconciler)
     commit_phase_recovery_needed = False
     root_fiber = reconciler._root_fiber
@@ -233,11 +275,22 @@ def commitContainerUpdate(
         reconciler._remove_extra_children(dom_container, next_index)
     finally:
         reconciler.pop_current_fiber()
-        _finish_hook_state()
+        _finish_hook_state(
+            defer_passive_effects_to_commit=should_defer_sync_passive_effects_to_commit,
+            defer_non_passive_hook_effects_to_commit=True,
+        )
+    _bubble_root_subtree_flags(root_fiber)
+    prepared_commit = PreparedCommit(
+        work_root=dom_container,
+        commit_list=buildCommitListFromFiberTree(
+            reconciler._root_fiber,
+            is_static_dirty=bool(dom_container.isStaticDirty),
+        ),
+    )
+    runPreparedCommitEffects(reconciler, container, prepared_commit)
     reconciler._finalize_tree_snapshot()
     reconciler._dispose_stale_class_component_instances()
     commit_phase_recovery_needed = reconciler._flush_class_component_commit_callbacks()
-    reconciler._after_commit(container)
     reconciler._flush_component_did_catch_callbacks(
         include_deferred=not commit_phase_recovery_needed,
     )
@@ -247,6 +300,157 @@ def commitContainerUpdate(
 
     if callback:
         callback()
+
+
+def beginContainerRender(
+    reconciler: _Reconciler,
+    element: RenderableNode,
+    container: ReconcilerContainer,
+    *,
+    priority: int,
+    callback: Callable[[], None] | None = None,
+) -> bool:
+    work_root = cloneNodeTree(container.container)
+    assert isinstance(work_root, DOMElement)
+    state = ConcurrentRenderState(
+        element=element,
+        priority=priority,
+        version=container.pending_work_version,
+        work_root=work_root,
+        callback=callback,
+    )
+    container.render_state = state
+    return resumeContainerRender(reconciler, container)
+
+
+def abortContainerRender(
+    _reconciler: _Reconciler,
+    container: ReconcilerContainer,
+    *,
+    reason: str,
+) -> None:
+    state = container.render_state
+    if not isinstance(state, ConcurrentRenderState):
+        return
+    state.status = "aborted"
+    state.abort_reason = reason
+    container.render_state = None
+
+
+def shouldResumeContainerRender(
+    _reconciler: _Reconciler,
+    container: ReconcilerContainer,
+    *,
+    priority: int,
+) -> bool:
+    state = container.render_state
+    if not isinstance(state, ConcurrentRenderState):
+        return False
+    if state.status != "active":
+        return False
+    if state.priority != priority:
+        return False
+    if state.version != container.pending_work_version:
+        return False
+    return True
+
+
+def resumeContainerRender(
+    reconciler: _Reconciler,
+    container: ReconcilerContainer,
+) -> bool:
+    state = container.render_state
+    if not isinstance(state, ConcurrentRenderState):
+        return True
+    if state.status != "active":
+        container.render_state = None
+        return True
+
+    _prepareNextCommitState(reconciler)
+    reconciler._current_work_budget = (
+        WorkBudget(remaining=16) if state.priority > 16 else None
+    )
+    root_fiber = reconciler._root_fiber
+    root_fiber.child = None
+    root_fiber.sibling = None
+
+    try:
+        reconciler.push_current_fiber(root_fiber)
+        if state.continuation is None:
+            next_index = 0
+            if state.element is not None:
+                from pyinkcli.packages.react_reconciler.ReactChildFiber import WorkYield
+
+                try:
+                    next_index = reconciler._reconcile_children(
+                        state.work_root,
+                        [state.element],
+                        (),
+                        0,
+                        "root",
+                    )
+                except WorkYield as yielded:
+                    state.continuation = yielded.continuation
+                    return False
+            reconciler._remove_extra_children(state.work_root, next_index)
+        else:
+            from pyinkcli.packages.react_reconciler.ReactChildFiber import WorkYield
+
+            try:
+                state.continuation()
+            except WorkYield as yielded:
+                state.continuation = yielded.continuation
+                return False
+            state.continuation = None
+    finally:
+        reconciler._current_work_budget = None
+        reconciler.pop_current_fiber()
+        _finish_hook_state(
+            defer_passive_effects_to_commit=True,
+            defer_non_passive_hook_effects_to_commit=True,
+        )
+
+    _bubble_root_subtree_flags(root_fiber)
+    finalizeContainerRender(reconciler, container)
+    return True
+
+
+def finalizeContainerRender(
+    reconciler: _Reconciler,
+    container: ReconcilerContainer,
+) -> None:
+    state = container.render_state
+    if not isinstance(state, ConcurrentRenderState):
+        return
+    if state.status != "active":
+        container.render_state = None
+        return
+
+    state.prepared_commit = PreparedCommit(
+        work_root=state.work_root,
+        commit_list=buildCommitListFromFiberTree(
+            reconciler._root_fiber,
+            is_static_dirty=bool(state.work_root.isStaticDirty),
+        ),
+        callback=state.callback,
+    )
+    reconciler._commit_prepared_container(
+        container,
+        state.prepared_commit,
+    )
+    reconciler._finalize_tree_snapshot()
+    reconciler._dispose_stale_class_component_instances()
+    commit_phase_recovery_needed = False
+    reconciler._flush_component_did_catch_callbacks(
+        include_deferred=not commit_phase_recovery_needed,
+    )
+
+    if commit_phase_recovery_needed:
+        reconciler.schedule_update_on_fiber(container, DefaultEventPriority)
+
+    container.render_state = None
+    if state.prepared_commit.callback:
+        state.prepared_commit.callback()
 
 
 def getEffectiveDevtoolsProps(
@@ -291,7 +495,11 @@ __all__ = [
     "createContainer",
     "flushSyncWork",
     "getEffectiveDevtoolsProps",
+    "abortContainerRender",
+    "beginContainerRender",
+    "resumeContainerRender",
     "submitContainer",
+    "shouldResumeContainerRender",
     "updateContainer",
     "updateContainerSync",
 ]

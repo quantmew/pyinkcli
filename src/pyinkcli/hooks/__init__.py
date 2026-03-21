@@ -3,6 +3,8 @@
 from pyinkcli.hooks._runtime import (
     useCallback,
     useEffect,
+    useInsertionEffect,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -32,6 +34,8 @@ __all__ = [
     "useFocus",
     "useState",
     "useEffect",
+    "useLayoutEffect",
+    "useInsertionEffect",
     "useRef",
     "useMemo",
     "useCallback",

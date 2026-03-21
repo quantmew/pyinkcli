@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Generic, TypeVar
 
 from pyinkcli.components._app_context_runtime import _get_app_context
+from pyinkcli.packages.react_reconciler.ReactFiberFlags import NoFlags, Passive
 from pyinkcli.packages.react_reconciler.ReactEventPriorities import (
     DefaultEventPriority,
     DiscreteEventPriority,
@@ -30,6 +31,31 @@ Deps = tuple[Any, ...]
 UpdatePriority = EventPriority
 BasicStateAction = Any
 _UNSET = object()
+HookHasEffect = 1 << 0
+HookPassive = 1 << 1
+HookLayout = 1 << 2
+HookInsertion = 1 << 3
+
+
+@dataclass
+class EffectInstance:
+    destroy: Callable[[], None] | None = None
+
+
+@dataclass
+class EffectRecord:
+    tag: int
+    create: Callable[[], Callable[[], None] | None]
+    deps: Deps | None
+    inst: EffectInstance
+    instance_id: str | None = None
+    hook_index: int | None = None
+    next: EffectRecord | None = None
+
+
+@dataclass
+class FunctionComponentUpdateQueue:
+    last_effect: EffectRecord | None = None
 
 @dataclass
 class Update(Generic[T]):
@@ -76,6 +102,13 @@ class HookFiber:
     child: HookFiber | None = None
     sibling: HookFiber | None = None
     state_node: Any = None
+    flags: int = NoFlags
+    subtree_flags: int = NoFlags
+    deletions: list[HookFiber] = field(default_factory=list)
+    ref_detachments: list[Any] = field(default_factory=list)
+    layout_callbacks: list[Callable[[], None]] = field(default_factory=list)
+    passive_callbacks: list[Callable[[], None]] = field(default_factory=list)
+    update_queue: FunctionComponentUpdateQueue | None = None
     index: int = 0
     hook_head: HookNode | None = None
     hook_tail: HookNode | None = None
@@ -88,6 +121,7 @@ class HookFiber:
 class PendingEffect:
     instance_id: str
     hook_index: int
+    hook_flags: int
     effect: Callable[[], Callable[[], None] | None]
     deps: Deps | None
 
@@ -98,6 +132,7 @@ class RuntimeState:
     fiber_stack: list[HookFiber] = field(default_factory=list)
     visited_instances: set[str] = field(default_factory=set)
     pending_effects: list[PendingEffect] = field(default_factory=list)
+    pending_passive_unmount_fibers: list[HookFiber] = field(default_factory=list)
     render_cycle_active: bool = False
     batch_depth: int = 0
     rerender_pending: bool = False
@@ -117,9 +152,14 @@ _runtime = RuntimeState()
 _schedule_update_callback: Callable[[HookFiber | None, UpdatePriority], None] | None = None
 _compat_rerender_callback: Callable[[], None] | None = None
 _compat_rerender_scheduled = False
+_scheduled_update_flush = False
+_defer_passive_effects_to_commit = False
+_defer_non_passive_hook_effects_to_commit = False
 
 
 def _flush_scheduled_rerender() -> bool:
+    global _scheduled_update_flush
+    _scheduled_update_flush = False
     callback = _schedule_update_callback
     if callback is None:
         return False
@@ -130,6 +170,22 @@ def _flush_scheduled_rerender() -> bool:
         return False
     callback(fiber, priority)
     return True
+
+
+def _schedule_update_flush() -> None:
+    global _scheduled_update_flush
+    if _scheduled_update_flush:
+        return
+    _scheduled_update_flush = True
+
+    def run_callback() -> None:
+        _flush_scheduled_rerender()
+
+    if _runtime.render_cycle_active or _runtime.batch_depth > 0:
+        _runtime.after_batch_callbacks.append(run_callback)
+        return
+
+    threading.Timer(0.001, run_callback).start()
 
 
 def _get_hook_node_by_index(fiber: HookFiber, hook_index: int) -> HookNode | None:
@@ -366,6 +422,13 @@ def _create_work_in_progress_fiber(current: HookFiber) -> HookFiber:
             child=None,
             sibling=None,
             state_node=current.state_node,
+            flags=NoFlags,
+            subtree_flags=NoFlags,
+            deletions=[],
+            ref_detachments=[],
+            layout_callbacks=[],
+            passive_callbacks=[],
+            update_queue=current.update_queue,
             is_work_in_progress=True,
         )
         work_in_progress.alternate = current
@@ -380,6 +443,13 @@ def _create_work_in_progress_fiber(current: HookFiber) -> HookFiber:
     work_in_progress.child = None
     work_in_progress.sibling = None
     work_in_progress.state_node = current.state_node
+    work_in_progress.flags = NoFlags
+    work_in_progress.subtree_flags = NoFlags
+    work_in_progress.deletions = []
+    work_in_progress.ref_detachments = []
+    work_in_progress.layout_callbacks = []
+    work_in_progress.passive_callbacks = []
+    work_in_progress.update_queue = current.update_queue
     work_in_progress.index = 0
     work_in_progress.is_work_in_progress = True
     (
@@ -400,6 +470,12 @@ def _commit_completed_fiber(
     work_in_progress.memoized_props = work_in_progress.pending_props
     work_in_progress.current_hook = None
     work_in_progress.is_work_in_progress = False
+    subtree_flags = NoFlags
+    child = work_in_progress.child
+    while child is not None:
+        subtree_flags |= child.flags | child.subtree_flags
+        child = child.sibling
+    work_in_progress.subtree_flags = subtree_flags
     if registry is not None:
         registry[work_in_progress.component_id] = work_in_progress
     return work_in_progress
@@ -630,16 +706,133 @@ def _flush_pending_effects() -> None:
         if fiber is None:
             continue
         previous = _get_hook_node_by_index(fiber, pending.hook_index)
-        if previous is not None:
-            _run_cleanup(previous.cleanup)
-        cleanup = pending.effect()
+        previous_cleanup = previous.cleanup if previous is not None else None
+        cleanup = None
+        should_defer = (
+            _defer_passive_effects_to_commit
+            if pending.hook_flags & HookPassive
+            else _defer_non_passive_hook_effects_to_commit
+        )
+        effect_tag = pending.hook_flags | HookHasEffect
+        if not should_defer:
+            if previous_cleanup is not None:
+                _run_cleanup(previous_cleanup)
+            cleanup = pending.effect()
+            effect_tag = pending.hook_flags
         hook = previous or _append_hook_node(
             fiber,
             HookNode(index=pending.hook_index, kind="Effect"),
         )
+        if fiber.update_queue is None:
+            fiber.update_queue = FunctionComponentUpdateQueue()
+        effect_record = EffectRecord(
+            tag=effect_tag,
+            create=pending.effect,
+            deps=pending.deps,
+            inst=EffectInstance(destroy=previous_cleanup),
+            instance_id=pending.instance_id,
+            hook_index=pending.hook_index,
+        )
+        last_effect = fiber.update_queue.last_effect
+        if last_effect is None:
+            effect_record.next = effect_record
+            fiber.update_queue.last_effect = effect_record
+        else:
+            first_effect = last_effect.next
+            last_effect.next = effect_record
+            effect_record.next = first_effect
+            fiber.update_queue.last_effect = effect_record
         hook.deps = pending.deps
         hook.cleanup = cleanup
     _runtime.pending_effects.clear()
+
+
+def _set_defer_passive_effects_to_commit(enabled: bool) -> None:
+    global _defer_passive_effects_to_commit
+    _defer_passive_effects_to_commit = enabled
+
+
+def _set_defer_non_passive_hook_effects_to_commit(enabled: bool) -> None:
+    global _defer_non_passive_hook_effects_to_commit
+    _defer_non_passive_hook_effects_to_commit = enabled
+
+
+def _commit_hook_effect_list_mount(flags: int, fiber: HookFiber) -> None:
+    update_queue = fiber.update_queue
+    last_effect = update_queue.last_effect if update_queue is not None else None
+    if last_effect is None:
+        return
+
+    current = last_effect.next
+    while current is not None:
+        if (current.tag & flags) == flags:
+            if current.inst.destroy is not None:
+                _run_cleanup(current.inst.destroy)
+            cleanup = current.create()
+            current.inst.destroy = cleanup
+            current.tag &= ~HookHasEffect
+            if current.hook_index is not None:
+                hook = _get_hook_node_by_index(fiber, current.hook_index)
+                if hook is not None:
+                    hook.cleanup = cleanup
+                    hook.deps = current.deps
+        if current is last_effect:
+            break
+        current = current.next
+
+
+def _commit_hook_passive_mount_effects(fiber: HookFiber) -> None:
+    _commit_hook_effect_list_mount(HookPassive | HookHasEffect, fiber)
+
+
+def _commit_hook_effect_list_unmount(flags: int, fiber: HookFiber) -> bool:
+    update_queue = fiber.update_queue
+    last_effect = update_queue.last_effect if update_queue is not None else None
+    if last_effect is None:
+        return False
+
+    current = last_effect.next
+    while current is not None:
+        if (current.tag & flags) == flags:
+            destroy = current.inst.destroy
+            hook = (
+                _get_hook_node_by_index(fiber, current.hook_index)
+                if current.hook_index is not None
+                else None
+            )
+            if destroy is None and hook is not None:
+                destroy = hook.cleanup
+            if destroy is not None:
+                _run_cleanup(destroy)
+            current.inst.destroy = None
+            if hook is not None:
+                hook.cleanup = None
+        if current is last_effect:
+            break
+        current = current.next
+    return True
+
+
+def _commit_hook_passive_unmount_effects(fiber: HookFiber) -> None:
+    if _commit_hook_effect_list_unmount(HookPassive | HookHasEffect, fiber):
+        return
+
+    current_hook = fiber.hook_head
+    while current_hook is not None:
+        if current_hook.cleanup is not None:
+            _run_cleanup(current_hook.cleanup)
+            current_hook.cleanup = None
+        current_hook = current_hook.next
+
+
+def _drain_pending_passive_unmount_fibers() -> list[HookFiber]:
+    pending = _runtime.pending_passive_unmount_fibers[:]
+    _runtime.pending_passive_unmount_fibers.clear()
+    return pending
+
+
+def _peek_pending_passive_unmount_fibers() -> list[HookFiber]:
+    return _runtime.pending_passive_unmount_fibers[:]
 
 
 def _cleanup_unmounted_instances() -> None:
@@ -652,20 +845,40 @@ def _cleanup_unmounted_instances() -> None:
         fiber = _runtime.fibers.pop(instance_id, None)
         if fiber is None:
             continue
+        if (
+            _defer_passive_effects_to_commit
+            or _defer_non_passive_hook_effects_to_commit
+        ):
+            _runtime.pending_passive_unmount_fibers.append(fiber)
+            continue
         current = fiber.hook_head
         while current is not None:
             _run_cleanup(current.cleanup)
             current = current.next
 
 
-def _finish_hook_state() -> None:
+def _finish_hook_state(
+    *,
+    defer_passive_effects_to_commit: bool = False,
+    defer_non_passive_hook_effects_to_commit: bool = False,
+) -> None:
     if not _runtime.render_cycle_active:
         return
-    _flush_pending_effects()
-    _cleanup_unmounted_instances()
-    _runtime.render_cycle_active = False
-    if _runtime.batch_depth == 0:
-        _run_after_batch_callbacks()
+    previous_defer = _defer_passive_effects_to_commit
+    previous_non_passive_defer = _defer_non_passive_hook_effects_to_commit
+    _set_defer_passive_effects_to_commit(defer_passive_effects_to_commit)
+    _set_defer_non_passive_hook_effects_to_commit(
+        defer_non_passive_hook_effects_to_commit
+    )
+    try:
+        _flush_pending_effects()
+        _cleanup_unmounted_instances()
+        _runtime.render_cycle_active = False
+        if _runtime.batch_depth == 0:
+            _run_after_batch_callbacks()
+    finally:
+        _set_defer_passive_effects_to_commit(previous_defer)
+        _set_defer_non_passive_hook_effects_to_commit(previous_non_passive_defer)
 
 
 def _clear_hook_state() -> None:
@@ -678,6 +891,7 @@ def _clear_hook_state() -> None:
     _runtime.fiber_stack.clear()
     _runtime.visited_instances.clear()
     _runtime.pending_effects.clear()
+    _runtime.pending_passive_unmount_fibers.clear()
     _runtime.render_cycle_active = False
     _runtime.batch_depth = 0
     _runtime.rerender_pending = False
@@ -953,6 +1167,13 @@ def _request_rerender(
     if _runtime.batch_depth > 0:
         return
 
+    if (
+        _schedule_update_callback is not None
+        and resolved_priority > DiscreteEventPriority
+    ):
+        _schedule_update_flush()
+        return
+
     _flush_scheduled_rerender()
 
 
@@ -1018,11 +1239,15 @@ def useState(
     return (current_value, queue.dispatch)
 
 
-def useEffect(
+def _use_hook_effect(
     effect: Callable[[], Callable[[], None] | None],
-    deps: Deps | None = None,
+    deps: Deps | None,
+    *,
+    fiber_flag: int,
+    hook_flags: int,
 ) -> None:
     fiber = _get_current_fiber()
+    fiber.flags |= fiber_flag
     hook = _get_or_create_hook(fiber, "Effect")
     normalized_deps = _normalize_deps(deps)
     if hook.deps is not None and not _deps_changed(hook.deps, normalized_deps):
@@ -1032,6 +1257,7 @@ def useEffect(
             PendingEffect(
                 instance_id=_get_current_instance_id(),
                 hook_index=hook.index,
+                hook_flags=hook_flags,
                 effect=effect,
                 deps=normalized_deps,
             )
@@ -1041,6 +1267,46 @@ def useEffect(
     cleanup = effect()
     hook.deps = normalized_deps
     hook.cleanup = cleanup
+
+
+def useEffect(
+    effect: Callable[[], Callable[[], None] | None],
+    deps: Deps | None = None,
+) -> None:
+    _use_hook_effect(
+        effect,
+        deps,
+        fiber_flag=Passive,
+        hook_flags=HookPassive,
+    )
+
+
+def useLayoutEffect(
+    effect: Callable[[], Callable[[], None] | None],
+    deps: Deps | None = None,
+) -> None:
+    from pyinkcli.packages.react_reconciler.ReactFiberFlags import Callback
+
+    _use_hook_effect(
+        effect,
+        deps,
+        fiber_flag=Callback,
+        hook_flags=HookLayout,
+    )
+
+
+def useInsertionEffect(
+    effect: Callable[[], Callable[[], None] | None],
+    deps: Deps | None = None,
+) -> None:
+    from pyinkcli.packages.react_reconciler.ReactFiberFlags import Insertion
+
+    _use_hook_effect(
+        effect,
+        deps,
+        fiber_flag=Insertion,
+        hook_flags=HookInsertion,
+    )
 
 
 def useRef(initial_value: T | None = None) -> Ref[T]:
@@ -1139,9 +1405,15 @@ def useTransition() -> tuple[bool, Callable[[Callable[[], None]], None]]:
 
 
 __all__ = [
+    "HookHasEffect",
+    "HookInsertion",
+    "HookLayout",
+    "HookPassive",
     "HookFiber",
     "useState",
     "useEffect",
+    "useInsertionEffect",
+    "useLayoutEffect",
     "useRef",
     "useMemo",
     "useCallback",

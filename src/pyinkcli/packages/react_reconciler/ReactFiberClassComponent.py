@@ -11,12 +11,19 @@ from pyinkcli._component_runtime import (
     _merge_component_props,
     renderComponent,
 )
+from pyinkcli._suspense_runtime import SuspendSignal
 from pyinkcli.hooks._runtime import _batched_updates_runtime
+from pyinkcli.packages.react_reconciler.ReactChildFiber import WorkYield
+from pyinkcli.packages.react_reconciler.ReactFiberFlags import Callback
 
 if TYPE_CHECKING:
     from pyinkcli.component import RenderableNode
     from pyinkcli.packages.ink.dom import DOMElement
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
+
+
+def _is_control_flow_exception(error: Exception) -> bool:
+    return isinstance(error, (SuspendSignal, WorkYield))
 
 
 def reconcileClassComponent(
@@ -69,6 +76,10 @@ def reconcileClassComponent(
         instance._last_rendered_node = rendered
     else:
         rendered = instance._last_rendered_node
+
+    current_fiber = reconciler._current_fiber
+    if current_fiber is not None:
+        current_fiber.state_node = instance
 
     reconciler._record_inspected_element(
         node_id=component_id,
@@ -137,6 +148,8 @@ def reconcileClassComponent(
             devtools_parent_id,
         )
     except Exception as error:
+        if _is_control_flow_exception(error):
+            raise
         fallback = renderErrorBoundaryFallback(
             reconciler,
             component_type,
@@ -217,11 +230,15 @@ def scheduleClassComponentCommitCallback(
     previous_props: dict[str, Any],
     previous_state: dict[str, Any],
 ) -> None:
+    current_fiber = getattr(reconciler, "_current_fiber", None)
     if is_new_instance:
         if callable(getattr(instance, "componentDidMount", None)):
-            reconciler._pending_class_component_commit_callbacks.append(
-                (instance, lambda: invokeComponentDidMount(reconciler, instance))
-            )
+            callback = lambda: invokeComponentDidMount(reconciler, instance)
+            if current_fiber is not None:
+                current_fiber.flags |= Callback
+                current_fiber.layout_callbacks.append((instance, callback))
+            else:
+                reconciler._pending_class_component_commit_callbacks.append((instance, callback))
         else:
             instance._is_mounted = True
         return
@@ -231,17 +248,17 @@ def scheduleClassComponentCommitCallback(
         and should_update
         and callable(getattr(instance, "componentDidUpdate", None))
     ):
-        reconciler._pending_class_component_commit_callbacks.append(
-            (
-                instance,
-                lambda: invokeComponentDidUpdate(
-                    reconciler,
-                    instance,
-                    previous_props,
-                    previous_state,
-                ),
-            )
+        callback = lambda: invokeComponentDidUpdate(
+            reconciler,
+            instance,
+            previous_props,
+            previous_state,
         )
+        if current_fiber is not None:
+            current_fiber.flags |= Callback
+            current_fiber.layout_callbacks.append((instance, callback))
+        else:
+            reconciler._pending_class_component_commit_callbacks.append((instance, callback))
 
 
 def invokeComponentDidMount(

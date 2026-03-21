@@ -8,15 +8,24 @@ from typing import TYPE_CHECKING, Any
 from pyinkcli.packages.ink.dom import DOMElement
 from pyinkcli.packages.ink.host_config import ReconcilerHostConfig
 from pyinkcli.packages.react_reconciler.ReactFiberContainerUpdate import (
+    abortContainerRender as _abort_container_render_impl,
+    beginContainerRender as _begin_container_render_impl,
     commitContainerUpdate as _commit_container_update_impl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberCommitWork import (
+    PreparedCommit,
+    commitPreparedContainer as _commit_prepared_container_impl,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberContainerUpdate import (
     createContainer as _create_container_impl,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberContainerUpdate import (
+    finalizeContainerRender as _finalize_container_render_impl,
     flushSyncWork as _flush_sync_work_impl,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberContainerUpdate import (
+    resumeContainerRender as _resume_container_render_impl,
+    shouldResumeContainerRender as _should_resume_container_render_impl,
     submitContainer as _submit_container_impl,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberContainerUpdate import (
@@ -139,6 +148,61 @@ class ReactFiberReconcilerRoot:
             parent_component=parent_component,
             callback=callback,
         )
+
+    def _begin_container_render(
+        self,
+        element: RenderableNode,
+        container: ReconcilerContainer,
+        *,
+        priority: int,
+        callback: Callable[[], None] | None = None,
+        ) -> bool:
+        return _begin_container_render_impl(
+            self,
+            element,
+            container,
+            priority=priority,
+            callback=callback,
+        )
+
+    def _resume_container_render(
+        self,
+        container: ReconcilerContainer,
+    ) -> bool:
+        return _resume_container_render_impl(self, container)
+
+    def _abort_container_render(
+        self,
+        container: ReconcilerContainer,
+        *,
+        reason: str,
+    ) -> None:
+        _abort_container_render_impl(self, container, reason=reason)
+
+    def _should_resume_container_render(
+        self,
+        container: ReconcilerContainer,
+        *,
+        priority: int,
+    ) -> bool:
+        return _should_resume_container_render_impl(
+            self,
+            container,
+            priority=priority,
+        )
+
+    def _finalize_container_render(
+        self,
+        container: ReconcilerContainer,
+    ) -> None:
+        _finalize_container_render_impl(self, container)
+
+    def _commit_prepared_container(
+        self,
+        container: ReconcilerContainer,
+        prepared_commit: PreparedCommit,
+    ) -> None:
+        _commit_prepared_container_impl(self, container, prepared_commit)
 
 
 __all__ = ["ReactFiberReconcilerRoot"]

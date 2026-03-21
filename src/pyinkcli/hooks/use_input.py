@@ -101,6 +101,7 @@ def useInput(
     """
     stdin = useStdin()
     handler_ref = useRef(handler)
+    unsubscribe_ref = useRef(None)
     handler_ref.current = handler
 
     def manage_raw_mode():
@@ -120,6 +121,11 @@ def useInput(
         if not is_active:
             return None
 
+        previous_unsubscribe = unsubscribe_ref.current
+        if callable(previous_unsubscribe):
+            previous_unsubscribe()
+            unsubscribe_ref.current = None
+
         def handle_data(data: str) -> None:
             char, key = _parse_keypress(data)
             current_handler = handler_ref.current
@@ -127,7 +133,16 @@ def useInput(
                 return
             discreteUpdates(lambda: current_handler(char, key))
 
-        return stdin.on("input", handle_data)
+        unsubscribe = stdin.on("input", handle_data)
+        unsubscribe_ref.current = unsubscribe
+
+        def cleanup():
+            current_unsubscribe = unsubscribe_ref.current
+            if callable(current_unsubscribe):
+                current_unsubscribe()
+                unsubscribe_ref.current = None
+
+        return cleanup
 
     useEffect(register_handler, (is_active,))
 def _parse_keypress(data: str) -> tuple[str, Key]:

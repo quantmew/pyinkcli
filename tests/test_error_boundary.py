@@ -4,6 +4,7 @@ from io import StringIO
 
 import pytest
 
+from pyinkcli.ansi_tokenizer import tokenizeAnsi
 from pyinkcli import Text, render
 from pyinkcli._component_runtime import _Component
 from pyinkcli.component import createElement
@@ -17,6 +18,10 @@ class FakeStdout(StringIO):
 class FakeStdin(StringIO):
     def isatty(self) -> bool:
         return False
+
+
+def _strip_ansi(text: str) -> str:
+    return "".join(token.value for token in tokenizeAnsi(text) if token.type == "text")
 
 
 def test_class_component_renders_through_reconciler() -> None:
@@ -105,13 +110,13 @@ def test_class_component_should_component_update_can_bail_out_render() -> None:
 
         app.rerender(createElement(Gate, value="skip"))
         app.wait_until_render_flush(timeout=0.2)
-        assert stdout.getvalue().endswith("first")
+        assert _strip_ansi(stdout.getvalue()).endswith("first")
         assert ("should-update", "skip") in events
         assert ("did-update", "first", "skip") not in events
 
         app.rerender(createElement(Gate, value="second"))
         app.wait_until_render_flush(timeout=0.2)
-        assert stdout.getvalue().endswith("second")
+        assert _strip_ansi(stdout.getvalue()).endswith("second")
         assert ("did-update", "skip", "second") in events
     finally:
         app.unmount()

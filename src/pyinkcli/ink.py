@@ -217,6 +217,7 @@ class Ink:
         self._current_component: RenderableNode | Callable | None = None
         self._full_static_output = ""
         self._has_pending_throttled_render = False
+        self._has_pending_resume_render = False
         self._pending_commit_priority = DefaultEventPriority
 
         # Exit handling
@@ -263,6 +264,14 @@ class Ink:
                 perform_render=self._perform_scheduled_render,
                 wait_for_render_flush=self._wait_for_render_flush,
                 request_render=self._request_commit_render,
+                schedule_resume=self._schedule_resume_render_work,
+                should_defer_sync_passive_effects_to_commit=(
+                    lambda: (
+                        self._debug
+                        or not self._interactive
+                        or self._is_screen_reader_enabled
+                    )
+                ),
             )
         )
         self._container = self._reconciler.create_container(
@@ -326,17 +335,22 @@ class Ink:
         """
         self._render_component(node, sync=False)
 
-    def _perform_scheduled_render(self, node: RenderableNode | Callable) -> None:
-        self._render_component(node, sync=True)
+    def _perform_scheduled_render(
+        self,
+        node: RenderableNode | Callable,
+        priority: UpdatePriority,
+    ) -> bool:
+        return self._render_component(node, sync=True, priority=priority)
 
     def _render_component(
         self,
         node: RenderableNode | Callable,
         *,
         sync: bool,
-    ) -> None:
+        priority: UpdatePriority = DefaultEventPriority,
+    ) -> bool:
         if self._is_unmounted:
-            return
+            return True
 
         self._render_flush_event.clear()
 
@@ -346,6 +360,26 @@ class Ink:
 
         # Set context
         _reset_hook_state()
+        if sync and self._concurrent and priority > DiscreteEventPriority:
+            if self._container.render_state is not None and not self._reconciler._should_resume_container_render(
+                self._container,
+                priority=priority,
+            ):
+                self._reconciler._abort_container_render(
+                    self._container,
+                    reason="stale_or_preempted",
+                )
+            if self._container.render_state is None:
+                completed = self._reconciler._begin_container_render(
+                    wrapped,
+                    self._container,
+                    priority=priority,
+                )
+            else:
+                completed = self._reconciler._resume_container_render(self._container)
+            if completed and not self._container.update_running:
+                self._drain_pending_hook_rerenders()
+            return completed
         if sync:
             self._reconciler.update_container_sync(
                 wrapped,
@@ -359,6 +393,22 @@ class Ink:
 
         if not self._container.update_running:
             self._drain_pending_hook_rerenders()
+        return True
+
+    def _schedule_resume_render_work(self, _priority: UpdatePriority) -> None:
+        if self._has_pending_resume_render or self._is_unmounted or self._is_unmounting:
+            return
+
+        self._has_pending_resume_render = True
+
+        def run() -> None:
+            try:
+                time.sleep(0.001)
+                self._drain_pending_hook_rerenders()
+            finally:
+                self._has_pending_resume_render = False
+
+        self._start_background_thread(run)
 
     def _normalize_render_node(
         self,
@@ -459,6 +509,8 @@ class Ink:
 
     def _perform_final_render(self) -> None:
         if not self._should_perform_final_render():
+            return
+        if self._is_unmounting and self._log.is_cursor_dirty():
             return
         try:
             self._calculate_layout()

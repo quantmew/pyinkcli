@@ -13,8 +13,11 @@ from pyinkcli.hooks._runtime import (
     _finish_hook_state,
     _reset_hook_state,
     _set_rerender_callback,
+    _set_schedule_update_callback,
     useCallback,
     useEffect,
+    useInsertionEffect,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -52,6 +55,7 @@ def render_components(*items):
 def teardown_function():
     _clear_hook_state()
     _set_rerender_callback(None)
+    _set_schedule_update_callback(None)
     _clear_input_handlers()
 
 
@@ -201,6 +205,26 @@ def test_use_effect_cleanup_runs_before_re_running_changed_deps():
     assert calls == ["run:0", "cleanup:0", "run:1"]
 
 
+def test_use_layout_and_insertion_effect_run_after_render_in_runtime_mode() -> None:
+    calls: list[str] = []
+
+    def component():
+        def insertion():
+            calls.append("insertion")
+            return None
+
+        def layout():
+            calls.append("layout")
+            return None
+
+        useInsertionEffect(insertion, ())
+        useLayoutEffect(layout, ())
+        return "ok"
+
+    assert render_component("effect-kinds", component) == "ok"
+    assert calls == ["insertion", "layout"]
+
+
 def test_use_input_keeps_single_subscription_across_rerenders_and_uses_latest_handler():
     calls: list[tuple[int, str]] = []
 
@@ -309,6 +333,31 @@ def test_discrete_updates_coalesce_multiple_state_updates_into_one_rerender() ->
     render_component("discrete-rerender-count", component)
 
     assert rerenders == ["rerender"]
+
+
+def test_schedule_update_callback_batches_non_discrete_updates_outside_render() -> None:
+    setter_holder: list[object] = []
+    scheduled: list[tuple[object, object]] = []
+    flushed = threading.Event()
+
+    def component():
+        value, set_value = useState(0)
+        setter_holder[:] = [set_value]
+        return value
+
+    def on_schedule(fiber, priority) -> None:
+        scheduled.append((fiber, priority))
+        flushed.set()
+
+    _set_schedule_update_callback(on_schedule)
+    render_component("scheduled-auto-batched", component)
+
+    set_value = setter_holder[0]
+    set_value(1)
+    set_value(2)
+
+    assert flushed.wait(0.2)
+    assert len(scheduled) == 1
 
 
 def test_render_phase_update_is_recorded_with_render_phase_priority() -> None:

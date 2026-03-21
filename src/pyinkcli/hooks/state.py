@@ -5,6 +5,8 @@ from pyinkcli.hooks._runtime import (
     Ref,
     useCallback,
     useEffect,
+    useInsertionEffect,
+    useLayoutEffect,
     useMemo,
     useReducer,
     useRef,
@@ -24,6 +26,8 @@ _set_schedule_update_callback = _runtime._set_schedule_update_callback
 __all__ = [
     "useState",
     "useEffect",
+    "useLayoutEffect",
+    "useInsertionEffect",
     "useRef",
     "useMemo",
     "useCallback",

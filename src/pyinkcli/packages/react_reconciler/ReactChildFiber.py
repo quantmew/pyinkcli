@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import ExitStack
+from dataclasses import dataclass
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -39,6 +40,25 @@ if TYPE_CHECKING:
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
 
 
+@dataclass
+class WorkBudget:
+    remaining: int | None = None
+
+    def consume(self) -> None:
+        if self.remaining is None:
+            return
+        self.remaining -= 1
+
+    def should_yield(self) -> bool:
+        return self.remaining is not None and self.remaining <= 0
+
+
+class WorkYield(Exception):
+    def __init__(self, continuation: Callable[[], int]):
+        super().__init__("render work yielded")
+        self.continuation = continuation
+
+
 def reconcileChildren(
     reconciler: _Reconciler,
     parent: DOMElement,
@@ -47,10 +67,32 @@ def reconcileChildren(
     dom_index: int,
     devtools_parent_id: str,
 ) -> int:
+    return _reconcile_children_range(
+        reconciler,
+        parent,
+        children,
+        path,
+        dom_index,
+        devtools_parent_id,
+        start_index=0,
+    )
+
+
+def _reconcile_children_range(
+    reconciler: _Reconciler,
+    parent: DOMElement,
+    children: list[RenderableNode],
+    path: tuple[Any, ...],
+    dom_index: int,
+    devtools_parent_id: str,
+    *,
+    start_index: int,
+) -> int:
     parent_fiber = reconciler._current_fiber
     if parent_fiber is not None:
         parent_fiber.child = None
-    for index, child in enumerate(children):
+    for index in range(start_index, len(children)):
+        child = children[index]
         child_path = path + (getChildPathToken(reconciler, child, index),)
         dom_index = reconcileChild(
             reconciler,
@@ -60,6 +102,21 @@ def reconcileChildren(
             dom_index,
             devtools_parent_id,
         )
+        budget = getattr(reconciler, "_current_work_budget", None)
+        if isinstance(budget, WorkBudget):
+            budget.consume()
+            if budget.should_yield() and index + 1 < len(children):
+                raise WorkYield(
+                    lambda: _reconcile_children_range(
+                        reconciler,
+                        parent,
+                        children,
+                        path,
+                        dom_index,
+                        devtools_parent_id,
+                        start_index=index + 1,
+                    )
+                )
     return dom_index
 
 
@@ -372,6 +429,15 @@ def _run_structural_fiber_work(
     structural_fiber = _begin_structural_fiber(reconciler, parent_fiber, fiber)
     try:
         return work(structural_fiber)
+    except WorkYield as yielded:
+        raise WorkYield(
+            lambda: _run_structural_fiber_work(
+                reconciler,
+                parent_fiber,
+                fiber,
+                work=lambda _fiber: yielded.continuation(),
+            )
+        )
     finally:
         _end_structural_fiber(reconciler, structural_fiber)
 
@@ -386,6 +452,15 @@ def _run_function_fiber_work(
     function_fiber = _begin_function_fiber(reconciler, parent_fiber, fiber)
     try:
         return work(function_fiber)
+    except WorkYield as yielded:
+        raise WorkYield(
+            lambda: _run_function_fiber_work(
+                reconciler,
+                parent_fiber,
+                fiber,
+                work=lambda _fiber: yielded.continuation(),
+            )
+        )
     finally:
         _end_function_fiber(reconciler, function_fiber)
 
@@ -625,9 +700,26 @@ def _reconcile_text_child(
         reconciler,
         parent_fiber,
         text_fiber,
-        work=lambda _fiber: reconciler._reconcile_text_node(parent, vnode, dom_index),
+        work=lambda fiber: _perform_text_fiber_work(
+            reconciler,
+            fiber=fiber,
+            parent=parent,
+            text=vnode,
+            dom_index=dom_index,
+        ),
     )
     return dom_index + 1
+
+
+def _perform_text_fiber_work(
+    reconciler: _Reconciler,
+    *,
+    fiber: HookFiber,
+    parent: DOMElement,
+    text: str,
+    dom_index: int,
+) -> None:
+    fiber.state_node = reconciler._reconcile_text_node(parent, text, dom_index)
 
 
 # Structural Performers
@@ -940,6 +1032,9 @@ def _perform_host_fiber_work(
         dom_index,
         vnode.key,
     )
+    current_fiber = reconciler._current_fiber
+    if current_fiber is not None:
+        current_fiber.state_node = dom_node
     if reconciler._next_devtools_host_instance_ids is not None:
         reconciler._next_devtools_host_instance_ids[id(dom_node)] = host_node_id
 

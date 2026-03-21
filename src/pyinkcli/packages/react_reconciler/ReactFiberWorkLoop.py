@@ -116,6 +116,7 @@ def requestRerender(
 
     with container.lock:
         container.update_requested = True
+        container.pending_work_version += 1
         markRootPinged(container, priority)
         container.pending_update_priority = container.callback_priority
         if container.update_running:
@@ -141,7 +142,22 @@ def requestRerender(
 
             previous_render_priority = shared_internals.current_render_priority
             shared_internals.current_render_priority = container.current_update_priority
-            host_config.perform_render(current_component)
+            completed = host_config.perform_render(
+                current_component,
+                container.current_update_priority,
+            )
+            if not completed:
+                with container.lock:
+                    container.pending_lanes = mergeLanes(
+                        container.pending_lanes,
+                        laneToMask(container.current_update_priority),
+                    )
+                    container.callback_priority = getHighestPriorityLane(container.pending_lanes)
+                    container.pending_update_priority = container.callback_priority
+                    container.update_requested = True
+                    container.update_running = False
+                host_config.schedule_resume(container.current_update_priority)
+                return
             shared_internals.current_render_priority = previous_render_priority
             with container.lock:
                 if getattr(reconciler, "_render_suspended", False):

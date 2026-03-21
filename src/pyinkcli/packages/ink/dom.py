@@ -398,6 +398,54 @@ def _mark_node_as_dirty(node: DOMNode | None) -> None:
         yogaNode.mark_dirty()
 
 
+def cloneNodeTree(node: DOMNode) -> DOMNode:
+    """Deep-clone a DOM tree for detached work."""
+    if isinstance(node, TextNode):
+        cloned_text = createTextNode(node.nodeValue)
+        cloned_text.style = dict(node.style)
+        return cloned_text
+
+    cloned = createNode(node.nodeName)
+    cloned.style = dict(node.style)
+    cloned.attributes = dict(node.attributes)
+    cloned.internal_ref = node.internal_ref
+    cloned.internal_transform = node.internal_transform
+    cloned.internal_static = node.internal_static
+    cloned.key = node.key
+    cloned.internal_accessibility = dict(node.internal_accessibility)
+    cloned.isStaticDirty = node.isStaticDirty
+
+    for child in node.childNodes:
+        appendChildNode(cloned, cloneNodeTree(child))
+
+    if node.staticNode is not None:
+        for child, cloned_child in zip(node.childNodes, cloned.childNodes):
+            if child is node.staticNode and isinstance(cloned_child, DOMElement):
+                cloned.staticNode = cloned_child
+                break
+
+    return cloned
+
+
+def adoptNodeTree(target: DOMElement, source: DOMElement) -> None:
+    """Adopt a detached work tree into the live root."""
+    while target.childNodes:
+        removeChildNode(target, target.childNodes[0])
+
+    while source.childNodes:
+        appendChildNode(target, source.childNodes[0])
+
+    target.style = dict(source.style)
+    target.attributes = dict(source.attributes)
+    target.internal_ref = source.internal_ref
+    target.internal_transform = source.internal_transform
+    target.internal_static = source.internal_static
+    target.key = source.key
+    target.internal_accessibility = dict(source.internal_accessibility)
+    target.isStaticDirty = source.isStaticDirty
+    target.staticNode = source.staticNode
+
+
 __all__ = [
     "DOMElement",
     "TextNode",
@@ -415,5 +463,7 @@ __all__ = [
     "setTextNodeValue",
     "addLayoutListener",
     "emitLayoutListeners",
+    "cloneNodeTree",
+    "adoptNodeTree",
     "squashTextNodes",
 ]

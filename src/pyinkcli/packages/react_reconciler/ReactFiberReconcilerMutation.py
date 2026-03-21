@@ -80,8 +80,8 @@ class ReactFiberReconcilerMutation:
         parent: DOMElement,
         text: str,
         dom_index: int,
-    ) -> None:
-        _reconcile_text_node_impl(self, parent, text, dom_index)
+    ) -> DOMNode:
+        return _reconcile_text_node_impl(self, parent, text, dom_index)
 
     def _reconcile_element_node(
         self,

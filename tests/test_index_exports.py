@@ -240,6 +240,8 @@ def test_hooks_state_module_is_now_thin_compat_surface() -> None:
     assert hooks_state.__all__ == [
         "useState",
         "useEffect",
+        "useLayoutEffect",
+        "useInsertionEffect",
         "useRef",
         "useMemo",
         "useCallback",

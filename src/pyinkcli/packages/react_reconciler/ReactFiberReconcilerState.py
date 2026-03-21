@@ -86,6 +86,13 @@ def initializeReconcilerState(
     reconciler._attached_host_refs = {}
     reconciler._render_suspended = False
     reconciler._suspended_lanes_this_render = 0
+    reconciler._current_work_budget = None
+    reconciler._prepared_effects = {
+        "mutation": [],
+        "layout": [],
+        "passive": [],
+    }
+    reconciler._last_prepared_commit = None
 
 
 def setCommitHandlers(

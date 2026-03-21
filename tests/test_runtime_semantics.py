@@ -10,7 +10,7 @@ from pyinkcli import Box, Text, measureElement, render
 from pyinkcli.component import createElement
 from pyinkcli.components._accessibility_runtime import _provide_accessibility
 from pyinkcli.dom import addLayoutListener
-from pyinkcli.hooks import useState, useTransition
+from pyinkcli.hooks import useEffect, useInsertionEffect, useLayoutEffect, useState, useTransition
 from pyinkcli.hooks.use_input import _dispatch_input, useInput
 from pyinkcli.hooks.use_cursor import useCursor
 from pyinkcli.ink import Ink, Options
@@ -155,6 +155,37 @@ def test_callback_ref_measurement_matches_ink_progress_bar_pattern() -> None:
     try:
         app.wait_until_render_flush(timeout=0.2)
         assert "Width: 12" in stdout.getvalue()
+    finally:
+        app.unmount()
+
+
+def test_host_ref_change_detaches_previous_ref_and_attaches_next_ref() -> None:
+    first_events: list[object] = []
+    second_events: list[object] = []
+
+    def first_ref(value) -> None:
+        first_events.append(value)
+
+    def second_ref(value) -> None:
+        second_events.append(value)
+
+    def Example(*, use_second: bool):
+        return Box(Text("ref"), ref=second_ref if use_second else first_ref, width=8)
+
+    stdout = FakeStdout()
+    stdin = FakeStdin()
+    app = render(createElement(Example, use_second=False), stdout=stdout, stdin=stdin, debug=True)
+    try:
+        app.wait_until_render_flush(timeout=0.2)
+        assert first_events
+        assert first_events[-1] is not None
+
+        app.rerender(createElement(Example, use_second=True))
+        app.wait_until_render_flush(timeout=0.2)
+
+        assert first_events[-1] is None
+        assert second_events
+        assert second_events[-1] is not None
     finally:
         app.unmount()
 
@@ -355,6 +386,318 @@ def test_suspense_resource_resolution_pings_original_lane() -> None:
 
     assert _records[key].wake_priority == DefaultEventPriority
     resetResource(key)
+
+
+def test_discrete_input_preempts_transition_render_and_transition_recovers() -> None:
+    stdout = FakeStdout()
+    stdin = FakeStdin()
+
+    def Example():
+        query, set_query = useState("")
+        is_pending, start_transition = useTransition()
+        deferred_query, set_deferred_query = useState("")
+
+        if deferred_query:
+            time.sleep(0.02)
+
+        def on_input(input_char: str, key) -> None:
+            if not input_char or key.ctrl or key.meta:
+                return
+            set_query(lambda previous: previous + input_char)
+            start_transition(
+                lambda: set_deferred_query(lambda previous: previous + input_char)
+            )
+
+        useInput(on_input)
+        return Text(f"{query}|{deferred_query}|{is_pending}")
+
+    app = render(createElement(Example), stdout=stdout, stdin=stdin, concurrent=True, debug=True)
+    try:
+        app.wait_until_render_flush(timeout=0.2)
+        _dispatch_input("a")
+        _dispatch_input("b")
+        time.sleep(0.05)
+        _wait_for_output(app, stdout, "ab|")
+        _wait_for_output(app, stdout, "ab|ab|False")
+    finally:
+        app.unmount()
+
+
+def test_concurrent_render_prepares_commit_before_host_commit() -> None:
+    stdout = FakeStdout()
+    stdin = FakeStdin()
+
+    def Example():
+        value, set_value = useState("")
+        is_pending, start_transition = useTransition()
+
+        def on_input(input_char: str, key) -> None:
+            if input_char and not key.ctrl and not key.meta:
+                start_transition(lambda: set_value(input_char))
+
+        useInput(on_input)
+        return Text(f"{value}|{is_pending}")
+
+    app = render(createElement(Example), stdout=stdout, stdin=stdin, concurrent=True, debug=True)
+    try:
+        app.wait_until_render_flush(timeout=0.2)
+        _dispatch_input("x")
+        _wait_for_output(app, stdout, "x|False")
+        prepared = app._reconciler._last_prepared_commit
+        assert prepared is not None
+        assert prepared.commit_list.effects
+        assert prepared.commit_list.layout_effects
+        assert prepared.mutations
+    finally:
+        app.unmount()
+
+
+def test_concurrent_commit_drives_passive_unmount_effects_from_fiber_queue() -> None:
+    stdout = FakeStdout()
+    stdin = FakeStdin()
+    calls: list[str] = []
+
+    def Child():
+        def effect():
+            calls.append("mount")
+
+            def cleanup():
+                calls.append("unmount")
+
+            return cleanup
+
+        useEffect(effect, ())
+        return Text("child")
+
+    def Example():
+        visible, set_visible = useState(True)
+        _is_pending, start_transition = useTransition()
+
+        def on_input(input_char: str, key) -> None:
+            if input_char == "x" and not key.ctrl and not key.meta:
+                start_transition(lambda: set_visible(False))
+
+        useInput(on_input)
+        return Box(Text("visible" if visible else "hidden"), createElement(Child) if visible else None)
+
+    app = render(createElement(Example), stdout=stdout, stdin=stdin, concurrent=True, debug=True)
+    try:
+        app.wait_until_render_flush(timeout=0.2)
+        initial_mounts = calls.count("mount")
+        assert initial_mounts >= 1
+
+        _dispatch_input("x")
+        _wait_for_output(app, stdout, "hidden")
+
+        assert calls.count("unmount") == 1
+        assert not app._container.render_state
+    finally:
+        app.unmount()
+
+
+def test_commit_path_runs_insertion_then_layout_then_passive_hook_effects() -> None:
+    stdout = FakeStdout()
+    stdin = FakeStdin()
+    calls: list[str] = []
+
+    def Example():
+        useInsertionEffect(lambda: calls.append("insertion") or None, ())
+        useLayoutEffect(lambda: calls.append("layout") or None, ())
+        useEffect(lambda: calls.append("passive") or None, ())
+        return Text("effects")
+
+    app = render(
+        createElement(Example),
+        stdout=stdout,
+        stdin=stdin,
+        concurrent=True,
+        debug=True,
+    )
+    try:
+        app.wait_until_render_flush(timeout=0.2)
+        assert "effects" in stdout.getvalue()
+        assert set(calls) == {"insertion", "layout", "passive"}
+    finally:
+        app.unmount()
+
+
+def test_sync_debug_commit_can_defer_passive_effects_to_commit_when_host_marks_it_safe() -> None:
+    stdout = FakeStdout()
+    stdin = FakeStdin()
+    calls: list[str] = []
+
+    def Example():
+        useInsertionEffect(lambda: calls.append("insertion") or None, ())
+        useLayoutEffect(lambda: calls.append("layout") or None, ())
+        useEffect(lambda: calls.append("passive") or None, ())
+        return Text("effects")
+
+    app = render(createElement(Example), stdout=stdout, stdin=stdin, debug=True)
+    try:
+        app.wait_until_render_flush(timeout=0.2)
+        assert "effects" in stdout.getvalue()
+        assert calls == ["insertion", "layout", "passive"]
+    finally:
+        app.unmount()
+
+
+def test_deleted_subtree_passive_unmount_runs_parent_before_child() -> None:
+    stdout = FakeStdout()
+    stdin = FakeStdin()
+    calls: list[str] = []
+
+    def Child():
+        useEffect(
+            lambda: (
+                None,
+                lambda: calls.append("child-unmount"),
+            )[1],
+            (),
+        )
+        return Text("child")
+
+    def Child():
+        useEffect(
+            lambda: (
+                None,
+                lambda: calls.append("child-unmount"),
+            )[1],
+            (),
+        )
+        return Text("child")
+
+    def Parent():
+        useEffect(
+            lambda: (
+                None,
+                lambda: calls.append("parent-unmount"),
+            )[1],
+            (),
+        )
+        return Box(Text("parent"), createElement(Child))
+
+    def Example():
+        visible, set_visible = useState(True)
+        def on_input(input_char: str, key) -> None:
+            if input_char == "x" and not key.ctrl and not key.meta:
+                set_visible(False)
+
+        useInput(on_input)
+        return createElement(Parent) if visible else Text("gone")
+
+    app = render(createElement(Example), stdout=stdout, stdin=stdin, debug=True)
+    try:
+        app.wait_until_render_flush(timeout=0.2)
+        _dispatch_input("x")
+        _wait_for_output(app, stdout, "gone")
+        assert calls == ["parent-unmount", "child-unmount"]
+    finally:
+        app.unmount()
+
+
+def test_updated_layout_and_insertion_effects_cleanup_before_new_mounts() -> None:
+    stdout = FakeStdout()
+    stdin = FakeStdin()
+    calls: list[str] = []
+
+    def Example():
+        value, set_value = useState("A")
+
+        useInsertionEffect(
+            lambda: (
+                calls.append(f"insertion-mount:{value}"),
+                lambda: calls.append(f"insertion-unmount:{value}"),
+            )[1],
+            (value,),
+        )
+        useLayoutEffect(
+            lambda: (
+                calls.append(f"layout-mount:{value}"),
+                lambda: calls.append(f"layout-unmount:{value}"),
+            )[1],
+            (value,),
+        )
+
+        def on_input(input_char: str, key) -> None:
+            if input_char == "x" and not key.ctrl and not key.meta:
+                set_value("B")
+
+        useInput(on_input)
+        return Text(value)
+
+    app = render(createElement(Example), stdout=stdout, stdin=stdin, debug=True)
+    try:
+        app.wait_until_render_flush(timeout=0.2)
+        calls.clear()
+        _dispatch_input("x")
+        _wait_for_output(app, stdout, "B")
+
+        assert calls == [
+            "insertion-unmount:A",
+            "insertion-mount:B",
+            "layout-unmount:A",
+            "layout-mount:B",
+        ]
+    finally:
+        app.unmount()
+
+
+def test_parent_fiber_tracks_deletions_list_for_removed_children() -> None:
+    root_node = create_root_node(40, 5)
+    reconciler = createReconciler(root_node)
+    container = reconciler.create_container(root_node)
+
+    first = Box(
+        Text("first"),
+        Text("second"),
+    )
+    reconciler.update_container(first, container)
+
+    second = Box(
+        Text("first"),
+    )
+    reconciler.update_container(second, container)
+
+    parent_fiber = reconciler._root_fiber.child
+    assert parent_fiber is not None
+    assert parent_fiber.deletions
+
+
+def test_stale_concurrent_render_state_is_explicitly_aborted() -> None:
+    stdout = FakeStdout()
+    stdin = FakeStdin()
+
+    def Example():
+        value, set_value = useState("")
+        is_pending, start_transition = useTransition()
+
+        def on_input(input_char: str, key) -> None:
+            if input_char and not key.ctrl and not key.meta:
+                start_transition(lambda: set_value(input_char))
+
+        useInput(on_input)
+        return Box(
+            Text(f"{value}|{is_pending}"),
+            *[Text(f"row-{index}-{value}") for index in range(40)],
+            flexDirection="column",
+        )
+
+    app = render(createElement(Example), stdout=stdout, stdin=stdin, concurrent=True, debug=True)
+    try:
+        app.wait_until_render_flush(timeout=0.2)
+        _dispatch_input("a")
+        time.sleep(0.01)
+        state = app._container.render_state
+        assert state is not None
+
+        app._container.pending_work_version += 1
+        app._reconciler._abort_container_render(app._container, reason="test_abort")
+
+        assert app._container.render_state is None
+        assert state.status == "aborted"
+        assert state.abort_reason == "test_abort"
+    finally:
+        app.unmount()
 
 def test_use_cursor_normalizes_negative_positions() -> None:
     def Example():

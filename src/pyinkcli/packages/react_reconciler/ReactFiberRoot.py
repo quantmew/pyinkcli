@@ -32,6 +32,8 @@ class ReconcilerContainer:
     update_running: bool = False
     pending_update_priority: UpdatePriority = NoEventPriority
     current_update_priority: UpdatePriority = NoEventPriority
+    pending_work_version: int = 0
+    render_state: object | None = None
 
 
 __all__ = ["ReconcilerContainer"]
