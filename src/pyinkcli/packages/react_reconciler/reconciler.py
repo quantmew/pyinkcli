@@ -15,6 +15,9 @@ from pyinkcli.packages.react_reconciler.ReactFiberReconciler import (
 )
 from pyinkcli.packages.react_reconciler.ReactFiberReconcilerFacade import _Reconciler
 from pyinkcli.packages.react_reconciler.ReactFiberRoot import ReconcilerContainer
+from pyinkcli.packages.react_reconciler.ReactFiberRootScheduler import (
+    flushSyncWorkOnAllRoots,
+)
 from pyinkcli.packages.react_reconciler.ReactFiberWorkLoop import priorityRank
 
 __all__ = [
@@ -28,6 +31,7 @@ __all__ = [
     "diff",
     "discreteUpdates",
     "flushScheduledUpdates",
+    "flushSyncWorkOnAllRoots",
     "flushSyncFromReconciler",
     "getReconciler",
     "packageInfo",

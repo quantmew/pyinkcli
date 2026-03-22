@@ -537,37 +537,27 @@ def getDevtoolsIteratorSize(_reconciler: _Reconciler, value: Any) -> int | None:
 
 
 def getDevtoolsThenableDisplayName(_reconciler: _Reconciler, value: Any) -> str:
-    constructor = getattr(type(value), "__name__", "")
-    return constructor or "Thenable"
+    from pyinkcli.packages.react_reconciler.ReactFiberThenable import getThenableDisplayName
+
+    return getThenableDisplayName(value)
 
 
 def getDevtoolsThenableStatus(_reconciler: _Reconciler, value: Any) -> str:
-    if isinstance(value, (asyncio.Future, concurrent.futures.Future)):
-        if not value.done():
-            return "pending"
-        try:
-            value.result()
-        except BaseException:
-            return "rejected"
-        return "fulfilled"
-    status = getattr(value, "status", None)
-    return status if isinstance(status, str) else "pending"
+    from pyinkcli.packages.react_reconciler.ReactFiberThenable import getThenableStatus
+
+    return getThenableStatus(value)
 
 
 def getDevtoolsThenableValue(_reconciler: _Reconciler, value: Any) -> Any:
-    if isinstance(value, (asyncio.Future, concurrent.futures.Future)):
-        return value.result()
-    return getattr(value, "value", None)
+    from pyinkcli.packages.react_reconciler.ReactFiberThenable import getThenableValue
+
+    return getThenableValue(value)
 
 
 def getDevtoolsThenableReason(_reconciler: _Reconciler, value: Any) -> Any:
-    if isinstance(value, (asyncio.Future, concurrent.futures.Future)):
-        try:
-            value.result()
-        except BaseException as error:
-            return error
-        return None
-    return getattr(value, "reason", None)
+    from pyinkcli.packages.react_reconciler.ReactFiberThenable import getThenableReason
+
+    return getThenableReason(value)
 
 
 def getDevtoolsLazyStatus(_reconciler: _Reconciler, payload: Any) -> str | None:

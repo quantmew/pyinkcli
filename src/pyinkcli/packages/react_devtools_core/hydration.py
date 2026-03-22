@@ -607,6 +607,7 @@ def _normalize_inspect_bridge_payload(
     node_id = payload.get("id")
     if node_id is None:
         raise ValueError(f"{payload_name} must include 'id'")
+    node_id = _normalize_bridge_request_id(node_id, field_name="id")
 
     path = payload.get("path")
     if path is not None and not isinstance(path, list):
@@ -617,9 +618,12 @@ def _normalize_inspect_bridge_payload(
         raise TypeError(f"{payload_name} 'forceFullData' must be a bool")
 
     renderer_id = payload.get("rendererID") if include_renderer_id else None
+    if include_renderer_id and renderer_id is not None:
+        renderer_id = _normalize_bridge_request_id(renderer_id, field_name="rendererID")
     payload_request_id = payload.get("requestID", payload.get("requestId", request_id))
     if payload_request_id is None:
         raise ValueError(f"{payload_name} must include requestID or envelope requestId")
+    payload_request_id = _normalize_bridge_request_id(payload_request_id)
 
     return {
         "id": node_id,
@@ -733,12 +737,18 @@ def _normalize_devtools_notification_payload(
     if require_renderer_id:
         if "rendererID" not in payload:
             raise ValueError(f"{payload_name} must include 'rendererID'")
-        normalized["rendererID"] = payload["rendererID"]
+        normalized["rendererID"] = _normalize_bridge_request_id(
+            payload["rendererID"],
+            field_name="rendererID",
+        )
 
     if require_id:
         if "id" not in payload:
             raise ValueError(f"{payload_name} must include 'id'")
-        normalized["id"] = payload["id"]
+        normalized["id"] = _normalize_bridge_request_id(
+            payload["id"],
+            field_name="id",
+        )
 
     if require_path:
         path = payload.get("path")
@@ -749,7 +759,10 @@ def _normalize_devtools_notification_payload(
     if require_count:
         if "count" not in payload:
             raise ValueError(f"{payload_name} must include 'count'")
-        normalized["count"] = payload["count"]
+        count = payload["count"]
+        if isinstance(count, bool) or not isinstance(count, int):
+            raise TypeError(f"{payload_name} 'count' must be an int")
+        normalized["count"] = count
 
     return normalized
 
@@ -1101,17 +1114,67 @@ def _next_bridge_request_id() -> int:
     return next(_BRIDGE_REQUEST_ID_COUNTER)
 
 
+def _normalize_bridge_request_id(request_id: Any, *, field_name: str = "requestId") -> int | str:
+    if isinstance(request_id, bool) or not isinstance(request_id, (int, str)):
+        raise TypeError(f"Bridge message {field_name} must be an int or non-empty string")
+    if isinstance(request_id, str) and not request_id:
+        raise ValueError(f"Bridge message {field_name} must not be empty")
+    return request_id
+
+
+def _normalize_bridge_message_envelope(
+    message: dict[str, Any],
+    *,
+    expected_type: str | None = None,
+    expected_event: str | None = None,
+    require_request_id: bool = False,
+) -> dict[str, Any]:
+    if not isinstance(message, dict):
+        raise TypeError("Bridge message must be a dict")
+
+    message_type = message.get("type")
+    if expected_type is not None:
+        if message_type != expected_type:
+            raise ValueError(f"Bridge message must have type='{expected_type}'")
+    elif message_type not in {"request", "notification", "response"}:
+        raise ValueError("Bridge message type must be 'request', 'notification', or 'response'")
+
+    event = message.get("event")
+    if not isinstance(event, str) or not event:
+        raise ValueError("Bridge message must include a non-empty event")
+    if expected_event is not None and event != expected_event:
+        raise ValueError(f"Bridge message event must be '{expected_event}'")
+
+    payload = message.get("payload", {})
+    if payload is None:
+        payload = {}
+    if not isinstance(payload, dict):
+        raise TypeError("Bridge message payload must be a dict")
+
+    normalized = {"event": event, "type": message_type, "payload": payload}
+    if "requestId" in message:
+        normalized["requestId"] = _normalize_bridge_request_id(message["requestId"])
+    elif require_request_id:
+        raise ValueError("Bridge message must include requestId")
+    return normalized
+
+
 def make_bridge_request(
     event: str,
     payload: dict[str, Any],
     *,
     request_id: Any = None,
 ) -> dict[str, Any]:
+    normalized_request_id = (
+        _next_bridge_request_id()
+        if request_id is None
+        else _normalize_bridge_request_id(request_id)
+    )
     return serialize_bridge_message_envelope(
         payload,
         event=event,
         message_type="request",
-        request_id=_next_bridge_request_id() if request_id is None else request_id,
+        request_id=normalized_request_id,
     )
 
 
@@ -1145,11 +1208,16 @@ def make_bridge_response(
     *,
     request_id: Any = None,
 ) -> dict[str, Any]:
+    normalized_request_id = (
+        _next_bridge_request_id()
+        if request_id is None
+        else _normalize_bridge_request_id(request_id)
+    )
     return serialize_bridge_message_envelope(
         payload,
         event=event,
         message_type="response",
-        request_id=_next_bridge_request_id() if request_id is None else request_id,
+        request_id=normalized_request_id,
     )
 
 
@@ -1244,21 +1312,13 @@ def handle_bridge_call(
     message: dict[str, Any],
     handlers: dict[str, Callable[..., Any]],
 ) -> dict[str, Any]:
-    if not isinstance(message, dict):
-        raise TypeError("Bridge call message must be a dict")
-    if message.get("type") != "request":
-        raise ValueError("Bridge call message must have type='request'")
-    event = message.get("event")
-    if not isinstance(event, str) or not event:
-        raise ValueError("Bridge call message must include a non-empty event")
-    if "requestId" not in message:
-        raise ValueError("Bridge call message must include requestId")
-
-    payload = message.get("payload", {})
-    if payload is None:
-        payload = {}
-    if not isinstance(payload, dict):
-        raise TypeError("Bridge call payload must be a dict")
+    normalized_message = _normalize_bridge_message_envelope(
+        message,
+        expected_type="request",
+        require_request_id=True,
+    )
+    event = normalized_message["event"]
+    payload = normalized_message["payload"]
 
     handler = handlers.get(event)
     if handler is None:
@@ -1268,7 +1328,7 @@ def handle_bridge_call(
                 "error_type": "LookupError",
                 "error_message": f'No bridge call handler registered for "{event}"',
             },
-            request_id=message["requestId"],
+            request_id=normalized_message["requestId"],
         )
 
     try:
@@ -1278,13 +1338,13 @@ def handle_bridge_call(
             return make_bridge_success_response(
                 event,
                 response_payload,
-                request_id=message["requestId"],
+                request_id=normalized_message["requestId"],
             )
         return make_bridge_error_response(
             event,
             failure or {"error_type": "RuntimeError", "error_message": "Unknown bridge call failure"},
             response_payload,
-            request_id=message["requestId"],
+            request_id=normalized_message["requestId"],
         )
     except Exception as error:
         serialized = _serialize_bridge_call_error(error)
@@ -1293,7 +1353,7 @@ def handle_bridge_call(
             event,
             serialized["failure"],
             response_payload,
-            request_id=message["requestId"],
+            request_id=normalized_message["requestId"],
         )
 
 
@@ -1303,26 +1363,18 @@ def dispatch_bridge_message(
     call_handlers: dict[str, Callable[..., Any]] | None = None,
     notification_handlers: dict[str, Callable[..., Any]] | None = None,
 ) -> Any:
-    if not isinstance(message, dict):
-        raise TypeError("Bridge message must be a dict")
-
-    message_type = message.get("type")
+    normalized_message = _normalize_bridge_message_envelope(message)
+    message_type = normalized_message["type"]
     if message_type == "request":
-        return handle_bridge_call(message, call_handlers or {})
+        return handle_bridge_call(normalized_message, call_handlers or {})
 
     if message_type == "notification":
-        event = message.get("event")
-        if not isinstance(event, str) or not event:
-            raise ValueError("Bridge notification must include a non-empty event")
-        payload = message.get("payload", {})
-        if payload is None:
-            payload = {}
-        if not isinstance(payload, dict):
-            raise TypeError("Bridge notification payload must be a dict")
+        event = normalized_message["event"]
+        payload = normalized_message["payload"]
         handler = (notification_handlers or {}).get(event)
         if handler is None:
             return None
-        return handler(payload, message)
+        return handler(payload, normalized_message)
 
     raise ValueError("Bridge message type must be 'request' or 'notification'")
 
@@ -1382,21 +1434,16 @@ def _handle_inspect_bridge_call(
     normalizer: Callable[..., dict[str, Any]],
     handler_factory: Callable[[Callable[..., dict[str, Any]]], Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]],
 ) -> dict[str, Any]:
-    if not isinstance(message, dict):
-        raise TypeError("Bridge call message must be a dict")
-    if message.get("type") != "request":
-        raise ValueError("Bridge call message must have type='request'")
-    if "requestId" not in message:
-        raise ValueError("Bridge call message must include requestId")
-    if message.get("event") != event:
-        raise ValueError(f"Bridge call message event must be '{event}'")
-
-    payload = message.get("payload", {})
-    if payload is None:
-        payload = {}
+    normalized_message = _normalize_bridge_message_envelope(
+        message,
+        expected_type="request",
+        expected_event=event,
+        require_request_id=True,
+    )
+    payload = normalized_message["payload"]
     normalized = normalizer(
         payload,
-        request_id=message["requestId"],
+        request_id=normalized_message["requestId"],
     )
 
     try:
@@ -1404,7 +1451,7 @@ def _handle_inspect_bridge_call(
         return make_bridge_success_response(
             response_event,
             response_payload,
-            request_id=message["requestId"],
+            request_id=normalized_message["requestId"],
         )
     except Exception as error:
         serialized = _serialize_bridge_call_error(error)
@@ -1413,7 +1460,7 @@ def _handle_inspect_bridge_call(
             response_event,
             serialized["failure"],
             response_payload,
-            request_id=message["requestId"],
+            request_id=normalized_message["requestId"],
         )
 
 
@@ -1424,18 +1471,14 @@ def handle_bridge_notification(
     event: str,
     normalizer: Callable[[dict[str, Any] | None], dict[str, Any]],
 ) -> Any:
-    if not isinstance(message, dict):
-        raise TypeError("Bridge notification message must be a dict")
-    if message.get("type") != "notification":
-        raise ValueError("Bridge notification message must have type='notification'")
-    if message.get("event") != event:
-        raise ValueError(f"Bridge notification message event must be '{event}'")
-
-    payload = message.get("payload", {})
-    if payload is None:
-        payload = {}
+    normalized_message = _normalize_bridge_message_envelope(
+        message,
+        expected_type="notification",
+        expected_event=event,
+    )
+    payload = normalized_message["payload"]
     normalized = normalizer(payload)
-    return handler(normalized, message)
+    return handler(normalized, normalized_message)
 
 
 def handle_clear_errors_and_warnings_bridge_notification(

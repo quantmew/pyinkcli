@@ -13,10 +13,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pyinkcli.hooks._runtime import _clear_hook_state
 from pyinkcli.packages.ink.dom import DOMElement, createNode
 from pyinkcli.packages.ink.output import Output
 from pyinkcli.packages.ink.render_node_to_output import renderNodeToOutput
+from pyinkcli.packages.react.dispatcher import clearHookState
 from pyinkcli.packages.react_reconciler.ReactFiberReconciler import createReconciler
 
 if TYPE_CHECKING:
@@ -103,4 +103,4 @@ def renderToString(
         yoga_node = root_node.yogaNode
         if yoga_node is not None:
             yoga_node.free()
-        _clear_hook_state()
+        clearHookState()

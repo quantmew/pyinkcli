@@ -6,6 +6,10 @@ from collections.abc import Callable
 from typing import Any
 
 from pyinkcli._component_runtime import RenderableNode, createElement, scopeRender
+from pyinkcli.components._app_context_runtime import _get_app_context
+from pyinkcli.packages.react_reconciler.ReactFiberRuntimeSources import (
+    recordRuntimeSourceDependency,
+)
 from pyinkcli.packages.react_router.context import (
     LocationContextObject,
     RouteContextObject,
@@ -17,6 +21,17 @@ from pyinkcli.packages.react_router.context import (
     _provide_outlet_context,
     _provide_route_context,
 )
+
+def _record_router_runtime_source(source: str) -> None:
+    app_context = _get_app_context()
+    app = getattr(app_context, "app", None) if app_context is not None else None
+    reconciler = getattr(app, "_reconciler", None)
+    recordRuntimeSourceDependency(
+        reconciler,
+        getattr(reconciler, "_current_fiber", None),
+        source,
+    )
+
 from pyinkcli.packages.react_router.router.history import Action, parsePath
 from pyinkcli.packages.react_router.router.utils import (
     RouteMatch,
@@ -37,6 +52,7 @@ def useInRouterContext() -> bool:
 def useLocation() -> Any:
     if not useInRouterContext():
         raise RuntimeError("useLocation() may be used only in the context of a <Router> component.")
+    _record_router_runtime_source("router.location")
     return _get_location_context().location
 
 
@@ -80,6 +96,7 @@ def useMatch(pattern: str | dict[str, Any]) -> dict[str, Any] | None:
 def useNavigate() -> Callable[[Any, dict[str, Any] | None], None]:
     if not useInRouterContext():
         raise RuntimeError("useNavigate() may be used only in the context of a <Router> component.")
+    _record_router_runtime_source("router.navigation")
 
     navigation_context = _get_navigation_context()
     route_context = _get_route_context()
@@ -157,6 +174,7 @@ def useRoutesImpl(
 ) -> RenderableNode:
     if not useInRouterContext():
         raise RuntimeError("useRoutes() may be used only in the context of a <Router> component.")
+    _record_router_runtime_source("router.location")
 
     navigation_context = _get_navigation_context()
     parent_matches = _get_route_context().matches

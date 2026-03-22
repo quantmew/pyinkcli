@@ -6,10 +6,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from pyinkcli.hooks._runtime import (
-    HookHasEffect,
-    HookInsertion,
-    HookLayout,
-    HookPassive,
     EffectRecord,
     _commit_hook_passive_mount_effects,
     _commit_hook_passive_unmount_effects,
@@ -38,6 +34,12 @@ from pyinkcli.packages.react_reconciler.ReactWorkTags import (
     HostText,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberClassComponent import captureCommitPhaseError
+from pyinkcli.packages.react_reconciler.ReactHookEffectTags import (
+    HasEffect as HookHasEffect,
+    Insertion as HookInsertion,
+    Layout as HookLayout,
+    Passive as HookPassive,
+)
 
 if TYPE_CHECKING:
     from pyinkcli.packages.react_reconciler.ReactFiberRoot import ReconcilerContainer
@@ -70,6 +72,7 @@ class CommitList:
 class PreparedCommit:
     work_root: Any
     commit_list: CommitList
+    root_completion_state: dict[str, Any] | None = None
     callback: Any = None
 
     @property
@@ -142,17 +145,33 @@ def _run_layout_effects(
     *,
     stage: str,
 ) -> None:
+    root_completion_state = prepared_commit.root_completion_state or {}
     for effect in prepared_commit.commit_list.layout_effects:
-        if stage == "before_fiber_layout" and effect.tag == "calculate_layout":
+        if stage == "before_fiber_layout" and effect.tag == "root_completion_state":
+            effect_completion_state = effect.payload.get("rootCompletionState")
+            if isinstance(effect_completion_state, dict):
+                root_completion_state = effect_completion_state
+                reconciler._last_root_completion_state = dict(effect_completion_state)
+        elif stage == "before_fiber_layout" and effect.tag == "calculate_layout":
             dom_container = container.container
             if callable(dom_container.onComputeLayout):
                 dom_container.onComputeLayout()
             elif dom_container.yogaNode:
                 reconciler._calculate_layout(dom_container)
+            reconciler._last_root_completion_state = dict(root_completion_state)
         elif stage == "after_fiber_layout" and effect.tag == "emit_layout_listeners":
             emitLayoutListeners(container.container)
         elif stage == "after_fiber_layout" and effect.tag == "request_render":
             immediate = bool(effect.payload.get("immediate", False))
+            effect_completion_state = effect.payload.get("rootCompletionState")
+            if isinstance(effect_completion_state, dict):
+                root_completion_state = effect_completion_state
+                reconciler._last_root_completion_state = dict(effect_completion_state)
+            if root_completion_state.get("containsSuspendedFibers"):
+                reconciler._last_root_commit_suspended = True
+                immediate = True
+            else:
+                reconciler._last_root_commit_suspended = False
             if immediate and container.container.isStaticDirty:
                 container.container.isStaticDirty = False
             requestHostRender(
@@ -499,6 +518,7 @@ def buildCommitListFromFiberTree(
     root_fiber: Any,
     *,
     is_static_dirty: bool,
+    root_completion_state: dict[str, Any] | None = None,
 ) -> CommitList:
     commit_list = CommitList()
     seen_deleted: set[int] = set()
@@ -524,11 +544,18 @@ def buildCommitListFromFiberTree(
     _collect_commit_effects_from_fiber(root_fiber, commit_list)
     commit_list.layout_effects.extend(
         [
+            CommitEffect(
+                tag="root_completion_state",
+                payload={"rootCompletionState": dict(root_completion_state or {})},
+            ),
             CommitEffect(tag="calculate_layout"),
             CommitEffect(tag="emit_layout_listeners"),
             CommitEffect(
                 tag="request_render",
-                payload={"immediate": bool(is_static_dirty)},
+                payload={
+                    "immediate": bool(is_static_dirty),
+                    "rootCompletionState": dict(root_completion_state or {}),
+                },
             ),
         ]
     )
@@ -556,6 +583,7 @@ def runPreparedCommitEffects(
     prepared_commit: PreparedCommit,
 ) -> None:
     reconciler._last_prepared_commit = prepared_commit
+    reconciler._last_root_completion_state = prepared_commit.root_completion_state
     deleted_hook_roots = _drain_pending_passive_unmount_fibers()
     deletions = getattr(reconciler._root_fiber, "deletions", None) or []
     for deleted in deletions:

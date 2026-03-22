@@ -55,7 +55,7 @@ def test_render_to_string_runs_effect_but_returns_initial_render_output() -> Non
         useEffect(effect, ())
         return Text(value)
 
-    output = renderToString(Example())
+    output = renderToString(createElement(Example))
 
     assert output == "initial"
     assert calls == [("effect", "initial")]

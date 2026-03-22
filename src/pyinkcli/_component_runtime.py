@@ -65,25 +65,27 @@ def _is_render_component_passthrough(value: Any) -> bool:
     return _is_text_renderable(value) or isElement(value)
 
 
-def _normalize_child(child: Any) -> RenderableNode:
+def _normalize_child(child: Any, *, preserve_callables: bool = False) -> RenderableNode | Any:
     if child is None:
         return None
+    if preserve_callables and callable(child):
+        return child
     if _is_renderable_node(child):
         return child
     return str(child)
 
 
-def _normalize_children(children: Any) -> list[RenderableNode]:
-    processed_children: list[RenderableNode] = []
+def _normalize_children(children: Any, *, preserve_callables: bool = False) -> list[RenderableNode | Any]:
+    processed_children: list[RenderableNode | Any] = []
     for child in children:
         if isinstance(child, (list, tuple)):
             for subchild in child:
-                normalized = _normalize_child(subchild)
+                normalized = _normalize_child(subchild, preserve_callables=preserve_callables)
                 if normalized is not None:
                     processed_children.append(normalized)
             continue
 
-        normalized = _normalize_child(child)
+        normalized = _normalize_child(child, preserve_callables=preserve_callables)
         if normalized is not None:
             processed_children.append(normalized)
 
@@ -154,10 +156,11 @@ def createElement(
     key: str | None = None,
     **props: Any,
 ) -> RenderableNode:
+    preserve_callables = bool(getattr(type, "__ink_react_consumer__", False))
     return _create_element_record(
         type=type,
         props=props,
-        children=_normalize_children(children),
+        children=_normalize_children(children, preserve_callables=preserve_callables),
         key=key,
     )
 
@@ -176,12 +179,15 @@ class _Component:
     def __init__(self, **props: Any):
         self.props = props
         self.state: dict[str, Any] = {}
+        self.refs: dict[str, Any] = {}
+        self.updater: Any = None
         self._state_version = 0
         self._is_unmounted = False
         self._is_mounted = False
         self._last_rendered_node: RenderableNode = None
         self._pending_previous_state: dict[str, Any] | None = None
         self._nearest_error_boundary: _Component | None = None
+        self._react_update_callbacks: list[Callable[[], Any]] = []
 
     def render(self) -> RenderableNode:
         return None
@@ -191,6 +197,27 @@ class _Component:
         update: dict[str, Any] | Callable[[dict[str, Any], dict[str, Any]], dict[str, Any] | None] | None = None,
         **kwargs: Any,
     ) -> None:
+        updater = getattr(self, "updater", None)
+        if updater is not None and hasattr(updater, "enqueueSetState"):
+            payload: Any = update if update is not None else {}
+            if kwargs:
+                if callable(payload):
+                    original = payload
+
+                    def merged_payload(prev_state, props):
+                        result = original(prev_state, props)
+                        next_result = dict(result) if isinstance(result, dict) else {}
+                        next_result.update(kwargs)
+                        return next_result
+
+                    payload = merged_payload
+                else:
+                    merged = dict(payload) if isinstance(payload, dict) else {}
+                    merged.update(kwargs)
+                    payload = merged
+            updater.enqueueSetState(self, payload, None, "setState")
+            return
+
         if self._is_unmounted:
             return
 
@@ -212,16 +239,20 @@ class _Component:
             self._pending_previous_state = dict(self.state)
         self.state.update(partial_state)
         self._state_version += 1
-        from pyinkcli.hooks._runtime import _request_rerender
+        from pyinkcli.packages.react.dispatcher import requestRerender
 
-        _request_rerender()
+        requestRerender()
 
     def force_update(self) -> None:
+        updater = getattr(self, "updater", None)
+        if updater is not None and hasattr(updater, "enqueueForceUpdate"):
+            updater.enqueueForceUpdate(self, None, "forceUpdate")
+            return
         if self._is_unmounted:
             return
-        from pyinkcli.hooks._runtime import _request_rerender
+        from pyinkcli.packages.react.dispatcher import requestRerender
 
-        _request_rerender()
+        requestRerender()
 
 
 def component(
@@ -230,6 +261,7 @@ def component(
     def wrapper(fn: Callable) -> Callable:
         fn._is_component = True
         fn._component_name = name or fn.__name__
+        fn.__ink_runtime_sources__ = ("imperative_render",)
         return fn
 
     if func is not None:

@@ -11,10 +11,19 @@ from pyinkcli._component_runtime import (
     _merge_component_props,
     renderComponent,
 )
-from pyinkcli._suspense_runtime import SuspendSignal
-from pyinkcli.hooks._runtime import _batched_updates_runtime
-from pyinkcli.packages.react_reconciler.ReactChildFiber import WorkYield
+from pyinkcli.packages.react_reconciler.ReactFiberClassUpdateQueue import (
+    createClassComponentUpdater,
+    initializeUpdateQueue,
+    processUpdateQueue,
+)
+from pyinkcli.packages.react_reconciler.ReactEventPriorities import DefaultEventPriority
+from pyinkcli.packages.react_reconciler.ReactFiberConcurrentUpdates import (
+    markFiberUpdated,
+    unsafe_markUpdateLaneFromFiberToRoot,
+)
+from pyinkcli.packages.react.dispatcher import batchedUpdatesRuntime
 from pyinkcli.packages.react_reconciler.ReactFiberFlags import Callback
+from pyinkcli.packages.react_reconciler.ReactFiberThrow import isControlFlowException
 
 if TYPE_CHECKING:
     from pyinkcli.component import RenderableNode
@@ -23,7 +32,7 @@ if TYPE_CHECKING:
 
 
 def _is_control_flow_exception(error: Exception) -> bool:
-    return isinstance(error, (SuspendSignal, WorkYield))
+    return isControlFlowException(error)
 
 
 def reconcileClassComponent(
@@ -51,8 +60,10 @@ def reconcileClassComponent(
         reconciler._error_boundary_stack[-1][2] if reconciler._error_boundary_stack else None
     )
     should_update = True
+    _, has_force_update = processUpdateQueue(instance, merged_props := _merge_component_props(tuple(children), props))
     if (
         not is_new_instance
+        and not has_force_update
         and callable(getattr(instance, "shouldComponentUpdate", None))
     ):
         should_update = bool(
@@ -80,6 +91,7 @@ def reconcileClassComponent(
     current_fiber = reconciler._current_fiber
     if current_fiber is not None:
         current_fiber.state_node = instance
+        instance._react_internal_fiber = current_fiber
 
     reconciler._record_inspected_element(
         node_id=component_id,
@@ -206,6 +218,8 @@ def getOrCreateClassComponentInstance(
 
     if instance is None or not isinstance(instance, component_type):
         instance = _create_component_instance(component_type, children, props)
+        instance.updater = createClassComponentUpdater(component_id)
+        initializeUpdateQueue(instance)
         reconciler._class_component_instances[component_id] = instance
         return (instance, True, {}, {})
 
@@ -218,6 +232,9 @@ def getOrCreateClassComponentInstance(
     instance._pending_previous_state = None
     instance.props = merged_props
     instance._is_unmounted = False
+    instance.updater = createClassComponentUpdater(component_id)
+    if getattr(instance, "_class_update_queue", None) is None:
+        initializeUpdateQueue(instance)
     return (instance, False, previous_props, previous_state)
 
 
@@ -241,6 +258,8 @@ def scheduleClassComponentCommitCallback(
                 reconciler._pending_class_component_commit_callbacks.append((instance, callback))
         else:
             instance._is_mounted = True
+            if not getattr(instance, "_class_update_queue", None):
+                instance._pending_previous_state = None
         return
 
     if (
@@ -259,6 +278,8 @@ def scheduleClassComponentCommitCallback(
             current_fiber.layout_callbacks.append((instance, callback))
         else:
             reconciler._pending_class_component_commit_callbacks.append((instance, callback))
+    elif not getattr(instance, "_class_update_queue", None):
+        instance._pending_previous_state = None
 
 
 def invokeComponentDidMount(
@@ -267,6 +288,8 @@ def invokeComponentDidMount(
 ) -> None:
     instance._is_mounted = True
     instance.componentDidMount()
+    if not getattr(instance, "_class_update_queue", None):
+        instance._pending_previous_state = None
 
 
 def invokeComponentDidUpdate(
@@ -277,6 +300,8 @@ def invokeComponentDidUpdate(
 ) -> None:
     instance._is_mounted = True
     instance.componentDidUpdate(previous_props, previous_state)
+    if not getattr(instance, "_class_update_queue", None):
+        instance._pending_previous_state = None
 
 
 def flushClassComponentCommitCallbacks(
@@ -299,8 +324,18 @@ def flushClassComponentCommitCallbacks(
                     continue
                 if unhandled_error is None:
                     unhandled_error = error
+            pending_callbacks = list(getattr(instance, "_react_update_callbacks", ()))
+            instance._react_update_callbacks = []
+            for pending_callback in pending_callbacks:
+                try:
+                    pending_callback()
+                except Exception as error:
+                    if captureCommitPhaseError(reconciler, instance, error):
+                        continue
+                    if unhandled_error is None:
+                        unhandled_error = error
 
-    _batched_updates_runtime(run_callbacks)
+    batchedUpdatesRuntime(run_callbacks)
     if unhandled_error is not None:
         raise unhandled_error
     return reconciler._commit_phase_recovery_requested
@@ -357,6 +392,13 @@ def captureCommitPhaseError(
         if isinstance(next_state, dict):
             boundary.state.update(next_state)
             boundary._state_version += 1
+            source_fiber = getattr(boundary, "_react_internal_fiber", None)
+            if source_fiber is not None:
+                markFiberUpdated(source_fiber, DefaultEventPriority)
+                unsafe_markUpdateLaneFromFiberToRoot(
+                    source_fiber,
+                    DefaultEventPriority,
+                )
 
     reconciler._deferred_component_did_catch.append((boundary, error))
     reconciler._commit_phase_recovery_requested = True

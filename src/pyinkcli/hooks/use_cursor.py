@@ -7,6 +7,9 @@ from collections.abc import Mapping
 from pyinkcli.components._app_context_runtime import _get_app_context
 from pyinkcli.components.CursorContext import _get_cursor_context
 from pyinkcli.hooks._runtime import Ref, useEffect, useRef
+from pyinkcli.packages.react_reconciler.ReactFiberRuntimeSources import (
+    recordRuntimeSourceDependency,
+)
 from pyinkcli.hooks.use_stdout import useStdout
 from pyinkcli.utils.ansi_escapes import cursor_hide, cursor_show
 
@@ -59,6 +62,12 @@ def useCursor(
     app_context = _get_app_context()
     cursor_context = _get_cursor_context()
     position_ref = useRef(None)
+    app = getattr(app_context, "app", None) if app_context is not None else None
+    recordRuntimeSourceDependency(
+        getattr(app, "_reconciler", None),
+        getattr(getattr(app, "_reconciler", None), "_current_fiber", None),
+        "cursor",
+    )
 
     def apply_cursor_visibility():
         if visible is None or not enabled:

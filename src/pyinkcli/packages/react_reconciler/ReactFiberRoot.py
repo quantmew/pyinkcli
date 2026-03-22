@@ -18,6 +18,9 @@ class ReconcilerContainer:
     container: DOMElement
     tag: int = 0
     hydrate: bool = False
+    next: ReconcilerContainer | None = None
+    callback_node: object | None = None
+    _reconciler: object | None = None
     pending_updates: list[tuple[object | None, Callable[[], None] | None]] = field(
         default_factory=list
     )

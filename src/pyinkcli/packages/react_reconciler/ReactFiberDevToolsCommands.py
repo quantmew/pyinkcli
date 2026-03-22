@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from pyinkcli.hooks._runtime import (
-    _delete_hook_state_path,
-    _override_hook_state,
-    _rename_hook_state_path,
+from pyinkcli.packages.react.dispatcher import (
+    deleteHookStatePath,
+    overrideHookState,
+    renameHookStatePath,
 )
 
 if TYPE_CHECKING:
@@ -222,7 +222,7 @@ def overrideDevtoolsHookState(
     path: list[Any],
     value: Any,
 ) -> bool:
-    return _override_hook_state(node_id, path, value)
+    return overrideHookState(node_id, path, value)
 
 
 def deleteDevtoolsHookStatePath(
@@ -230,7 +230,7 @@ def deleteDevtoolsHookStatePath(
     node_id: str,
     path: list[Any],
 ) -> bool:
-    return _delete_hook_state_path(node_id, path)
+    return deleteHookStatePath(node_id, path)
 
 
 def renameDevtoolsHookStatePath(
@@ -239,7 +239,7 @@ def renameDevtoolsHookStatePath(
     old_path: list[Any],
     new_path: list[Any],
 ) -> bool:
-    return _rename_hook_state_path(node_id, old_path, new_path)
+    return renameHookStatePath(node_id, old_path, new_path)
 
 
 def overrideDevtoolsState(
@@ -358,11 +358,22 @@ def scheduleDevtoolsUpdate(
     node_id: str,
 ) -> bool:
     from pyinkcli.packages.react_reconciler.ReactEventPriorities import DefaultEventPriority
+    from pyinkcli.packages.react_reconciler.ReactFiberConcurrentUpdates import (
+        markFiberUpdated,
+        unsafe_markUpdateLaneFromFiberToRoot,
+    )
 
     if not reconciler._has_tree_node(node_id):
         return False
     if reconciler._devtools_container is None:
         return False
+    target_fiber = reconciler._fiber_nodes.get(node_id)
+    if target_fiber is not None:
+        markFiberUpdated(target_fiber, DefaultEventPriority)
+        unsafe_markUpdateLaneFromFiberToRoot(
+            target_fiber,
+            DefaultEventPriority,
+        )
     reconciler.schedule_update_on_fiber(
         reconciler._devtools_container,
         DefaultEventPriority,
@@ -375,11 +386,22 @@ def scheduleDevtoolsRetry(
     node_id: str,
 ) -> bool:
     from pyinkcli.packages.react_reconciler.ReactEventPriorities import DefaultEventPriority
+    from pyinkcli.packages.react_reconciler.ReactFiberConcurrentUpdates import (
+        markFiberUpdated,
+        unsafe_markUpdateLaneFromFiberToRoot,
+    )
 
     if not reconciler._has_tree_node(node_id):
         return False
     if reconciler._devtools_container is None:
         return False
+    target_fiber = reconciler._fiber_nodes.get(node_id)
+    if target_fiber is not None:
+        markFiberUpdated(target_fiber, DefaultEventPriority)
+        unsafe_markUpdateLaneFromFiberToRoot(
+            target_fiber,
+            DefaultEventPriority,
+        )
     reconciler.schedule_update_on_fiber(
         reconciler._devtools_container,
         DefaultEventPriority,

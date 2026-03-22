@@ -11,7 +11,20 @@ from pyinkcli.packages.react_reconciler.ReactEventPriorities import (
     NoEventPriority,
     TransitionEventPriority,
     UpdatePriority,
+    eventPriorityToLane,
     higherEventPriority,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberLane import (
+    Lane,
+    Lanes,
+    NoLane,
+    NoLanes,
+    getHighestPriorityLane as getHighestPriorityLaneImpl,
+    mergeLanes as mergeLanesImpl,
+    removeLanes as removeLanesImpl,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberRootScheduler import (
+    requestTransitionLane,
 )
 from pyinkcli.packages.react_reconciler.ReactSharedInternals import shared_internals
 
@@ -34,39 +47,37 @@ def priorityRank(priority: UpdatePriority) -> int:
     return 1000 - priority
 
 
-def laneToMask(lane: UpdatePriority) -> int:
-    if lane == DiscreteEventPriority:
-        return 1 << 0
-    if lane == DefaultEventPriority:
-        return 1 << 1
-    if lane == TransitionEventPriority:
-        return 1 << 2
-    return 1 << 3
+def laneToMask(lane: UpdatePriority) -> Lane:
+    return eventPriorityToLane(lane)
 
 
-def mergeLanes(a: int, b: int) -> int:
-    return a | b
+def mergeLanes(a: Lanes, b: Lanes) -> Lanes:
+    return mergeLanesImpl(a, b)
 
 
 def getHighestPriorityLane(lanes: int) -> UpdatePriority:
-    if lanes & laneToMask(DiscreteEventPriority):
+    lane = getHighestPriorityLaneImpl(lanes)
+    if lane == NoLane:
+        return NoEventPriority
+    if lane == eventPriorityToLane(DiscreteEventPriority):
         return DiscreteEventPriority
-    if lanes & laneToMask(DefaultEventPriority):
+    if lane == eventPriorityToLane(DefaultEventPriority):
         return DefaultEventPriority
-    if lanes & laneToMask(TransitionEventPriority):
+    if lane == eventPriorityToLane(TransitionEventPriority):
         return TransitionEventPriority
-    if lanes != NoEventPriority:
-        return max(DefaultEventPriority, lanes)
+    if lanes != NoLanes:
+        return max(DefaultEventPriority, lane)
     return NoEventPriority
 
 
 def removeLanes(lanes: int, lane: UpdatePriority) -> int:
-    return lanes & ~laneToMask(lane)
+    return removeLanesImpl(lanes, laneToMask(lane))
 
 
 def requestUpdateLane(_fiber: object | None = None) -> UpdatePriority:
     if shared_internals.current_transition is not None:
-        return TransitionEventPriority
+        lane = requestTransitionLane()
+        return lane if lane != NoEventPriority else TransitionEventPriority
     current_priority = shared_internals.current_update_priority
     if current_priority != NoEventPriority:
         return current_priority
@@ -200,12 +211,12 @@ def dispatchCommitRender(
 
 def batchedUpdates(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
     global executionContext
-    from pyinkcli.hooks._runtime import _batched_updates_runtime
+    from pyinkcli.packages.react.dispatcher import batchedUpdatesRuntime
 
     previous_context = executionContext
     executionContext |= BatchedContext
     try:
-        return _batched_updates_runtime(lambda: fn(*args, **kwargs))
+        return batchedUpdatesRuntime(lambda: fn(*args, **kwargs))
     finally:
         executionContext = previous_context
 
@@ -225,7 +236,7 @@ def discreteUpdates(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
 
 def flushSyncFromReconciler(fn: Callable[[], Any] | None = None) -> Any:
     global executionContext
-    from pyinkcli.hooks._runtime import _flush_scheduled_rerender
+    from pyinkcli.packages.react.dispatcher import flushScheduledRerender
 
     previous_context = executionContext
     previous_priority = shared_internals.current_update_priority
@@ -236,7 +247,7 @@ def flushSyncFromReconciler(fn: Callable[[], Any] | None = None) -> Any:
     finally:
         shared_internals.current_update_priority = previous_priority
         executionContext = previous_context
-    _flush_scheduled_rerender()
+    flushScheduledRerender()
     return result
 
 

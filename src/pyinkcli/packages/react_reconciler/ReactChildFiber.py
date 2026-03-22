@@ -2,26 +2,39 @@
 
 from __future__ import annotations
 
-from contextlib import ExitStack
 from dataclasses import dataclass
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from pyinkcli._component_runtime import (
-    _Fragment,
     _is_component_class,
-    is_component,
     isElement,
     renderComponent,
 )
 from pyinkcli._suspense_runtime import SuspendSignal
-from pyinkcli.hooks._runtime import (
-    HookFiber,
-    _begin_component_render,
-    _commit_completed_fiber,
-    _end_component_render,
-    _get_hook_state_snapshot,
-    _set_current_hook_fiber,
+from pyinkcli.hooks._runtime import HookFiber, _commit_completed_fiber
+from pyinkcli.packages.react.dispatcher import (
+    beginComponentRender,
+    endComponentRender,
+    getHookStateSnapshot,
+    setCurrentHookFiber,
+)
+from pyinkcli.packages.react_reconciler.ReactCurrentFiber import (
+    resetCurrentFiber,
+    setCurrentFiber,
+    setIsRendering,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberBeginWork import beginWork
+from pyinkcli.packages.react_reconciler.ReactFiberLane import NoLanes
+from pyinkcli.packages.react_reconciler.ReactFiberThenable import (
+    createSuspendedThenableRecord,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberUnwindWork import (
+    unwindInterruptedWork,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberHooks import (
+    finishRenderingHooks,
+    renderWithHooks,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberHostContext import getChildHostContext
 from pyinkcli.packages.react_reconciler.ReactFiberWorkLoop import laneToMask
@@ -57,6 +70,56 @@ class WorkYield(Exception):
     def __init__(self, continuation: Callable[[], int]):
         super().__init__("render work yielded")
         self.continuation = continuation
+
+
+def _is_fiber_in_current_tree(
+    reconciler: _Reconciler,
+    target_fiber: HookFiber | None,
+) -> bool:
+    if target_fiber is None:
+        return False
+    committed_root_child = getattr(reconciler, "_current_committed_root_child", None)
+    root = committed_root_child if committed_root_child is not None else getattr(reconciler, "_root_fiber", None)
+    stack = [root]
+    seen: set[int] = set()
+    while stack:
+        current = stack.pop()
+        if current is None:
+            continue
+        current_id = id(current)
+        if current_id in seen:
+            continue
+        seen.add(current_id)
+        if current is target_fiber:
+            return True
+        child = getattr(current, "child", None)
+        while child is not None:
+            stack.append(child)
+            child = getattr(child, "sibling", None)
+    return False
+
+
+def _get_current_tree_fiber(
+    reconciler: _Reconciler,
+    component_id: str,
+) -> HookFiber | None:
+    stack = [getattr(reconciler, "_current_committed_root_child", None)]
+    seen: set[int] = set()
+    while stack:
+        current = stack.pop()
+        if current is None:
+            continue
+        current_id = id(current)
+        if current_id in seen:
+            continue
+        seen.add(current_id)
+        if getattr(current, "component_id", None) == component_id:
+            return current
+        child = getattr(current, "child", None)
+        while child is not None:
+            stack.append(child)
+            child = getattr(child, "sibling", None)
+    return None
 
 
 def reconcileChildren(
@@ -130,90 +193,15 @@ def reconcileChild(
     dom_index: int,
     devtools_parent_id: str,
 ) -> int:
-    if vnode is None:
-        return dom_index
-
-    context_manager_factories = getattr(vnode, "context_manager_factories", None)
-    if context_manager_factories is not None:
-        with ExitStack() as stack:
-            for factory in context_manager_factories:
-                stack.enter_context(factory())
-            return reconcileChild(
-                reconciler,
-                vnode.node,
-                parent,
-                path,
-                dom_index,
-                devtools_parent_id,
-            )
-
-    if isinstance(vnode, str):
-        return _reconcile_text_child(reconciler, vnode, parent, path, dom_index)
-
-    node_type = vnode.type
-    props = dict(vnode.props)
-    children = list(vnode.children)
-
-    if node_type == "__ink-suspense__":
-        return _reconcile_suspense_child(
-            reconciler,
-            props=props,
-            children=children,
-            vnode=vnode,
-            parent=parent,
-            path=path,
-            dom_index=dom_index,
-            devtools_parent_id=devtools_parent_id,
-        )
-
-    if is_component(node_type):
-        return _reconcile_component_child(
-            reconciler,
-            vnode,
-            node_type,
-            parent,
-            props,
-            children,
-            path,
-            dom_index,
-            devtools_parent_id,
-        )
-
-    if node_type is _Fragment or node_type == "Fragment":
-        return _reconcile_fragment_child(
-            reconciler,
-            vnode,
-            parent,
-            children,
-            path,
-            dom_index,
-            devtools_parent_id,
-        )
-
-    element_name = getElementName(reconciler, node_type)
-    if element_name is None:
-        return dom_index
-
-    host_context = reconciler._host_context_stack[-1]
-    is_inside_text = host_context.get("isInsideText", False)
-
-    if is_inside_text and element_name == "ink-box":
-        raise ValueError("<Box> can't be nested inside <Text> component")
-
-    actual_type = element_name
-    if element_name == "ink-text" and is_inside_text:
-        actual_type = "ink-virtual-text"
-
-    return _reconcile_host_child(
+    return beginWork(
         reconciler,
+        None,
+        None,
         vnode,
         parent,
-        props,
-        children,
         path,
         dom_index,
         devtools_parent_id,
-        actual_type=actual_type,
     )
 
 
@@ -249,9 +237,10 @@ def _create_or_reuse_structural_fiber(
     key: str | None,
     path: tuple[Any, ...],
     pending_props: dict[str, Any] | None,
+    pending_children: tuple[Any, ...] | None,
     return_fiber: HookFiber | None,
 ) -> HookFiber:
-    current = reconciler._fiber_nodes.get(component_id)
+    current = _get_current_tree_fiber(reconciler, component_id)
     if current is None or getattr(current, "tag", None) != tag:
         return HookFiber(
             component_id=component_id,
@@ -261,7 +250,11 @@ def _create_or_reuse_structural_fiber(
             path=path,
             pending_props=pending_props,
             memoized_props=None,
+            pending_children=pending_children,
+            memoized_children=None,
             return_fiber=return_fiber,
+            lanes=NoLanes,
+            child_lanes=NoLanes,
         )
 
     work_in_progress = current.alternate
@@ -274,7 +267,13 @@ def _create_or_reuse_structural_fiber(
             path=path,
             pending_props=pending_props,
             memoized_props=current.memoized_props,
+            pending_children=pending_children,
+            memoized_children=getattr(current, "memoized_children", None),
             return_fiber=return_fiber,
+            lanes=current.lanes,
+            child_lanes=current.child_lanes,
+            dependencies=list(getattr(current, "dependencies", [])),
+            runtime_source_deps=list(getattr(current, "runtime_source_deps", [])),
         )
         work_in_progress.alternate = current
         current.alternate = work_in_progress
@@ -285,7 +284,13 @@ def _create_or_reuse_structural_fiber(
         work_in_progress.path = path
         work_in_progress.pending_props = pending_props
         work_in_progress.memoized_props = current.memoized_props
+        work_in_progress.pending_children = pending_children
+        work_in_progress.memoized_children = getattr(current, "memoized_children", None)
         work_in_progress.return_fiber = return_fiber
+        work_in_progress.lanes = current.lanes
+        work_in_progress.child_lanes = current.child_lanes
+        work_in_progress.dependencies = list(getattr(current, "dependencies", []))
+        work_in_progress.runtime_source_deps = list(getattr(current, "runtime_source_deps", []))
 
     work_in_progress.child = None
     work_in_progress.sibling = None
@@ -349,8 +354,11 @@ def _complete_structural_fiber_boundary(fiber: HookFiber) -> HookFiber:
 
 
 def _complete_function_fiber_boundary(fiber: HookFiber) -> HookFiber:
-    _set_current_hook_fiber(None)
-    return _end_component_render() or fiber
+    setCurrentHookFiber(None)
+    setIsRendering(False)
+    resetCurrentFiber()
+    finishRenderingHooks()
+    return endComponentRender() or fiber
 
 
 def _prepare_structural_fiber_boundary(fiber: HookFiber) -> HookFiber:
@@ -358,7 +366,9 @@ def _prepare_structural_fiber_boundary(fiber: HookFiber) -> HookFiber:
 
 
 def _prepare_function_fiber_boundary(fiber: HookFiber) -> HookFiber:
-    return _begin_component_render(fiber)
+    setCurrentFiber(fiber)
+    setIsRendering(True)
+    return beginComponentRender(fiber)
 
 
 def _enter_structural_fiber_boundary(fiber: HookFiber) -> None:
@@ -366,7 +376,7 @@ def _enter_structural_fiber_boundary(fiber: HookFiber) -> None:
 
 
 def _enter_function_fiber_boundary(fiber: HookFiber) -> None:
-    _set_current_hook_fiber(fiber)
+    setCurrentHookFiber(fiber)
 
 
 def _begin_fiber_boundary(
@@ -386,8 +396,24 @@ def _begin_fiber_boundary(
 
 def _finalize_completed_fiber_boundary(
     reconciler: _Reconciler,
+    previous_fiber: HookFiber,
     fiber: HookFiber,
 ) -> HookFiber:
+    fiber.return_fiber = previous_fiber.return_fiber
+    fiber.sibling = previous_fiber.sibling
+    parent_fiber = previous_fiber.return_fiber
+    if parent_fiber is not None:
+        current_child = parent_fiber.child
+        previous_sibling = None
+        while current_child is not None:
+            if current_child is previous_fiber:
+                if previous_sibling is None:
+                    parent_fiber.child = fiber
+                else:
+                    previous_sibling.sibling = fiber
+                break
+            previous_sibling = current_child
+            current_child = current_child.sibling
     reconciler._fiber_nodes[fiber.component_id] = fiber
     return fiber
 
@@ -399,7 +425,7 @@ def _complete_fiber_boundary(
     complete: Callable[[HookFiber], HookFiber],
 ) -> HookFiber:
     completed_fiber = complete(fiber)
-    _finalize_completed_fiber_boundary(reconciler, completed_fiber)
+    _finalize_completed_fiber_boundary(reconciler, fiber, completed_fiber)
     reconciler.pop_current_fiber()
     return completed_fiber
 
@@ -461,6 +487,9 @@ def _run_function_fiber_work(
                 work=lambda _fiber: yielded.continuation(),
             )
         )
+    except BaseException:
+        unwindInterruptedWork(function_fiber)
+        raise
     finally:
         _end_function_fiber(reconciler, function_fiber)
 
@@ -596,6 +625,7 @@ def _build_structural_fiber_boundary(
     key: str | None,
     path: tuple[Any, ...],
     pending_props: dict[str, Any] | None,
+    pending_children: tuple[Any, ...] | None,
     parent_fiber: HookFiber | None,
     devtools_parent_id: str,
     is_error_boundary: bool = False,
@@ -612,6 +642,7 @@ def _build_structural_fiber_boundary(
         key=key,
         path=path,
         pending_props=pending_props,
+        pending_children=pending_children,
         return_fiber=parent_fiber,
     )
     node_id = _append_boundary_devtools_node(
@@ -646,6 +677,7 @@ def _build_function_fiber_boundary(
     key: str | None,
     path: tuple[Any, ...],
     pending_props: dict[str, Any],
+    pending_children: tuple[Any, ...] | None,
     parent_fiber: HookFiber | None,
     devtools_parent_id: str,
 ) -> tuple[HookFiber, str]:
@@ -665,8 +697,19 @@ def _build_function_fiber_boundary(
         key=key,
         path=path,
         pending_props=pending_props,
+        pending_children=pending_children,
         return_fiber=parent_fiber,
     )
+    current = _get_current_tree_fiber(reconciler, component_id)
+    if current is not None:
+        fiber.alternate = current
+        current.alternate = fiber
+        fiber.memoized_props = getattr(current, "memoized_props", None)
+        fiber.memoized_children = getattr(current, "memoized_children", None)
+        fiber.lanes = getattr(current, "lanes", NoLanes)
+        fiber.child_lanes = getattr(current, "child_lanes", NoLanes)
+        fiber.dependencies = list(getattr(current, "dependencies", []))
+        fiber.runtime_source_deps = list(getattr(current, "runtime_source_deps", []))
     return (fiber, node_id)
 
 
@@ -694,6 +737,7 @@ def _reconcile_text_child(
         key=None,
         path=path,
         pending_props={"nodeValue": vnode},
+        pending_children=None,
         return_fiber=parent_fiber,
     )
     _perform_immediate_structural_fiber_work(
@@ -733,31 +777,16 @@ def _reconcile_fragment_child(
     dom_index: int,
     devtools_parent_id: str,
 ) -> int:
-    parent_fiber = reconciler._current_fiber
-    fragment_fiber, fragment_id = _build_structural_fiber_boundary(
+    from pyinkcli.packages.react_reconciler.ReactFiberBeginWork import beginFragmentWork
+
+    return beginFragmentWork(
         reconciler,
-        component_id=buildDevtoolsNodeID(reconciler, "Fragment", path, vnode.key),
-        tag=Fragment,
-        element_type="fragment",
-        display_name="Fragment",
-        key=vnode.key,
-        path=path,
-        pending_props=None,
-        parent_fiber=parent_fiber,
-        devtools_parent_id=devtools_parent_id,
-    )
-    return _run_structural_fiber_work(
-        reconciler,
-        parent_fiber,
-        fragment_fiber,
-        work=lambda _fiber: _perform_fragment_fiber_work(
-            reconciler,
-            parent=parent,
-            children=children,
-            path=path,
-            dom_index=dom_index,
-            fragment_id=fragment_id,
-        ),
+        vnode,
+        parent,
+        children,
+        path,
+        dom_index,
+        devtools_parent_id,
     )
 
 
@@ -792,35 +821,18 @@ def _reconcile_host_child(
     *,
     actual_type: str,
 ) -> int:
-    parent_fiber = reconciler._current_fiber
-    host_fiber, host_node_id = _build_structural_fiber_boundary(
+    from pyinkcli.packages.react_reconciler.ReactFiberBeginWork import beginHostWork
+
+    return beginHostWork(
         reconciler,
-        component_id=buildDevtoolsNodeID(reconciler, actual_type, path, vnode.key),
-        tag=HostComponent,
-        element_type="host",
-        display_name=actual_type,
-        key=vnode.key,
-        path=path,
-        pending_props=props,
-        parent_fiber=parent_fiber,
-        devtools_parent_id=devtools_parent_id,
-        inspected_props=props,
-    )
-    return _run_structural_fiber_work(
-        reconciler,
-        parent_fiber,
-        host_fiber,
-        work=lambda _fiber: _perform_host_fiber_work(
-            reconciler,
-            vnode=vnode,
-            parent=parent,
-            props=props,
-            children=children,
-            path=path,
-            dom_index=dom_index,
-            actual_type=actual_type,
-            host_node_id=host_node_id,
-        ),
+        vnode,
+        parent,
+        props,
+        children,
+        path,
+        dom_index,
+        devtools_parent_id,
+        actual_type=actual_type,
     )
 
 
@@ -834,59 +846,18 @@ def _reconcile_suspense_child(
     dom_index: int,
     devtools_parent_id: str,
 ) -> int:
-    parent_fiber = reconciler._current_fiber
-    suspense_fiber, suspense_id = _build_structural_fiber_boundary(
+    from pyinkcli.packages.react_reconciler.ReactFiberBeginWork import beginSuspenseWork
+
+    return beginSuspenseWork(
         reconciler,
-        component_id=buildDevtoolsNodeID(reconciler, "Suspense", path, vnode.key),
-        tag=SuspenseComponent,
-        element_type="suspense",
-        display_name="Suspense",
-        key=vnode.key,
-        path=path,
-        pending_props=props,
-        parent_fiber=parent_fiber,
-        devtools_parent_id=devtools_parent_id,
-        inspected_props=props,
-        can_toggle_suspense=True,
-        is_suspended=False,
-        nearest_suspense_boundary_id=buildDevtoolsNodeID(reconciler, "Suspense", path, vnode.key),
+        vnode,
+        parent,
+        props,
+        children,
+        path,
+        dom_index,
+        devtools_parent_id,
     )
-
-    fallback = props.get("fallback")
-    if suspense_id in reconciler._devtools_forced_suspense_boundaries:
-        return _run_suspense_fallback_work(
-            reconciler,
-            vnode=vnode,
-            parent_fiber=parent_fiber,
-            suspense_fiber=suspense_fiber,
-            parent=parent,
-            props=props,
-            fallback=fallback,
-            path=path,
-            dom_index=dom_index,
-            suspense_id=suspense_id,
-        )
-
-    reconciler._suspense_boundary_stack.append(suspense_id)
-    try:
-        return _run_structural_fiber_work(
-            reconciler,
-            parent_fiber,
-            suspense_fiber,
-            work=lambda _fiber: _reconcile_suspense_fiber_children(
-                reconciler,
-                vnode,
-                parent,
-                props,
-                children,
-                path,
-                dom_index,
-                suspense_id,
-                fallback,
-            ),
-        )
-    finally:
-        reconciler._suspense_boundary_stack.pop()
 
 
 def _reconcile_suspense_fiber_children(
@@ -927,22 +898,7 @@ def _reconcile_suspense_fiber_children(
             path=path,
             dom_index=dom_index,
             suspense_id=suspense_id,
-            suspended_by=[
-                {
-                    "name": "SuspendSignal",
-                    "awaited": {
-                        "value": {
-                            "resource": {
-                                "key": repr(signal.key),
-                            },
-                            "message": str(signal),
-                        }
-                    },
-                    "env": None,
-                    "owner": None,
-                    "stack": None,
-                }
-            ],
+            suspended_by=createSuspendedThenableRecord(signal),
         )
 
 
@@ -1067,37 +1023,21 @@ def _reconcile_class_child(
     display_name: str,
     owner_entry: dict[str, Any],
 ) -> int:
-    parent_fiber = reconciler._current_fiber
-    class_fiber, _class_node_id = _build_structural_fiber_boundary(
+    from pyinkcli.packages.react_reconciler.ReactFiberBeginWork import beginClassComponent
+
+    return beginClassComponent(
         reconciler,
+        vnode,
+        node_type,
+        parent,
+        props,
+        children,
+        path,
+        dom_index,
+        devtools_parent_id,
         component_id=component_id,
-        tag=ClassComponent,
-        element_type="class",
         display_name=display_name,
-        key=vnode.key,
-        path=path,
-        pending_props=props,
-        parent_fiber=parent_fiber,
-        devtools_parent_id=devtools_parent_id,
-        is_error_boundary=reconciler._is_component_type_error_boundary(node_type),
-        inspected_props=props,
-    )
-    return _run_structural_fiber_work(
-        reconciler,
-        parent_fiber,
-        class_fiber,
-        work=lambda _fiber: _perform_class_fiber_work(
-            reconciler,
-            vnode=vnode,
-            node_type=node_type,
-            parent=parent,
-            props=props,
-            children=children,
-            path=path,
-            dom_index=dom_index,
-            component_id=component_id,
-            owner_entry=owner_entry,
-        ),
+        owner_entry=owner_entry,
     )
 
 
@@ -1144,35 +1084,22 @@ def _reconcile_function_child(
     component_source: Any,
     owner_entry: dict[str, Any],
 ) -> int:
-    parent_fiber = reconciler._current_fiber
-    fiber, function_node_id = _build_function_fiber_boundary(
+    from pyinkcli.packages.react_reconciler.ReactFiberBeginWork import beginFunctionComponent
+
+    return beginFunctionComponent(
         reconciler,
+        vnode,
+        node_type,
+        parent,
+        props,
+        children,
+        path,
+        dom_index,
+        devtools_parent_id,
         component_id=component_id,
         display_name=display_name,
-        key=vnode.key,
-        path=path,
-        pending_props=props,
-        parent_fiber=parent_fiber,
-        devtools_parent_id=devtools_parent_id,
-    )
-    return _run_function_fiber_work(
-        reconciler,
-        parent_fiber,
-        fiber,
-        work=lambda function_fiber: _perform_function_fiber_work(
-            reconciler,
-            vnode,
-            node_type,
-            parent,
-            props,
-            children,
-            path,
-            dom_index,
-            component_id,
-            function_node_id,
-            component_source,
-            owner_entry,
-        ),
+        component_source=component_source,
+        owner_entry=owner_entry,
     )
 
 
@@ -1190,14 +1117,19 @@ def _perform_function_fiber_work(
     component_source: Any,
     owner_entry: dict[str, Any],
 ) -> int:
-    rendered = renderComponent(node_type, *children, **props)
+    rendered = renderWithHooks(
+        reconciler._current_fiber,
+        node_type,
+        *children,
+        **props,
+    )
     _update_boundary_inspection(
         reconciler,
         node_id=function_node_id,
         element_type="function",
         key=vnode.key,
         props=props,
-        hooks=_get_hook_state_snapshot(component_id),
+        hooks=getHookStateSnapshot(component_id),
         can_edit_hooks=True,
         can_edit_function_props=True,
         source=component_source,

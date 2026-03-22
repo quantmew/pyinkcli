@@ -2,15 +2,18 @@
 
 import time
 
-from pyinkcli.component import createElement
+from pyinkcli.component import component, createElement
 from pyinkcli.dom import createNode
-from pyinkcli.hooks._runtime import useState
+from pyinkcli.hooks._runtime import useEffect, useRef, useState
+from pyinkcli.packages import react
+from pyinkcli import render
 from pyinkcli.reconciler import (
     batchedUpdates,
     consumePendingRerenderPriority,
     createReconciler,
     discreteUpdates,
 )
+from pyinkcli.packages.react_router import MemoryRouter, useLocation
 
 
 def test_reconciler_reuses_host_nodes_on_update():
@@ -158,3 +161,226 @@ def test_reconciler_commit_handlers_receive_normal_and_immediate_commits() -> No
     reconciler.flush_sync_work(container)
 
     assert calls == ["normal", "immediate"]
+
+
+def test_begin_work_rerenders_context_dependent_subtree_when_provider_value_changes() -> None:
+    render_count = 0
+    value_context = react.createContext("fallback")
+
+    def Reader():
+        nonlocal render_count
+        render_count += 1
+        return createElement("ink-text", react.useContext(value_context))
+
+    root = createNode("ink-root")
+    reconciler = createReconciler(root)
+    container = reconciler.create_container(root)
+
+    reconciler.update_container_sync(
+        createElement(value_context.Provider, createElement(Reader), value="first"),
+        container,
+    )
+    reconciler.update_container_sync(
+        createElement(value_context.Provider, createElement(Reader), value="second"),
+        container,
+    )
+
+    assert render_count == 2
+    assert root.childNodes[0].childNodes[0].nodeValue == "second"
+
+
+def test_begin_work_bails_out_leaf_function_component_without_hooks() -> None:
+    render_count = 0
+
+    def Child(label: str):
+        nonlocal render_count
+        render_count += 1
+        return createElement("ink-text", label)
+
+    def App(label: str):
+        return createElement("ink-box", createElement(Child, label=label))
+
+    root = createNode("ink-root")
+    reconciler = createReconciler(root)
+    container = reconciler.create_container(root)
+
+    reconciler.update_container_sync(createElement(App, label="same"), container)
+    reconciler.update_container_sync(createElement(App, label="same"), container)
+
+    assert render_count == 1
+
+
+def test_begin_work_bails_out_function_component_with_ref_and_stable_effect_deps() -> None:
+    render_count = 0
+
+    def Child(label: str):
+        nonlocal render_count
+        render_count += 1
+        ref = useRef("stable")
+        assert ref.current == "stable"
+        useEffect(lambda: None, (label,))
+        return createElement("ink-text", label)
+
+    root = createNode("ink-root")
+    reconciler = createReconciler(root)
+    container = reconciler.create_container(root)
+
+    reconciler.update_container_sync(createElement(Child, label="same"), container)
+    reconciler.update_container_sync(createElement(Child, label="same"), container)
+
+    assert render_count == 1
+
+
+def test_begin_work_does_not_bail_out_function_component_with_effect_without_deps() -> None:
+    render_count = 0
+
+    def Child(label: str):
+        nonlocal render_count
+        render_count += 1
+        useEffect(lambda: None)
+        return createElement("ink-text", label)
+
+    root = createNode("ink-root")
+    reconciler = createReconciler(root)
+    container = reconciler.create_container(root)
+
+    reconciler.update_container_sync(createElement(Child, label="same"), container)
+    reconciler.update_container_sync(createElement(Child, label="same"), container)
+
+    assert render_count == 2
+
+
+def test_begin_work_bails_out_internal_router_like_wrapper_with_context_read_only() -> None:
+    render_count = 0
+
+    def RouterReader():
+        nonlocal render_count
+        render_count += 1
+        return createElement("ink-text", useLocation().pathname)
+
+    RouterReader.__module__ = "pyinkcli.tests.router_like"
+    RouterReader.__ink_runtime_sources__ = ("router.location",)
+
+    root = createNode("ink-root")
+    reconciler = createReconciler(root)
+    container = reconciler.create_container(root)
+    tree = createElement(MemoryRouter, createElement(RouterReader), initialEntries=["/same"])
+
+    reconciler.update_container_sync(tree, container)
+    reconciler.update_container_sync(tree, container)
+
+    assert render_count == 1
+
+
+def test_begin_work_bails_out_internal_control_component_with_stable_effects() -> None:
+    render_count = 0
+
+    def CursorController(label: str):
+        nonlocal render_count
+        render_count += 1
+        ref = useRef("stable")
+        assert ref.current == "stable"
+        useEffect(lambda: None, (label,))
+        return createElement("ink-text", label)
+
+    CursorController.__module__ = "pyinkcli.tests.internal_control"
+    CursorController.__ink_runtime_sources__ = ("cursor",)
+
+    root = createNode("ink-root")
+    reconciler = createReconciler(root)
+    container = reconciler.create_container(root)
+
+    reconciler.update_container_sync(createElement(CursorController, label="same"), container)
+    reconciler.update_container_sync(createElement(CursorController, label="same"), container)
+
+    assert render_count == 1
+
+
+def test_begin_work_distinguishes_router_location_and_navigation_runtime_sources() -> None:
+    render_count = 0
+
+    def RouterLocationReader():
+        nonlocal render_count
+        render_count += 1
+        return createElement("ink-text", useLocation().pathname)
+
+    RouterLocationReader.__module__ = "pyinkcli.tests.router_location_only"
+    RouterLocationReader.__ink_runtime_sources__ = ("router.location",)
+
+    root = createNode("ink-root")
+    reconciler = createReconciler(root)
+    container = reconciler.create_container(root)
+    tree = createElement(MemoryRouter, createElement(RouterLocationReader), initialEntries=["/same"])
+
+    reconciler.update_container_sync(tree, container)
+    reconciler.update_container_sync(tree, container)
+
+    assert render_count == 1
+
+
+def test_begin_work_does_not_bail_out_internal_component_with_unsupported_runtime_source() -> None:
+    render_count = 0
+
+    def ImperativeWrapper(label: str):
+        nonlocal render_count
+        render_count += 1
+        useRef("stable")
+        return createElement("ink-text", label)
+
+    ImperativeWrapper.__module__ = "pyinkcli.tests.imperative_like"
+    ImperativeWrapper.__ink_runtime_sources__ = ("imperative_render",)
+
+    root = createNode("ink-root")
+    reconciler = createReconciler(root)
+    container = reconciler.create_container(root)
+
+    reconciler.update_container_sync(createElement(ImperativeWrapper, label="same"), container)
+    reconciler.update_container_sync(createElement(ImperativeWrapper, label="same"), container)
+
+    assert render_count == 2
+
+
+def test_imperative_component_rerender_invalidates_runtime_source_dependency() -> None:
+    class _Stdout:
+        def __init__(self) -> None:
+            self._parts: list[str] = []
+
+        def isatty(self) -> bool:
+            return False
+
+        def write(self, value: str) -> int:
+            self._parts.append(value)
+            return len(value)
+
+        def flush(self) -> None:
+            return None
+
+        def getvalue(self) -> str:
+            return "".join(self._parts)
+
+    class _Stdin:
+        def isatty(self) -> bool:
+            return False
+
+    label = "first"
+    render_count = 0
+
+    @component
+    def Example():
+        nonlocal render_count
+        render_count += 1
+        return createElement("ink-text", label)
+
+    stdout = _Stdout()
+    stdin = _Stdin()
+    app = render(Example, stdout=stdout, stdin=stdin, debug=True)
+    try:
+        app.wait_until_render_flush(timeout=0.2)
+        label = "second"
+        app.rerender(Example)
+        app.wait_until_render_flush(timeout=0.2)
+    finally:
+        app.unmount()
+
+    assert render_count == 2
+    assert "second" in stdout.getvalue()

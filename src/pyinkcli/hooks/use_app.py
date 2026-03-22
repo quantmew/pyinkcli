@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from pyinkcli.components._app_context_runtime import _get_app_context
-from pyinkcli.hooks._runtime import _queue_after_current_batch
+from pyinkcli.packages.react.dispatcher import queueAfterCurrentBatch
 
 if TYPE_CHECKING:
     from pyinkcli.ink import Ink
@@ -30,7 +30,7 @@ class _AppHandle:
             error_or_result: Optional exit error or result.
         """
         if self._ink is not None:
-            _queue_after_current_batch(
+            queueAfterCurrentBatch(
                 lambda: self._ink._handle_app_exit(error_or_result)
             )
 

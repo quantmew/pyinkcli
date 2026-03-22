@@ -100,9 +100,9 @@ def flushSyncFromReconciler(callback: Callable[[], Any] | None = None) -> Any:
 
 
 def flushScheduledUpdates() -> bool:
-    from pyinkcli.hooks._runtime import _flush_scheduled_rerender
+    from pyinkcli.packages.react.dispatcher import flushScheduledRerender
 
-    return _flush_scheduled_rerender()
+    return flushScheduledRerender()
 
 
 __all__ = [

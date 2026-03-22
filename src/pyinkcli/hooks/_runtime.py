@@ -15,6 +15,7 @@ from typing import Any, Generic, TypeVar
 
 from pyinkcli.components._app_context_runtime import _get_app_context
 from pyinkcli.packages.react_reconciler.ReactFiberFlags import NoFlags, Passive
+from pyinkcli.packages.react_reconciler.ReactFiberLane import NoLanes
 from pyinkcli.packages.react_reconciler.ReactEventPriorities import (
     DefaultEventPriority,
     DiscreteEventPriority,
@@ -98,12 +99,16 @@ class HookFiber:
     path: tuple[Any, ...] = ()
     pending_props: dict[str, Any] | None = None
     memoized_props: dict[str, Any] | None = None
+    pending_children: tuple[Any, ...] | None = None
+    memoized_children: tuple[Any, ...] | None = None
     return_fiber: HookFiber | None = None
     child: HookFiber | None = None
     sibling: HookFiber | None = None
     state_node: Any = None
     flags: int = NoFlags
     subtree_flags: int = NoFlags
+    lanes: int = NoLanes
+    child_lanes: int = NoLanes
     deletions: list[HookFiber] = field(default_factory=list)
     ref_detachments: list[Any] = field(default_factory=list)
     layout_callbacks: list[Callable[[], None]] = field(default_factory=list)
@@ -115,6 +120,8 @@ class HookFiber:
     current_hook: HookNode | None = None
     alternate: HookFiber | None = None
     is_work_in_progress: bool = False
+    dependencies: list[tuple[Any, Any]] = field(default_factory=list)
+    runtime_source_deps: list[tuple[str, int]] = field(default_factory=list)
 
 
 @dataclass
@@ -418,18 +425,24 @@ def _create_work_in_progress_fiber(current: HookFiber) -> HookFiber:
             path=current.path,
             pending_props=current.pending_props,
             memoized_props=current.memoized_props,
+            pending_children=current.pending_children,
+            memoized_children=current.memoized_children,
             return_fiber=current.return_fiber,
             child=None,
             sibling=None,
             state_node=current.state_node,
             flags=NoFlags,
             subtree_flags=NoFlags,
+            lanes=current.lanes,
+            child_lanes=current.child_lanes,
             deletions=[],
             ref_detachments=[],
             layout_callbacks=[],
             passive_callbacks=[],
             update_queue=current.update_queue,
             is_work_in_progress=True,
+            dependencies=list(current.dependencies),
+            runtime_source_deps=list(current.runtime_source_deps),
         )
         work_in_progress.alternate = current
         current.alternate = work_in_progress
@@ -439,12 +452,16 @@ def _create_work_in_progress_fiber(current: HookFiber) -> HookFiber:
     work_in_progress.path = current.path
     work_in_progress.pending_props = current.pending_props
     work_in_progress.memoized_props = current.memoized_props
+    work_in_progress.pending_children = current.pending_children
+    work_in_progress.memoized_children = current.memoized_children
     work_in_progress.return_fiber = current.return_fiber
     work_in_progress.child = None
     work_in_progress.sibling = None
     work_in_progress.state_node = current.state_node
     work_in_progress.flags = NoFlags
     work_in_progress.subtree_flags = NoFlags
+    work_in_progress.lanes = current.lanes
+    work_in_progress.child_lanes = current.child_lanes
     work_in_progress.deletions = []
     work_in_progress.ref_detachments = []
     work_in_progress.layout_callbacks = []
@@ -452,6 +469,8 @@ def _create_work_in_progress_fiber(current: HookFiber) -> HookFiber:
     work_in_progress.update_queue = current.update_queue
     work_in_progress.index = 0
     work_in_progress.is_work_in_progress = True
+    work_in_progress.dependencies = list(current.dependencies)
+    work_in_progress.runtime_source_deps = list(current.runtime_source_deps)
     (
         work_in_progress.hook_head,
         work_in_progress.hook_tail,
@@ -468,14 +487,19 @@ def _commit_completed_fiber(
     if current is not None:
         current.alternate = work_in_progress
     work_in_progress.memoized_props = work_in_progress.pending_props
+    work_in_progress.memoized_children = work_in_progress.pending_children
     work_in_progress.current_hook = None
     work_in_progress.is_work_in_progress = False
     subtree_flags = NoFlags
+    child_lanes = NoLanes
     child = work_in_progress.child
     while child is not None:
         subtree_flags |= child.flags | child.subtree_flags
+        child_lanes |= getattr(child, "lanes", NoLanes)
+        child_lanes |= getattr(child, "child_lanes", NoLanes)
         child = child.sibling
     work_in_progress.subtree_flags = subtree_flags
+    work_in_progress.child_lanes = child_lanes
     if registry is not None:
         registry[work_in_progress.component_id] = work_in_progress
     return work_in_progress
@@ -621,6 +645,11 @@ def _create_hook_dispatch(
     fiber: HookFiber | None,
 ) -> Callable[[Any], None]:
     def dispatch(action: Any) -> None:
+        from pyinkcli.packages.react_reconciler.ReactFiberConcurrentUpdates import (
+            markFiberUpdated,
+            unsafe_markUpdateLaneFromFiberToRoot,
+        )
+
         previous_value = (
             queue.last_rendered_state
             if queue.last_rendered_reducer is not None
@@ -643,6 +672,9 @@ def _create_hook_dispatch(
                 pass
 
         _enqueue_hook_update(queue, update)
+        if fiber is not None:
+            markFiberUpdated(fiber, update.priority)
+            unsafe_markUpdateLaneFromFiberToRoot(fiber, update.priority)
         _request_rerender(fiber)
 
     return dispatch

@@ -5,6 +5,10 @@ from typing import Any
 
 from pyinkcli._component_runtime import RenderableNode, createElement
 from pyinkcli.hooks._runtime import useRef
+from pyinkcli.components._app_context_runtime import _get_app_context
+from pyinkcli.packages.react_reconciler.ReactFiberRuntimeSources import (
+    recordRuntimeSourceDependency,
+)
 
 
 def _StaticComponent(
@@ -13,6 +17,13 @@ def _StaticComponent(
     render_item: Callable[[Any, int], RenderableNode] | None,
     box_style: dict[str, Any],
 ) -> RenderableNode:
+    app_context = _get_app_context()
+    app = getattr(app_context, "app", None) if app_context is not None else None
+    recordRuntimeSourceDependency(
+        getattr(app, "_reconciler", None),
+        getattr(getattr(app, "_reconciler", None), "_current_fiber", None),
+        "static_output",
+    )
     index_ref = useRef(0)
     start_index = int(index_ref.current or 0)
     items_to_render = items[start_index:]
@@ -66,3 +77,7 @@ def Static(
 
 
 __all__ = ["Static"]
+
+
+_StaticComponent.__ink_runtime_sources__ = ("static_output",)
+Static.__ink_runtime_sources__ = ("static_output",)

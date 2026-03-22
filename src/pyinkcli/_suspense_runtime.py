@@ -7,7 +7,7 @@ from collections.abc import Callable, Hashable
 from dataclasses import dataclass, field
 from typing import Any
 
-from pyinkcli.hooks._runtime import _has_rerender_target, _request_rerender
+from pyinkcli.packages.react.dispatcher import hasRerenderTarget, requestRerender
 from pyinkcli.packages.react_reconciler.ReactEventPriorities import (
     DefaultEventPriority,
     NoEventPriority,
@@ -60,9 +60,9 @@ def _resolve_resource(
             record.status = "resolved"
             record.value = value
 
-    if _has_rerender_target():
+    if hasRerenderTarget():
         wake_priority = record.wake_priority or DefaultEventPriority
-        _request_rerender(priority=wake_priority)
+        requestRerender(priority=wake_priority)
 
 
 def readResource(key: Hashable, loader: Callable[[], Any]) -> Any:

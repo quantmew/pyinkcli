@@ -1,11 +1,12 @@
 """Hooks for pyinkcli."""
 
-from pyinkcli.hooks._runtime import (
+from pyinkcli.packages.react.ReactHooks import (
     useCallback,
     useEffect,
     useInsertionEffect,
     useLayoutEffect,
     useMemo,
+    useReducer,
     useRef,
     useState,
     useTransition,
@@ -39,6 +40,7 @@ __all__ = [
     "useRef",
     "useMemo",
     "useCallback",
+    "useReducer",
     "useTransition",
     # New hooks
     "usePaste",

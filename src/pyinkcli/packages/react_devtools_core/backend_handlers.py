@@ -366,7 +366,15 @@ def create_host_instance_name_lookup() -> Callable[[Any], str | None]:
         get_display_name = renderer.get("getDisplayNameForNode")
         if not callable(get_display_name):
             return None
-        return get_display_name(match["id"])
+        display_name = get_display_name(match["id"])
+        if (
+            isinstance(display_name, str)
+            and len(display_name) >= 2
+            and display_name[0] == display_name[-1]
+            and display_name[0] in {"'", '"'}
+        ):
+            return display_name[1:-1]
+        return display_name
 
     return method
 

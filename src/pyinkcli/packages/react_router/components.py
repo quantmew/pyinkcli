@@ -11,7 +11,11 @@ from pyinkcli._component_runtime import (
     isElement,
     scopeRender,
 )
+from pyinkcli.components._app_context_runtime import _get_app_context
 from pyinkcli.hooks import useEffect, useRef, useState
+from pyinkcli.packages.react_reconciler.ReactFiberRuntimeSources import (
+    markRuntimeSourceUpdated,
+)
 from pyinkcli.packages.react_router.context import (
     LocationContextObject,
     NavigationContextObject,
@@ -78,6 +82,9 @@ def MemoryRouter(
     initialIndex: int | None = None,
     unstable_useTransitions: bool | None = None,
 ) -> RenderableNode:
+    app_context = _get_app_context()
+    app = getattr(app_context, "app", None) if app_context is not None else None
+    reconciler = getattr(app, "_reconciler", None)
     historyRef = useRef(None)
     if historyRef.current is None:
         historyRef.current = createMemoryHistory(
@@ -97,6 +104,7 @@ def MemoryRouter(
     )
 
     def setState(newState: dict[str, Any]) -> None:
+        markRuntimeSourceUpdated(reconciler, "router.location")
         setStateImpl(newState)
 
     def subscribe() -> Any:
@@ -338,3 +346,9 @@ def _coalesce_route_children(
             return route_children[0]
         return list(route_children)
     return [*route_children, children]
+
+
+MemoryRouter.__ink_runtime_sources__ = ("router.location",)
+Navigate.__ink_runtime_sources__ = ("router.navigation", "router.location")
+Router.__ink_runtime_sources__ = ("router.location",)
+Routes.__ink_runtime_sources__ = ("router.location",)

@@ -6,6 +6,9 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from pyinkcli.packages.react_reconciler.ReactFiberHostContext import getRootHostContext
+from pyinkcli.packages.react_reconciler.ReactFiberRuntimeSources import (
+    initializeRuntimeSourceVersions,
+)
 from pyinkcli.hooks._runtime import HookFiber
 from pyinkcli.packages.react_reconciler.ReactWorkTags import HostRoot
 
@@ -34,6 +37,7 @@ def initializeReconcilerState(
     reconciler._current_fiber = None
     reconciler._current_fiber_stack = []
     reconciler._host_context_stack = [getRootHostContext()]
+    reconciler._context_provider_stack = []
     reconciler._owner_component_stack = []
     reconciler._error_boundary_stack = []
     reconciler._suspense_boundary_stack = []
@@ -87,6 +91,8 @@ def initializeReconcilerState(
     reconciler._render_suspended = False
     reconciler._suspended_lanes_this_render = 0
     reconciler._current_work_budget = None
+    reconciler._current_committed_root_child = None
+    initializeRuntimeSourceVersions(reconciler)
     reconciler._prepared_effects = {
         "mutation": [],
         "layout": [],
@@ -154,11 +160,7 @@ def getComponentInstanceID(
     vnode: Any,
     path: tuple[Any, ...],
 ) -> str:
-    component_name = getattr(component_type, "_component_name", None)
-    if component_name is None:
-        component_name = getattr(component_type, "displayName", None)
-    if component_name is None:
-        component_name = getattr(component_type, "__name__", repr(component_type))
+    component_name = getComponentDisplayName(_reconciler, component_type)
 
     key = vnode.key if vnode.key is not None else ""
     return f"{component_name}:{'.'.join(str(part) for part in path)}:{key}"
@@ -168,6 +170,18 @@ def getComponentDisplayName(
     _reconciler: _Reconciler,
     component_type: Any,
 ) -> str:
+    if getattr(component_type, "__ink_react_memo__", False):
+        return f"Memo({getComponentDisplayName(_reconciler, component_type.type)})"
+    if getattr(component_type, "__ink_react_forward_ref__", False):
+        render = component_type.render
+        inner_name = getattr(render, "displayName", None) or getattr(render, "__name__", "Anonymous")
+        return f"ForwardRef({inner_name})"
+    if getattr(component_type, "__ink_react_lazy__", False):
+        return "Lazy"
+    if getattr(component_type, "__ink_react_provider__", False):
+        return "Context.Provider"
+    if getattr(component_type, "__ink_react_consumer__", False):
+        return "Context.Consumer"
     display_name = getattr(component_type, "_component_name", None)
     if display_name is None:
         display_name = getattr(component_type, "displayName", None)

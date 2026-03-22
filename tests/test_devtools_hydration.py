@@ -257,7 +257,6 @@ def test_devtools_hydration_helper_upgrades_unserializable_transport_metadata() 
 
         inspected = renderer["inspectElement"](1, carrier_node["id"], None, False)
         props_transport = inspected["value"]["props"]
-
         assert ["fallback"] in props_transport["unserializable"]
         assert ["failure"] in props_transport["unserializable"]
         assert props_transport["data"]["fallback"]["type"] == "react_element"
@@ -296,6 +295,32 @@ def test_devtools_hydration_helper_upgrades_unserializable_transport_metadata() 
         assert get_metadata(hydrated_fallback)["readonly"] is True
     finally:
         app.unmount()
+
+
+def test_bridge_envelope_validation_rejects_bad_request_ids_and_notification_counts() -> None:
+    with pytest.raises(TypeError):
+        make_bridge_request("inspectElement", {}, request_id=object())
+
+    with pytest.raises(TypeError):
+        normalize_store_as_global_bridge_payload(
+            {
+                "rendererID": 1,
+                "id": 2,
+                "path": ["props"],
+                "count": "1",
+            }
+        )
+
+
+def test_bridge_dispatch_message_rejects_invalid_envelopes() -> None:
+    with pytest.raises(ValueError):
+        dispatch_bridge_message({"type": "weird", "event": "x", "payload": {}})
+
+    with pytest.raises(TypeError):
+        handle_bridge_call(
+            {"type": "request", "event": "inspectElement", "payload": {}, "requestId": []},
+            {},
+        )
 
 
 def test_devtools_class_instance_transport_matches_hydration_shape() -> None:

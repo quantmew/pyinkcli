@@ -24,13 +24,7 @@ from typing import (
 from pyinkcli._component_runtime import createElement, scopeRender
 from pyinkcli.components._accessibility_runtime import _provide_accessibility
 from pyinkcli.components._app_context_runtime import Props as AppContextProps
-from pyinkcli.hooks._runtime import (
-    HookFiber,
-    _clear_hook_state,
-    _flush_scheduled_rerender,
-    _reset_hook_state,
-    _set_schedule_update_callback,
-)
+from pyinkcli.hooks._runtime import HookFiber
 from pyinkcli.hooks.use_app import _set_app_ink
 from pyinkcli.hooks.use_input import _clear_input_handlers, _dispatch_input
 from pyinkcli.hooks.use_stderr import _set_stderr
@@ -48,6 +42,15 @@ from pyinkcli.packages.react_reconciler.ReactEventPriorities import (
     DefaultEventPriority,
     DiscreteEventPriority,
     UpdatePriority,
+)
+from pyinkcli.packages.react.dispatcher import (
+    clearHookState,
+    flushScheduledRerender,
+    resetHookState,
+    setScheduleUpdateCallback,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberRuntimeSources import (
+    markRuntimeSourceUpdated,
 )
 from pyinkcli.patch_console import patch_console
 from pyinkcli.sanitize_ansi import sanitizeAnsi
@@ -300,7 +303,7 @@ class Ink:
         _set_stdin(self._stdin, self._stdout)
         _set_stdout(self._stdout)
         _set_stderr(self._stderr)
-        _set_schedule_update_callback(self._schedule_hook_update)
+        setScheduleUpdateCallback(self._schedule_hook_update)
 
         # Set up exit signal handler
         self._setup_exit_handler()
@@ -333,6 +336,7 @@ class Ink:
         Args:
             node: The root component or virtual node to render.
         """
+        markRuntimeSourceUpdated(self._reconciler, "imperative_render")
         self._render_component(node, sync=False)
 
     def _perform_scheduled_render(
@@ -359,7 +363,7 @@ class Ink:
         wrapped = self._create_wrapped_app(vnode)
 
         # Set context
-        _reset_hook_state()
+        resetHookState()
         if sync and self._concurrent and priority > DiscreteEventPriority:
             if self._container.render_state is not None and not self._reconciler._should_resume_container_render(
                 self._container,
@@ -486,7 +490,7 @@ class Ink:
         if self._is_unmounted or self._is_unmounting:
             return
 
-        _flush_scheduled_rerender()
+        flushScheduledRerender()
         self._wait_for_render_flush(timeout=timeout)
         self._wait_for_transition_idle(timeout=timeout)
 
@@ -1142,9 +1146,9 @@ class Ink:
         """Clean up resources."""
         self._run_unmount_callbacks()
 
-        _set_schedule_update_callback(None)
+        setScheduleUpdateCallback(None)
         self._reconciler.cleanup_class_component_instances()
-        _clear_hook_state()
+        clearHookState()
         _clear_input_handlers()
         self._restore_terminal_state()
         self._flush_stdout()

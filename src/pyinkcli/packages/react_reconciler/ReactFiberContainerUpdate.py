@@ -10,12 +10,24 @@ from typing import TYPE_CHECKING, Any
 from pyinkcli.hooks._runtime import _finish_hook_state
 from pyinkcli.packages.react_reconciler.ReactFiberFlags import NoFlags
 from pyinkcli.packages.ink.dom import DOMElement, cloneNodeTree
-from pyinkcli.packages.react_reconciler.ReactEventPriorities import DefaultEventPriority
+from pyinkcli.packages.react_reconciler.ReactFiberBeginWork import beginWork
+from pyinkcli.packages.react_reconciler.ReactFiberCompleteWork import (
+    buildCompletionState,
+    completeTree,
+)
+from pyinkcli.packages.react_reconciler.ReactEventPriorities import (
+    DefaultEventPriority,
+    DiscreteEventPriority,
+)
 from pyinkcli.packages.react_reconciler.ReactChildFiber import WorkBudget
 from pyinkcli.packages.react_reconciler.ReactFiberCommitWork import (
     buildCommitListFromFiberTree,
     PreparedCommit,
     runPreparedCommitEffects,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberRootScheduler import (
+    ensureRootIsScheduled,
+    removeRootFromSchedule,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberReconciler import packageInfo
 from pyinkcli.packages.react_reconciler.ReactFiberRoot import ReconcilerContainer
@@ -23,17 +35,6 @@ from pyinkcli.packages.react_reconciler.ReactFiberRoot import ReconcilerContaine
 if TYPE_CHECKING:
     from pyinkcli.component import RenderableNode
     from pyinkcli.packages.react_reconciler.reconciler import _Reconciler
-
-
-def _bubble_root_subtree_flags(root_fiber: Any) -> None:
-    subtree_flags = NoFlags
-    child = root_fiber.child
-    while child is not None:
-        subtree_flags |= getattr(child, "flags", NoFlags)
-        subtree_flags |= getattr(child, "subtree_flags", NoFlags)
-        child = child.sibling
-    root_fiber.subtree_flags = subtree_flags
-
 
 @dataclass
 class ConcurrentRenderState:
@@ -55,6 +56,7 @@ def createContainer(
     hydrate: bool = False,
 ) -> ReconcilerContainer:
     reconciler_container = ReconcilerContainer(container=container, tag=tag, hydrate=hydrate)
+    reconciler_container._reconciler = reconciler
     if reconciler._devtools_container is None:
         reconciler._devtools_container = reconciler_container
     return reconciler_container
@@ -68,6 +70,7 @@ def updateContainer(
     callback: Callable[[], None] | None = None,
 ) -> None:
     if container.tag == 0:
+        ensureRootIsScheduled(container)
         updateContainerSync(
             reconciler,
             element,
@@ -82,6 +85,7 @@ def updateContainer(
         if container.update_scheduled:
             return
         container.update_scheduled = True
+    ensureRootIsScheduled(container)
 
     def run() -> None:
         while True:
@@ -110,6 +114,7 @@ def updateContainerSync(
     parent_component: Any | None = None,
     callback: Callable[[], None] | None = None,
 ) -> None:
+    ensureRootIsScheduled(container)
     commitContainerUpdate(reconciler, element, container, parent_component, callback)
 
 
@@ -135,6 +140,8 @@ def flushSyncWork(
         if next_update is None:
             with container.lock:
                 container.update_scheduled = False
+            if not container.pending_updates and not container.update_running:
+                removeRootFromSchedule(container)
             return
 
         element, callback = next_update
@@ -149,6 +156,7 @@ def submitContainer(
     callback: Callable[[], None] | None = None,
 ) -> None:
     if container.tag == 0:
+        ensureRootIsScheduled(container)
         updateContainerSync(
             reconciler,
             element,
@@ -257,6 +265,7 @@ def commitContainerUpdate(
     _prepareNextCommitState(reconciler)
     commit_phase_recovery_needed = False
     root_fiber = reconciler._root_fiber
+    reconciler._current_committed_root_child = root_fiber.child
     root_fiber.child = None
     root_fiber.sibling = None
 
@@ -264,9 +273,12 @@ def commitContainerUpdate(
         reconciler.push_current_fiber(root_fiber)
         next_index = 0
         if element is not None:
-            next_index = reconciler._reconcile_children(
+            next_index = beginWork(
+                reconciler,
+                None,
+                root_fiber,
+                element,
                 dom_container,
-                [element],
                 (),
                 0,
                 "root",
@@ -279,13 +291,16 @@ def commitContainerUpdate(
             defer_passive_effects_to_commit=should_defer_sync_passive_effects_to_commit,
             defer_non_passive_hook_effects_to_commit=True,
         )
-    _bubble_root_subtree_flags(root_fiber)
+    completeTree(None, root_fiber)
+    reconciler._current_committed_root_child = root_fiber.child
     prepared_commit = PreparedCommit(
         work_root=dom_container,
         commit_list=buildCommitListFromFiberTree(
             reconciler._root_fiber,
             is_static_dirty=bool(dom_container.isStaticDirty),
+            root_completion_state=buildCompletionState(root_fiber),
         ),
+        root_completion_state=buildCompletionState(root_fiber),
     )
     runPreparedCommitEffects(reconciler, container, prepared_commit)
     reconciler._finalize_tree_snapshot()
@@ -300,6 +315,13 @@ def commitContainerUpdate(
 
     if callback:
         callback()
+
+    if (
+        not container.pending_updates
+        and not container.update_running
+        and not container.render_state
+    ):
+        removeRootFromSchedule(container)
 
 
 def beginContainerRender(
@@ -368,9 +390,10 @@ def resumeContainerRender(
 
     _prepareNextCommitState(reconciler)
     reconciler._current_work_budget = (
-        WorkBudget(remaining=16) if state.priority > 16 else None
+        WorkBudget(remaining=16) if state.priority > DiscreteEventPriority else None
     )
     root_fiber = reconciler._root_fiber
+    reconciler._current_committed_root_child = root_fiber.child
     root_fiber.child = None
     root_fiber.sibling = None
 
@@ -382,9 +405,12 @@ def resumeContainerRender(
                 from pyinkcli.packages.react_reconciler.ReactChildFiber import WorkYield
 
                 try:
-                    next_index = reconciler._reconcile_children(
+                    next_index = beginWork(
+                        reconciler,
+                        None,
+                        root_fiber,
+                        state.element,
                         state.work_root,
-                        [state.element],
                         (),
                         0,
                         "root",
@@ -410,7 +436,8 @@ def resumeContainerRender(
             defer_non_passive_hook_effects_to_commit=True,
         )
 
-    _bubble_root_subtree_flags(root_fiber)
+    completeTree(None, root_fiber)
+    reconciler._current_committed_root_child = root_fiber.child
     finalizeContainerRender(reconciler, container)
     return True
 
@@ -431,7 +458,9 @@ def finalizeContainerRender(
         commit_list=buildCommitListFromFiberTree(
             reconciler._root_fiber,
             is_static_dirty=bool(state.work_root.isStaticDirty),
+            root_completion_state=buildCompletionState(reconciler._root_fiber),
         ),
+        root_completion_state=buildCompletionState(reconciler._root_fiber),
         callback=state.callback,
     )
     reconciler._commit_prepared_container(
@@ -451,6 +480,12 @@ def finalizeContainerRender(
     container.render_state = None
     if state.prepared_commit.callback:
         state.prepared_commit.callback()
+    if (
+        not container.pending_updates
+        and not container.update_running
+        and not container.render_state
+    ):
+        removeRootFromSchedule(container)
 
 
 def getEffectiveDevtoolsProps(

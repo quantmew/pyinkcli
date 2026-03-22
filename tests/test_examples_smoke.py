@@ -97,6 +97,7 @@ def test_aria_example_smoke() -> None:
         ("examples/router/index.py", 1.5, "Home"),
         ("examples/incremental-rendering/index.py", 1.5, "Incremental Rendering"),
         ("examples/jest/index.py", 3.5, "Test Suites:"),
+        ("examples/stress-test/index.py", 1.5, "Mode"),
         ("examples/use-focus/index.py", 1.5, "Press Tab to focus next element"),
         ("examples/use-focus-with-id/index.py", 1.5, "Press 1, 2 or 3 to focus an item"),
         ("examples/use-stdout/index.py", 1.5, "Terminal dimensions:"),

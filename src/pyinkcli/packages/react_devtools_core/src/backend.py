@@ -103,6 +103,25 @@ from pyinkcli.packages.react_devtools_core.window_polyfill import (
 )
 
 _devtools_initialized: bool = False
+_saved_component_filters: list[dict[str, Any]] | None = None
+
+
+def installHook(
+    target: dict[str, Any] | None = None,
+    component_filters: list[dict[str, Any]] | None = None,
+    settings: dict[str, Any] | None = None,
+    should_start_profiling_now: bool = False,
+    profiling_settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    del settings, should_start_profiling_now, profiling_settings
+    global_scope = target if target is not None else installDevtoolsWindowPolyfill()
+    hook = global_scope.setdefault("__REACT_DEVTOOLS_GLOBAL_HOOK__", global_scope["window"].get("__REACT_DEVTOOLS_GLOBAL_HOOK__") if isinstance(global_scope.get("window"), dict) else None)
+    if hook is None:
+        hook = installDevtoolsWindowPolyfill()["__REACT_DEVTOOLS_GLOBAL_HOOK__"]
+        global_scope["__REACT_DEVTOOLS_GLOBAL_HOOK__"] = hook
+    if component_filters is not None:
+        global_scope["__REACT_DEVTOOLS_COMPONENT_FILTERS__"] = deepcopy(component_filters)
+    return global_scope
 
 
 def _create_bridge_dispatcher(
@@ -405,10 +424,165 @@ def initializeBackend() -> bool:
     return False
 
 
+def initialize(
+    maybeSettingsOrSettingsPromise: dict[str, Any] | None = None,
+    shouldStartProfilingNow: bool = False,
+    profilingSettings: dict[str, Any] | None = None,
+    maybeComponentFiltersOrComponentFiltersPromise: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    del maybeSettingsOrSettingsPromise
+    global _saved_component_filters
+    global_scope = installDevtoolsWindowPolyfill()
+    component_filters = (
+        maybeComponentFiltersOrComponentFiltersPromise
+        if maybeComponentFiltersOrComponentFiltersPromise is not None
+        else _saved_component_filters
+    )
+    if component_filters is None:
+        component_filters = deepcopy(global_scope["__REACT_DEVTOOLS_COMPONENT_FILTERS__"])
+    _saved_component_filters = deepcopy(component_filters)
+    return installHook(
+        global_scope,
+        component_filters=component_filters,
+        should_start_profiling_now=shouldStartProfilingNow,
+        profiling_settings=profilingSettings,
+    )
+
+
+def _pick_renderer_interface() -> dict[str, Any] | None:
+    global_scope = installDevtoolsWindowPolyfill()
+    renderers = global_scope.get("__INK_DEVTOOLS_RENDERERS__", {})
+    if isinstance(renderers, dict) and renderers:
+        return next(iter(renderers.values()))
+    metadata = global_scope.get("__INK_RECONCILER_DEVTOOLS_METADATA__")
+    return metadata if isinstance(metadata, dict) else None
+
+
+def connectWithCustomMessagingProtocol(
+    *,
+    onSubscribe: Any,
+    onUnsubscribe: Any,
+    onMessage: Any,
+    nativeStyleEditorValidAttributes: list[str] | None = None,
+    resolveRNStyle: Any = None,
+    onSettingsUpdated: Any = None,
+    isReloadAndProfileSupported: bool = False,
+    isProfiling: bool | None = None,
+    onReloadAndProfile: Any = None,
+    onReloadAndProfileFlagsReset: Any = None,
+) -> Any:
+    del nativeStyleEditorValidAttributes
+    del resolveRNStyle
+    del onSettingsUpdated
+    del isReloadAndProfileSupported
+    del isProfiling
+    del onReloadAndProfile
+    if callable(onReloadAndProfileFlagsReset):
+        onReloadAndProfileFlagsReset()
+
+    renderer_interface = _pick_renderer_interface()
+    if renderer_interface is None:
+        return lambda: None
+
+    listeners: list[Any] = []
+
+    def handle_message(message: dict[str, Any]) -> Any:
+        event = message.get("event")
+        payload = message.get("payload")
+        if event == "updateComponentFilters" and isinstance(payload, list):
+            global _saved_component_filters
+            _saved_component_filters = deepcopy(payload)
+        dispatch = renderer_interface.get("dispatchBridgeMessage")
+        if callable(dispatch):
+            return dispatch(message)
+        return None
+
+    def subscriber(message: Any) -> None:
+        if isinstance(message, dict):
+            handle_message(message)
+
+    listeners.append(subscriber)
+    if callable(onSubscribe):
+        onSubscribe(subscriber)
+
+    def send_to_frontend(event: str, payload: Any) -> None:
+        if callable(onMessage):
+            onMessage(event, payload)
+
+    renderer_interface["_devtools_send_to_frontend"] = send_to_frontend
+
+    def unsubscribe() -> None:
+        if callable(onUnsubscribe):
+            for listener in listeners:
+                onUnsubscribe(listener)
+        hook = installDevtoolsWindowPolyfill()["__REACT_DEVTOOLS_GLOBAL_HOOK__"]
+        emit = getattr(hook, "emit", None)
+        if callable(emit):
+            emit("shutdown")
+
+    return unsubscribe
+
+
+def connectToDevTools(options: dict[str, Any] | None = None) -> Any:
+    initialize()
+    global_scope = installDevtoolsWindowPolyfill()
+    hook = global_scope.get("__REACT_DEVTOOLS_GLOBAL_HOOK__")
+    if hook is None:
+        return None
+
+    options = options or {}
+    websocket = options.get("websocket")
+    if websocket is None:
+        host = options.get("host", "localhost")
+        port = int(options.get("port", 8097))
+        if not isBackendReachable(host=host, port=port):
+            return None
+        return None
+
+    def on_subscribe(listener: Any) -> None:
+        listeners = getattr(websocket, "_devtools_listeners", None)
+        if listeners is None:
+            listeners = []
+            setattr(websocket, "_devtools_listeners", listeners)
+        listeners.append(listener)
+
+    def on_unsubscribe(listener: Any) -> None:
+        listeners = getattr(websocket, "_devtools_listeners", None)
+        if isinstance(listeners, list) and listener in listeners:
+            listeners.remove(listener)
+
+    def on_message(event: str, payload: Any) -> None:
+        sender = getattr(websocket, "send", None)
+        if callable(sender):
+            sender({"event": event, "payload": payload})
+
+    unsubscribe = connectWithCustomMessagingProtocol(
+        onSubscribe=on_subscribe,
+        onUnsubscribe=on_unsubscribe,
+        onMessage=on_message,
+        nativeStyleEditorValidAttributes=options.get("nativeStyleEditorValidAttributes"),
+        resolveRNStyle=options.get("resolveRNStyle"),
+        onSettingsUpdated=options.get("onSettingsUpdated"),
+        isReloadAndProfileSupported=bool(options.get("isReloadAndProfileSupported", False)),
+        isProfiling=options.get("isProfiling"),
+        onReloadAndProfile=options.get("onReloadAndProfile"),
+        onReloadAndProfileFlagsReset=options.get("onReloadAndProfileFlagsReset"),
+    )
+
+    onopen = getattr(websocket, "onopen", None)
+    if callable(onopen):
+        onopen()
+    return unsubscribe
+
+
 __all__ = [
     "CURRENT_BRIDGE_PROTOCOL",
+    "connectToDevTools",
+    "connectWithCustomMessagingProtocol",
     "createBackend",
+    "initialize",
     "initializeBackend",
+    "installHook",
     "installDevtoolsWindowPolyfill",
     "isBackendReachable",
 ]
