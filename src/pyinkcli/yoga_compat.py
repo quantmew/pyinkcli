@@ -90,10 +90,10 @@ class Node:
         return cls()
 
     def insert_child(self, child: "Node", index: int) -> None:
-        self._node.insertChild(child._node, index)
+        yoga.YGNodeInsertChild(self._node, child._node, index)
 
     def remove_child(self, child: "Node") -> None:
-        self._node.removeChild(child._node)
+        yoga.YGNodeRemoveChild(self._node, child._node)
 
     def calculate_layout(
         self,
@@ -101,54 +101,58 @@ class Node:
         height: float | None = None,
         direction= DIRECTION_LTR,
     ) -> None:
-        yoga.calculateLayout(
-            self._node,
-            float("nan") if width is None else width,
-            float("nan") if height is None else height,
-            direction,
-        )
+        yoga.YGNodeCalculateLayout(self._node, float("nan") if width is None else width, float("nan") if height is None else height, direction)
 
     def set_width(self, value: float) -> None:
-        self._node.style().setDimension(yoga.YGDimension.YGDimensionWidth, value)
+        yoga.YGNodeStyleSetWidth(self._node, float(value))
 
     def set_height(self, value: float) -> None:
-        self._node.style().setDimension(yoga.YGDimension.YGDimensionHeight, value)
+        yoga.YGNodeStyleSetHeight(self._node, float(value))
 
     def set_flex_direction(self, value) -> None:
-        self._node.style().setFlexDirection(value)
+        yoga.YGNodeStyleSetFlexDirection(self._node, value)
 
     def set_align_items(self, value) -> None:
-        self._node.style().setAlignItems(value)
+        yoga.YGNodeStyleSetAlignItems(self._node, value)
 
     def set_justify_content(self, value) -> None:
-        self._node.style().setJustifyContent(value)
+        yoga.YGNodeStyleSetJustifyContent(self._node, value)
 
     def set_padding(self, edge, value: float) -> None:
-        self._node.style().setPadding(edge, value)
+        yoga.YGNodeStyleSetPadding(self._node, edge, float(value))
 
     def set_margin(self, edge, value: float) -> None:
-        self._node.style().setMargin(edge, value)
+        yoga.YGNodeStyleSetMargin(self._node, edge, float(value))
 
     def set_border(self, edge, value: float) -> None:
-        self._node.style().setBorder(edge, value)
+        yoga.YGNodeStyleSetBorder(self._node, edge, float(value))
 
     def set_flex_grow(self, value: float) -> None:
-        self._node.style().setFlexGrow(value)
+        yoga.YGNodeStyleSetFlexGrow(self._node, float(value))
 
     def set_flex_shrink(self, value: float) -> None:
-        self._node.style().setFlexShrink(value)
+        yoga.YGNodeStyleSetFlexShrink(self._node, float(value))
 
     def set_display(self, value) -> None:
-        self._node.style().setDisplay(value)
+        yoga.YGNodeStyleSetDisplay(self._node, value)
 
     def set_position_type(self, value) -> None:
-        self._node.style().setPositionType(value)
+        yoga.YGNodeStyleSetPositionType(self._node, value)
 
     def set_position(self, edge, value: float) -> None:
-        self._node.style().setPosition(edge, value)
+        yoga.YGNodeStyleSetPosition(self._node, edge, float(value))
 
     def set_flex_wrap(self, value) -> None:
-        self._node.style().setFlexWrap(value)
+        yoga.YGNodeStyleSetFlexWrap(self._node, value)
+
+    def set_gap(self, gutter, value: float) -> None:
+        yoga.YGNodeStyleSetGap(self._node, gutter, float(value))
+
+    def set_min_width(self, value: float) -> None:
+        yoga.YGNodeStyleSetMinWidth(self._node, float(value))
+
+    def set_max_width(self, value: float) -> None:
+        yoga.YGNodeStyleSetMaxWidth(self._node, float(value))
 
     def get_computed_width(self) -> float:
         return float(yoga.YGNodeLayoutGetWidth(self._node))

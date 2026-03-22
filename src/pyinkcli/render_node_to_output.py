@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .components import _accessibility_runtime
+from .components.Text import ANSI_BG_OPEN
 from .squash_text_nodes import squashTextNodes
 
 OutputTransformer = object
@@ -57,6 +58,27 @@ def renderNodeToScreenReaderOutput(node) -> str:
 
 
 def renderNodeToOutput(node) -> str:
+    node_name = getattr(node, "nodeName", None)
+    if node_name == "#text":
+        return node.nodeValue
+    if node_name == "ink-text":
+        content = "".join(renderNodeToOutput(child) for child in getattr(node, "childNodes", []))
+        transform = getattr(node, "internal_transform", None)
+        return transform(content) if callable(transform) else content
+    if node_name == "ink-box":
+        style = getattr(node, "attributes", {}).get("style", {})
+        background = style.get("backgroundColor")
+        separator = "\n" if style.get("flexDirection") == "column" else ""
+        content = separator.join(renderNodeToOutput(child) for child in getattr(node, "childNodes", []))
+        if background in ANSI_BG_OPEN:
+            return ANSI_BG_OPEN[background] + content.replace("\x1b[49m", "") + "\x1b[49m"
+        return content
+    parts = [renderNodeToOutput(child) for child in getattr(node, "childNodes", []) if not getattr(child, "aria_hidden", False)]
+    parts = [part for part in parts if part != ""]
+    if node_name in {"ink-root", "ink-box", "ink-fragment"}:
+        return "\n".join(parts)
+    if parts:
+        return "".join(parts)
     return squashTextNodes(node)
 
 

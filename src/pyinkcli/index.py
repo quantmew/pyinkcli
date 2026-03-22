@@ -1,4 +1,5 @@
 from .components.Box import Box
+from .components.Static import Static
 from .components.Text import Text
 from .measure_element import measureElement
 from .hooks import (
@@ -20,7 +21,6 @@ from .parse_keypress import Key
 from .render import render
 from .render_to_string import renderToString
 
-Static = object()
 Transform = object()
 Newline = object()
 Spacer = object()

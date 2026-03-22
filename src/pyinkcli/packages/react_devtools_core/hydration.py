@@ -66,7 +66,7 @@ def copy_with_metadata(value, metadata=None):
     elif isinstance(value, list):
         cloned = HydratedList(copy.deepcopy(value))
     elif isinstance(value, dict):
-        cloned = HydratedDict(copy.deepcopy({k: v for k, v in value.items() if k not in {META_KEY, INSPECTED_KEY, UNSERIALIZABLE_KEY}}))
+        cloned = HydratedDict(copy.deepcopy(dict(value)))
         legacy = get_metadata(value)
         if legacy is not None:
             set_metadata(cloned, dict(legacy))
@@ -139,7 +139,7 @@ def _iter_transport_paths(items):
 
 
 def _wrapped_from_meta_payload(data: dict):
-    wrapper = HydratedList() if all(isinstance(key, int) for key in data.keys() if not isinstance(key, str) or key.isdigit()) and data.get("type") in {"iterator", "typed_array", "html_all_collection"} else HydratedDict()
+    wrapper = HydratedList() if all(isinstance(key, int) for key in data.keys() if not isinstance(key, str) or key.isdigit()) and data.get("type") in {"iterator", "typed_array", "html_all_collection", "array"} else HydratedDict()
     metadata = {k: v for k, v in data.items() if isinstance(k, str) and not isinstance(wrapper, HydratedList) and k not in {META_KEY, INSPECTED_KEY, UNSERIALIZABLE_KEY}}
     if isinstance(wrapper, HydratedList):
         numeric_keys = sorted(k for k in data.keys() if isinstance(k, int))
@@ -183,6 +183,7 @@ def hydrate_helper(payload, path=None):
                 "error",
                 "class_instance",
                 "iterator",
+                "array",
                 "typed_array",
                 "array_buffer",
                 "data_view",
@@ -226,7 +227,7 @@ def hydrate_helper(payload, path=None):
             return wrapped
         return value
 
-    return hydrate_value(data, path if "data" not in payload else [])
+    return hydrate_value(data, path or [])
 
 
 def get_in_object(value, path):
@@ -283,6 +284,8 @@ def rename_in_path(value, path, new_path):
 
 
 def rename_path_in_object(value, path, new_path):
+    if path == new_path:
+        return value
     moved = get_in_object(value, path)
     delete_path_in_object(value, path)
     return set_in_object(value, new_path, moved)
@@ -528,15 +531,15 @@ def handle_bridge_notification(message, handlers=None, event=None, normalizer=No
 def normalize_serialized_mutation_bridge_payload(payload):
     if not isinstance(payload, dict):
         raise TypeError("dict")
+    if "mode" in payload and not isinstance(payload["mode"], str):
+        raise TypeError("'mode' must be a string")
+    if "rollback" in payload and not isinstance(payload["rollback"], bool):
+        raise TypeError("'rollback' must be a bool")
     operations = payload.get("operations")
     if not isinstance(operations, list):
         raise TypeError("'operations' must be a list")
     if any(not isinstance(item, dict) for item in operations):
         raise TypeError("dict items")
-    if "mode" in payload and not isinstance(payload["mode"], str):
-        raise TypeError("'mode' must be a string")
-    if "rollback" in payload and not isinstance(payload["rollback"], bool):
-        raise TypeError("'rollback' must be a bool")
     return {"operations": operations, "mode": payload.get("mode", "fail-fast"), "rollback": payload.get("rollback", False)}
 
 
@@ -598,25 +601,59 @@ def handle_serialized_mutation_bridge_call(message, target_or_factory):
 
 
 def make_inspect_element_bridge_handler(inspector):
-    return lambda payload, raw_message: inspector(raw_message["requestId"], payload["id"], payload.get("path"), payload.get("forceFullData", False))
+    def handler(payload, raw_message):
+        result = inspector(raw_message["requestId"], payload["id"], payload.get("path"), payload.get("forceFullData", False))
+        if isinstance(result, dict):
+            result.setdefault("id", payload["id"])
+            result.setdefault("responseID", raw_message["requestId"])
+        return result
+    return handler
 
 
 def handle_inspect_element_bridge_call(message, inspector):
     if message["event"] != "inspectElement":
         raise ValueError("event must be 'inspectElement'")
     payload = normalize_inspect_element_bridge_payload(message["payload"], request_id=message["requestId"])
-    result = inspector(message["requestId"], payload["id"], payload.get("path"), payload.get("forceFullData", False))
-    return serialize_bridge_message_envelope({"ok": True, "failure": None, **result}, event="inspectedElement", message_type="response", request_id=message["requestId"])
+    try:
+        result = inspector(message["requestId"], payload["id"], payload.get("path"), payload.get("forceFullData", False))
+        if isinstance(result, dict):
+            result.setdefault("id", payload["id"])
+            result.setdefault("responseID", message["requestId"])
+        return serialize_bridge_message_envelope({"ok": True, "failure": None, **result}, event="inspectedElement", message_type="response", request_id=message["requestId"])
+    except Exception as error:  # noqa: BLE001
+        return serialize_bridge_message_envelope(
+            {"ok": False, "failure": {"error_type": type(error).__name__, "error_message": str(error)}},
+            event="inspectedElement",
+            message_type="response",
+            request_id=message["requestId"],
+        )
 
 
 def make_inspect_screen_bridge_handler(inspector):
-    return lambda payload, raw_message: inspector(raw_message["requestId"], payload["id"], payload.get("path"), payload.get("forceFullData", False))
+    def handler(payload, raw_message):
+        result = inspector(raw_message["requestId"], payload["id"], payload.get("path"), payload.get("forceFullData", False))
+        if isinstance(result, dict):
+            result.setdefault("id", payload["id"])
+            result.setdefault("responseID", raw_message["requestId"])
+        return result
+    return handler
 
 
 def handle_inspect_screen_bridge_call(message, inspector):
     payload = normalize_inspect_screen_bridge_payload(message["payload"], request_id=message["requestId"])
-    result = inspector(message["requestId"], payload["id"], payload.get("path"), payload.get("forceFullData", False))
-    return serialize_bridge_message_envelope({"ok": True, "failure": None, **result}, event="inspectedScreen", message_type="response", request_id=message["requestId"])
+    try:
+        result = inspector(message["requestId"], payload["id"], payload.get("path"), payload.get("forceFullData", False))
+        if isinstance(result, dict):
+            result.setdefault("id", payload["id"])
+            result.setdefault("responseID", message["requestId"])
+        return serialize_bridge_message_envelope({"ok": True, "failure": None, **result}, event="inspectedScreen", message_type="response", request_id=message["requestId"])
+    except Exception as error:  # noqa: BLE001
+        return serialize_bridge_message_envelope(
+            {"ok": False, "failure": {"error_type": type(error).__name__, "error_message": str(error)}},
+            event="inspectedScreen",
+            message_type="response",
+            request_id=message["requestId"],
+        )
 
 
 def make_clear_errors_and_warnings_bridge_handler(handler):
@@ -640,13 +677,14 @@ def handle_override_suspense_milestone_bridge_notification(message, handler):
 
 
 def make_devtools_backend_notification_handlers(**handlers):
+    noop = lambda payload, message: None
     return {
-        "clearErrorsAndWarnings": make_clear_errors_and_warnings_bridge_handler(handlers["clear_errors_and_warnings"]),
-        "clearErrorsForElementID": lambda payload, message: handlers["clear_errors_for_element"](normalize_clear_errors_for_element_bridge_payload(payload), message),
-        "clearWarningsForElementID": lambda payload, message: handlers["clear_warnings_for_element"](normalize_clear_errors_for_element_bridge_payload(payload), message),
-        "copyElementPath": lambda payload, message: handlers["copy_element_path"](normalize_copy_element_path_bridge_payload(payload), message),
-        "storeAsGlobal": lambda payload, message: handlers["store_as_global"](normalize_store_as_global_bridge_payload(payload), message),
-        "overrideSuspenseMilestone": lambda payload, message: handlers["override_suspense_milestone"](normalize_override_suspense_milestone_bridge_payload(payload), message),
+        "clearErrorsAndWarnings": make_clear_errors_and_warnings_bridge_handler(handlers.get("clear_errors_and_warnings", noop)),
+        "clearErrorsForElementID": lambda payload, message: handlers.get("clear_errors_for_element", noop)(normalize_clear_errors_for_element_bridge_payload(payload), message),
+        "clearWarningsForElementID": lambda payload, message: handlers.get("clear_warnings_for_element", noop)(normalize_clear_errors_for_element_bridge_payload(payload), message),
+        "copyElementPath": lambda payload, message: handlers.get("copy_element_path", noop)(normalize_copy_element_path_bridge_payload(payload), message),
+        "storeAsGlobal": lambda payload, message: handlers.get("store_as_global", noop)(normalize_store_as_global_bridge_payload(payload), message),
+        "overrideSuspenseMilestone": lambda payload, message: handlers.get("override_suspense_milestone", noop)(normalize_override_suspense_milestone_bridge_payload(payload), message),
     }
 
 

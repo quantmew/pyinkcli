@@ -69,19 +69,42 @@ def _render_box(node: RenderableNode, instance_id: str) -> str:
     style = node.props.get("style", {})
     background = style.get("backgroundColor")
     width = style.get("width")
+    height = style.get("height")
     padding = style.get("padding", 0)
     padding_x = style.get("padding_x", 0)
     padding_y = style.get("padding_y", 0)
+    effective_padding_x = padding + padding_x
+    effective_padding_y = padding + padding_y
     border_style = style.get("borderStyle")
     border_color = style.get("borderColor")
 
-    if width and len(node.children) == 1 and isinstance(node.children[0], RenderableNode) and node.children[0].type == "ink-text":
+    def soft_wrap_plain(text: str, limit: int) -> list[str]:
+        remaining = text
+        lines: list[str] = []
+        while remaining:
+            if string_width(remaining) <= limit:
+                lines.append(remaining)
+                break
+            candidate = remaining[:limit]
+            split_at = candidate.rfind(" ")
+            if split_at > 0:
+                lines.append(remaining[: split_at + 1])
+                remaining = remaining[split_at + 1 :]
+            else:
+                lines.append(candidate)
+                remaining = remaining[limit:]
+        return lines or [""]
+
+    if width and not border_style and not padding and not padding_x and not padding_y and not height and len(node.children) == 1 and isinstance(node.children[0], RenderableNode) and node.children[0].type == "ink-text":
         child = node.children[0]
         child_background = child.props.get("backgroundColor")
         plain_text = sanitizeAnsi("".join(_flatten_text(part) for part in child.children))
-        wrapped_lines = wrap_ansi(plain_text, width, hard=True).splitlines()
+        wrapped_lines = soft_wrap_plain(plain_text, width)
         if background:
             lines = [_background_wrap(line, background, width=width) for line in wrapped_lines]
+            if height:
+                while len(lines) < height:
+                    lines.append(_background_wrap("", background, width=width))
             return "\n".join(lines)
         if child_background:
             return "\n".join(_background_wrap(line, child_background) for line in wrapped_lines)
@@ -92,7 +115,10 @@ def _render_box(node: RenderableNode, instance_id: str) -> str:
     def flush_plain() -> None:
         nonlocal buffered_plain
         if buffered_plain:
-            outputs.append(_background_wrap(buffered_plain, background))
+            if background and not width and not border_style:
+                outputs.append(buffered_plain)
+            else:
+                outputs.append(_background_wrap(buffered_plain, background))
             buffered_plain = ""
 
     for index, child in enumerate(node.children):
@@ -106,36 +132,48 @@ def _render_box(node: RenderableNode, instance_id: str) -> str:
     separator = "\n" if style.get("flexDirection") == "column" else ""
     content = separator.join(outputs)
 
+    if background and not width and not border_style:
+        bg_open = ANSI_BG_OPEN.get(background, "")
+        if bg_open:
+            return bg_open + content.replace("\x1b[49m", "") + "\x1b[49m"
+
     if width and not border_style:
-        inner_width = max(width - 2 * padding - 2 * padding_x, 1)
-        wrapped_lines = wrap_ansi(sanitizeAnsi(content), inner_width, hard=True).splitlines()
+        inner_width = max(width - 2 * effective_padding_x, 1)
+        wrapped_lines = soft_wrap_plain(sanitizeAnsi(content), inner_width)
         final_lines: list[str] = []
-        for _ in range(padding_y):
+        for _ in range(effective_padding_y):
             final_lines.append(_background_wrap(" " * width, background, width=width) if background else " " * width)
         for line in wrapped_lines:
-            padded_content = (" " * (padding + padding_x)) + line
+            padded_content = (" " * effective_padding_x) + line
             total_width = width
             if background:
                 final_lines.append(_background_wrap(padded_content, background, width=total_width))
             else:
                 final_lines.append(padded_content)
-        for _ in range(padding_y):
+        for _ in range(effective_padding_y):
             final_lines.append(_background_wrap(" " * width, background, width=width) if background else " " * width)
+        if height:
+            while len(final_lines) < height:
+                final_lines.append(_background_wrap("", background, width=width) if background else " " * width)
         content = "\n".join(final_lines)
 
     if border_style:
-        inner_width = max((width - 2) if width else None or max(string_width(sanitizeAnsi(content)), 1), 1)
-        wrapped_lines = wrap_ansi(sanitizeAnsi(content), max(inner_width - 2 * padding_x, 1), hard=True).splitlines() or [""]
+        inner_width = max((width - 2) if width else max(string_width(sanitizeAnsi(content)), 1), 1)
+        inner_height = max((height - 2) if height else 0, 0)
+        wrapped_lines = soft_wrap_plain(sanitizeAnsi(content), max(inner_width - 2 * effective_padding_x, 1))
         bordered_lines: list[str] = []
-        for _ in range(padding_y):
+        for _ in range(effective_padding_y):
             bordered_lines.append(_background_wrap(" " * inner_width, background, width=inner_width) if background else " " * inner_width)
         for line in wrapped_lines:
-            padded_line = (" " * padding_x) + line + (" " * padding_x)
+            padded_line = (" " * effective_padding_x) + line + (" " * effective_padding_x)
             bordered_lines.append(
                 _background_wrap(padded_line, background, width=inner_width) if background else padded_line
             )
-        for _ in range(padding_y):
+        for _ in range(effective_padding_y):
             bordered_lines.append(_background_wrap(" " * inner_width, background, width=inner_width) if background else " " * inner_width)
+        if inner_height:
+            while len(bordered_lines) < inner_height:
+                bordered_lines.append(_background_wrap("", background, width=inner_width) if background else " " * inner_width)
         return _border_wrap(bordered_lines, border_style, border_color)
 
     return content

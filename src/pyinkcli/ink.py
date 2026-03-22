@@ -14,7 +14,7 @@ from .hooks.use_stdout import _StdoutHandle, _set_stdout_handle
 from .hooks.use_window_size import _set_window_size
 from .packages.react_reconciler.ReactFiberWorkLoop import flushPendingEffects
 from .reconciler import createReconciler
-from .render_node_to_output import renderNodeToOutput
+from .render_node_to_output import renderNodeToOutput, renderNodeToScreenReaderOutput
 from .render_to_string import create_root_node
 from .suspense_runtime import _set_renderer_rerender
 from .utils.ansi_escapes import enter_alternative_screen, exit_alternative_screen, hide_cursor_escape
@@ -30,6 +30,7 @@ class Options:
     patch_console: bool = False
     concurrent: bool = False
     alternate_screen: bool = False
+    screen_reader_enabled: bool = False
 
 
 class Ink:
@@ -75,8 +76,8 @@ class Ink:
         self._reconciler.update_container(self._current_node, self._container)
         if self.options.concurrent and getattr(self._container, "scheduled_timer", None) is not None:
             return
-        self._rendered_output = renderNodeToOutput(self._root_node)
-        if hasattr(self.stdout, "seek") and hasattr(self.stdout, "truncate"):
+        self._rendered_output = self._render_output()
+        if self._can_rewrite_stream(self.stdout):
             self.stdout.seek(0)
             self.stdout.truncate(0)
         self._write_stream(self.stdout, self._rendered_output)
@@ -108,6 +109,7 @@ class Ink:
             self._write_stream(self.stdout, exit_alternative_screen())
 
     def wait_until_exit(self, timeout: float | None = None):
+        self.wait_until_render_flush(timeout or 0.3)
         return None
 
     def wait_until_render_flush(self, timeout: float | None = None):
@@ -137,8 +139,8 @@ class Ink:
                 self._reconciler._force_rerender = False
             hooks_runtime._dirty_components.clear()
         if self._current_node is not None and not self._is_unmounted:
-            self._rendered_output = renderNodeToOutput(self._root_node)
-            if hasattr(self.stdout, "seek") and hasattr(self.stdout, "truncate"):
+            self._rendered_output = self._render_output()
+            if self._can_rewrite_stream(self.stdout):
                 self.stdout.seek(0)
                 self.stdout.truncate(0)
             self._write_stream(self.stdout, self._rendered_output)
@@ -148,9 +150,17 @@ class Ink:
         return None
 
     def clear(self) -> None:
-        if hasattr(self.stdout, "truncate"):
+        if self._can_rewrite_stream(self.stdout):
             self.stdout.seek(0)
             self.stdout.truncate(0)
+
+    def _can_rewrite_stream(self, stream) -> bool:
+        if not (hasattr(stream, "seek") and hasattr(stream, "truncate")):
+            return False
+        try:
+            return bool(stream.seekable())
+        except Exception:  # noqa: BLE001
+            return False
 
     def _request_commit_render(self, priority: str, immediate: bool = False) -> None:
         if immediate:
@@ -199,6 +209,11 @@ class Ink:
         timer = threading.Timer(delay, callback)
         self._transition_threads.append(timer)
         timer.start()
+
+    def _render_output(self) -> str:
+        if self.options.screen_reader_enabled:
+            return renderNodeToScreenReaderOutput(self._root_node)
+        return renderNodeToOutput(self._root_node)
 
 
 __all__ = ["Ink", "Options"]

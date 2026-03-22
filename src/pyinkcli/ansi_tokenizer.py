@@ -174,6 +174,7 @@ def tokenizeAnsi(text: str) -> list[AnsiToken]:
             escape_sequence = _read_escape_sequence(text, index + 1)
             if escape_sequence is None:
                 if next_character == "\x07":
+                    _flush_text(tokens, text_buffer)
                     index += 1
                     continue
                 _flush_text(tokens, text_buffer)
@@ -237,4 +238,3 @@ def tokenizeAnsi(text: str) -> list[AnsiToken]:
 
 
 __all__ = ["AnsiToken", "hasAnsiControlCharacters", "tokenizeAnsi"]
-
