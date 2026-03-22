@@ -667,6 +667,10 @@ def _create_hook_dispatch(
                 update.eager_state = eager_state
                 if _state_values_equal(previous_value, eager_state):
                     _enqueue_hook_update(queue, update)
+                    if fiber is not None:
+                        markFiberUpdated(fiber, update.priority)
+                        unsafe_markUpdateLaneFromFiberToRoot(fiber, update.priority)
+                    _request_rerender(fiber)
                     return
             except Exception:
                 pass
@@ -1201,7 +1205,7 @@ def _request_rerender(
 
     if (
         _schedule_update_callback is not None
-        and resolved_priority > DiscreteEventPriority
+        and resolved_priority == DefaultEventPriority
     ):
         _schedule_update_flush()
         return
@@ -1230,7 +1234,7 @@ def _queue_after_current_batch(callback: Callable[[], None]) -> None:
         _runtime.after_batch_callbacks.append(callback)
         return
 
-    callback()
+    threading.Timer(0.001, callback).start()
 
 
 def _batched_updates_runtime(callback: Callable[[], T]) -> T:
@@ -1404,6 +1408,7 @@ def useTransition() -> tuple[bool, Callable[[Callable[[], None]], None]]:
         pending_count_ref.current = pending_count
         if pending_count == 0:
             set_is_pending(False)
+            _flush_scheduled_rerender()
 
     def run_transition(callback: Callable[[], None]) -> None:
         previous_transition = shared_internals.current_transition
@@ -1424,6 +1429,7 @@ def useTransition() -> tuple[bool, Callable[[Callable[[], None]], None]]:
 
         pending_count_ref.current = (pending_count_ref.current or 0) + 1
         set_is_pending(True)
+        _request_rerender()
 
         def run_scheduled_transition() -> None:
             try:
@@ -1431,7 +1437,12 @@ def useTransition() -> tuple[bool, Callable[[Callable[[], None]], None]]:
             finally:
                 complete_transition()
 
-        _queue_after_current_batch(run_scheduled_transition)
+        schedule_transition = getattr(app_context, "schedule_transition", None) if app_context is not None else None
+        if callable(schedule_transition):
+            schedule_transition(run_scheduled_transition, delay=0.01)
+            return
+
+        _queue_after_current_batch(lambda: threading.Timer(0.01, run_scheduled_transition).start())
 
     return (is_pending, start_transition)
 

@@ -58,4 +58,4 @@ def static_example():
 
 
 if __name__ == "__main__":
-    render(static_example).wait_until_exit()
+    render(static_example, interactive=True, patch_console=False).wait_until_exit()

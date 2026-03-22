@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import threading
-from pathlib import Path
 
 from pyinkcli import Box, Text, render
 from pyinkcli.ansi_tokenizer import tokenizeAnsi
@@ -19,37 +19,33 @@ def subprocess_output_example():
     output, set_output = useState("")
 
     def setup():
-        process = subprocess.Popen(
-            [
-                "python",
-                "-u",
-                str(Path(__file__).resolve().parents[1] / "jest" / "index.py"),
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=False,
-        )
-
         def consume():
-            collected: list[str] = []
-            buffer = ""
-            assert process.stdout is not None
-            while True:
-                chunk = process.stdout.read1(64)
-                if not chunk:
-                    break
-
-                buffer += chunk.decode("utf8", errors="replace")
-                cleaned = strip_ansi(buffer)
-                collected = [entry for entry in cleaned.splitlines() if entry.strip()]
-                set_output("\n".join(collected[-5:]))
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-u",
+                    "-c",
+                    (
+                        "import pathlib;"
+                        "base=pathlib.Path('tests');"
+                        "paths=sorted(str(p).replace('\\\\','/') for p in base.iterdir())[:20];"
+                        "print('\\n'.join(paths))"
+                    ),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                check=False,
+            )
+            cleaned = strip_ansi(completed.stdout)
+            collected = [entry for entry in cleaned.splitlines() if entry.strip()]
+            set_output("\n".join(collected[-5:]))
 
         thread = threading.Thread(target=consume, daemon=True)
         thread.start()
 
         def cleanup():
-            if process.poll() is None:
-                process.kill()
+            return None
 
         return cleanup
 
@@ -64,4 +60,4 @@ def subprocess_output_example():
 
 
 if __name__ == "__main__":
-    render(subprocess_output_example).wait_until_exit()
+    render(subprocess_output_example, interactive=True, patch_console=False).wait_until_exit()

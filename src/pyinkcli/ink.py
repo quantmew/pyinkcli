@@ -231,6 +231,7 @@ class Ink:
         self._transition_idle_event.set()
         self._exit_result: Any = None
         self._exit_error: Exception | None = None
+        self._pending_unmount_error: Exception | None = None
         self._before_exit_handler: Callable[[], None] | None = None
         self._on_unmount_callbacks: list[Callable[[], None]] = []
         self._pending_transition_count = 0
@@ -457,6 +458,7 @@ class Ink:
             return
 
         self._is_unmounting = True
+        self._pending_unmount_error = error
 
         self._invoke_before_exit_handler()
         self._perform_final_render()
@@ -528,6 +530,7 @@ class Ink:
     def _finalize_exit_state(self, error: Exception | None) -> None:
         if error:
             self._exit_error = error
+        self._pending_unmount_error = None
         self._mark_transition_idle()
         self._mark_render_flushed()
         self._exit_promise.set()
@@ -603,6 +606,8 @@ class Ink:
     def _should_perform_final_render(self) -> bool:
         if self._is_stdout_closed():
             return False
+        if self._pending_unmount_error is not None:
+            return True
 
         return not (not self._interactive and self._last_output)
 
@@ -746,7 +751,8 @@ class Ink:
     ) -> None:
         def write() -> None:
             self._log.clear()
-            self._write_stream(self._stdout, static_output)
+            payload = static_output if not static_output or static_output.endswith("\n") else static_output + "\n"
+            self._write_stream(self._stdout, payload)
             self._log(output_to_render)
 
         self._with_synchronized_stdout(write)
@@ -793,6 +799,7 @@ class Ink:
         self._drain_pending_hook_rerenders()
 
     def _drain_pending_hook_rerenders(self) -> None:
+        flushScheduledRerender()
         self._reconciler.flush_scheduled_updates()
 
     def _schedule_hook_update(

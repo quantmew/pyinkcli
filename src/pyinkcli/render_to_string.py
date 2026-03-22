@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pyinkcli import _yoga as yoga
 from pyinkcli.packages.ink.dom import DOMElement, createNode
 from pyinkcli.packages.ink.output import Output
 from pyinkcli.packages.ink.render_node_to_output import renderNodeToOutput
@@ -82,6 +83,11 @@ def renderToString(
         yoga_node = root_node.yogaNode
         if yoga_node is None:
             return ""
+        yoga_node.calculate_layout(
+            columns,
+            rows,
+            yoga.DIRECTION_LTR,
+        )
 
         width = int(yoga_node.get_computed_width())
         height = int(yoga_node.get_computed_height())

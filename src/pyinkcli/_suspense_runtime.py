@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from pyinkcli.packages.react.dispatcher import hasRerenderTarget, requestRerender
+from pyinkcli.hooks import _runtime as hooks_runtime
 from pyinkcli.packages.react_reconciler.ReactEventPriorities import (
     DefaultEventPriority,
     NoEventPriority,
@@ -34,6 +35,20 @@ class _ResourceRecord:
 
 _records: dict[Hashable, _ResourceRecord] = {}
 _records_lock = threading.Lock()
+_resource_versions: dict[Hashable, int] = {}
+
+
+def _record_resource_dependency(key: Hashable) -> None:
+    try:
+        fiber = hooks_runtime._get_current_fiber()
+    except Exception:
+        return
+
+    versions = getattr(fiber, "suspense_resource_versions", None)
+    if versions is None:
+        versions = {}
+        fiber.suspense_resource_versions = versions
+    versions[key] = _resource_versions.get(key, 0)
 
 
 def _resolve_resource(
@@ -66,6 +81,7 @@ def _resolve_resource(
 
 
 def readResource(key: Hashable, loader: Callable[[], Any]) -> Any:
+    _record_resource_dependency(key)
     with _records_lock:
         record = _records.get(key)
         if record is None:
@@ -128,13 +144,16 @@ def peekResource(key: Hashable) -> Any:
 def invalidateResource(key: Hashable) -> None:
     with _records_lock:
         _records.pop(key, None)
+        _resource_versions[key] = _resource_versions.get(key, 0) + 1
 
 
 def resetResource(key: Hashable) -> None:
     with _records_lock:
         _records.pop(key, None)
+        _resource_versions[key] = _resource_versions.get(key, 0) + 1
 
 
 def resetAllResources() -> None:
     with _records_lock:
         _records.clear()
+        _resource_versions.clear()
