@@ -1,0 +1,213 @@
+from __future__ import annotations
+
+from .component import RenderableNode, isElement
+from .components.Text import ANSI_BG_OPEN, ANSI_OPEN
+from ._component_runtime import _Component
+from .sanitize_ansi import sanitizeAnsi
+from .suspense_runtime import SuspendSignal
+from .utils.cli_boxes import get_box_style
+from .utils.string_width import string_width
+from .utils.wrap_ansi import wrap_ansi
+
+from .hooks import _runtime as hooks_runtime
+from .packages import react
+from .packages import react_router
+
+
+def _flatten_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (list, tuple)):
+        return "".join(_flatten_text(item) for item in value)
+    if isElement(value):
+        return _render(value, "0")
+    return str(value)
+
+
+def _background_wrap(text: str, background: str | None, *, width: int | None = None) -> str:
+    if not background:
+        return text
+    bg_open = ANSI_BG_OPEN.get(background)
+    if bg_open is None:
+        return text
+    if width is None:
+        return bg_open + text + "\x1b[49m"
+    padded = text + (" " * max(width - string_width(sanitizeAnsi(text)), 0))
+    return bg_open + padded + "\x1b[49m"
+
+
+def _border_wrap(lines: list[str], style_name: str, border_color: str | None) -> str:
+    style = get_box_style(style_name)
+    content_width = max((string_width(sanitizeAnsi(line)) for line in lines), default=0)
+    prefix = ANSI_OPEN.get(border_color, "")
+    suffix = "\x1b[39m" if prefix else ""
+    top = prefix + style.top_left + (style.top * content_width) + style.top_right + suffix
+    middle = [
+        prefix
+        + style.left
+        + suffix
+        + line
+        + (" " * max(content_width - string_width(sanitizeAnsi(line)), 0))
+        + prefix
+        + style.right
+        + suffix
+        for line in lines
+    ]
+    bottom = prefix + style.bottom_left + (style.bottom * content_width) + style.bottom_right + suffix
+    return "\n".join([top, *middle, bottom])
+
+
+def _render_ink_text(node: RenderableNode, instance_id: str) -> str:
+    text = "".join(_flatten_text(child) for child in node.children)
+    transform = node.props.get("internal_transform")
+    return transform(text) if callable(transform) else text
+
+
+def _render_box(node: RenderableNode, instance_id: str) -> str:
+    style = node.props.get("style", {})
+    background = style.get("backgroundColor")
+    width = style.get("width")
+    padding = style.get("padding", 0)
+    padding_x = style.get("padding_x", 0)
+    padding_y = style.get("padding_y", 0)
+    border_style = style.get("borderStyle")
+    border_color = style.get("borderColor")
+
+    if width and len(node.children) == 1 and isinstance(node.children[0], RenderableNode) and node.children[0].type == "ink-text":
+        child = node.children[0]
+        child_background = child.props.get("backgroundColor")
+        plain_text = sanitizeAnsi("".join(_flatten_text(part) for part in child.children))
+        wrapped_lines = wrap_ansi(plain_text, width, hard=True).splitlines()
+        if background:
+            lines = [_background_wrap(line, background, width=width) for line in wrapped_lines]
+            return "\n".join(lines)
+        if child_background:
+            return "\n".join(_background_wrap(line, child_background) for line in wrapped_lines)
+
+    outputs: list[str] = []
+    buffered_plain = ""
+
+    def flush_plain() -> None:
+        nonlocal buffered_plain
+        if buffered_plain:
+            outputs.append(_background_wrap(buffered_plain, background))
+            buffered_plain = ""
+
+    for index, child in enumerate(node.children):
+        if isinstance(child, RenderableNode) and child.type == "ink-text" and not child.props.get("backgroundColor") and background and not width:
+            buffered_plain += _render(child, f"{instance_id}:{index}")
+            continue
+        flush_plain()
+        outputs.append(_render(child, f"{instance_id}:{index}"))
+    flush_plain()
+
+    separator = "\n" if style.get("flexDirection") == "column" else ""
+    content = separator.join(outputs)
+
+    if width and not border_style:
+        inner_width = max(width - 2 * padding - 2 * padding_x, 1)
+        wrapped_lines = wrap_ansi(sanitizeAnsi(content), inner_width, hard=True).splitlines()
+        final_lines: list[str] = []
+        for _ in range(padding_y):
+            final_lines.append(_background_wrap(" " * width, background, width=width) if background else " " * width)
+        for line in wrapped_lines:
+            padded_content = (" " * (padding + padding_x)) + line
+            total_width = width
+            if background:
+                final_lines.append(_background_wrap(padded_content, background, width=total_width))
+            else:
+                final_lines.append(padded_content)
+        for _ in range(padding_y):
+            final_lines.append(_background_wrap(" " * width, background, width=width) if background else " " * width)
+        content = "\n".join(final_lines)
+
+    if border_style:
+        inner_width = max((width - 2) if width else None or max(string_width(sanitizeAnsi(content)), 1), 1)
+        wrapped_lines = wrap_ansi(sanitizeAnsi(content), max(inner_width - 2 * padding_x, 1), hard=True).splitlines() or [""]
+        bordered_lines: list[str] = []
+        for _ in range(padding_y):
+            bordered_lines.append(_background_wrap(" " * inner_width, background, width=inner_width) if background else " " * inner_width)
+        for line in wrapped_lines:
+            padded_line = (" " * padding_x) + line + (" " * padding_x)
+            bordered_lines.append(
+                _background_wrap(padded_line, background, width=inner_width) if background else padded_line
+            )
+        for _ in range(padding_y):
+            bordered_lines.append(_background_wrap(" " * inner_width, background, width=inner_width) if background else " " * inner_width)
+        return _border_wrap(bordered_lines, border_style, border_color)
+
+    return content
+
+
+def _render(node, instance_id: str) -> str:
+    if node is None:
+        return ""
+    if isinstance(node, str):
+        return node
+    if isinstance(node, (list, tuple)):
+        return "".join(_render(child, f"{instance_id}:{index}") for index, child in enumerate(node))
+    if not isinstance(node, RenderableNode):
+        return str(node)
+
+    if node.type is react.Fragment:
+        return "".join(_render(child, f"{instance_id}:{index}") for index, child in enumerate(node.children))
+    if getattr(node.type, "__ink_react_provider__", False):
+        value = node.props.get("value", node.type._context.default_value)
+        with hooks_runtime._push_context(node.type._context, value):
+            return "".join(_render(child, f"{instance_id}:{index}") for index, child in enumerate(node.children))
+    if getattr(node.type, "__ink_react_consumer__", False):
+        reader = node.children[0]
+        return _render(reader(hooks_runtime.useContext(node.type._context)), f"{instance_id}:consumer")
+    if getattr(node.type, "__ink_react_forward_ref__", False):
+        return _render(node.type.render(node.props, node.props.get("ref")), f"{instance_id}:fwd")
+    if getattr(node.type, "__ink_react_lazy__", False):
+        resolved = node.type._init(node.type._payload)
+        return _render(RenderableNode(type=resolved, props=node.props, children=node.children, key=node.key), instance_id)
+    if getattr(node.type, "__ink_react_memo__", False):
+        return _render(RenderableNode(type=node.type.type, props=node.props, children=node.children, key=node.key), instance_id)
+    if node.type == "__router_provider__":
+        with react_router._push_router_context(node.props["internal_router_context"]):
+            return "".join(_render(child, f"{instance_id}:{index}") for index, child in enumerate(node.children))
+    if node.type == "__ink-suspense__":
+        try:
+            return "".join(_render(child, f"{instance_id}:{index}") for index, child in enumerate(node.children))
+        except SuspendSignal:
+            return _render(node.props.get("fallback"), f"{instance_id}:fallback")
+    if isinstance(node.type, type) and issubclass(node.type, _Component):
+        instance = node.type(props=node.props)
+        return _render(instance.render(), f"{instance_id}:class")
+    if callable(node.type):
+        component_instance_id = f"{instance_id}:{getattr(node.type, '__name__', 'anonymous')}"
+        hooks_runtime._begin_component_render(component_instance_id, node.type)
+        try:
+            rendered = node.type(*node.children, **node.props)
+        finally:
+            hooks_runtime._end_component_render()
+        return _render(rendered, f"{component_instance_id}:rendered")
+    if node.type == "ink-text":
+        return _render_ink_text(node, instance_id)
+    if node.type == "ink-box":
+        return _render_box(node, instance_id)
+    return "".join(_render(child, f"{instance_id}:{index}") for index, child in enumerate(node.children))
+
+
+def create_root_node(width: int = 80, height: int = 24):
+    from .dom import createNode
+
+    root = createNode("ink-root")
+    root.width = width
+    root.height = height
+    return root
+
+
+def renderToString(node, options=None, **kwargs) -> str:
+    hooks_runtime._reset_hook_state()
+    try:
+        return _render(node, "root")
+    finally:
+        hooks_runtime._finish_hook_state()
+
+
+__all__ = ["renderToString", "create_root_node"]
