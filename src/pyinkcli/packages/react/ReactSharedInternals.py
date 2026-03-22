@@ -1,5 +1,0 @@
-"""React-side re-export for the shared internals object."""
-
-from pyinkcli.packages.shared.ReactSharedInternals import ReactSharedInternals, shared_internals
-
-__all__ = ["ReactSharedInternals", "shared_internals"]
