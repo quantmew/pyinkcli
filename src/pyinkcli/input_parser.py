@@ -40,62 +40,54 @@ class InputParser:
     }
 
     def __init__(self) -> None:
-        self._buffer = ""
+        self._pending = ""
+
+    def push(self, chunk: str) -> list[InputEvent]:
+        parsed = _parse_keypresses(self._pending + chunk)
+        self._pending = parsed["pending"]
+        return parsed["events"]
 
     def feed(self, chunk: str) -> list[InputEvent]:
-        """Feed a chunk of input and return parsed events."""
-
-        self._buffer += chunk
-        events: list[InputEvent] = []
-
-        while self._buffer:
-            if self._buffer.startswith(self._BRACKETED_PASTE_START):
-                end_index = self._buffer.find(
-                    self._BRACKETED_PASTE_END,
-                    len(self._BRACKETED_PASTE_START),
-                )
-                if end_index == -1:
-                    break
-
-                paste_start = len(self._BRACKETED_PASTE_START)
-                paste_data = self._buffer[paste_start:end_index]
-                events.append(InputEvent(kind="paste", data=paste_data))
-                self._buffer = self._buffer[end_index + len(self._BRACKETED_PASTE_END):]
+        """Compatibility alias matching older parser tests."""
+        events = self.push(chunk)
+        normalized: list[InputEvent] = []
+        for event in events:
+            if event.kind != "input":
+                normalized.append(event)
                 continue
-
-            if self._buffer[0] != "\x1b":
-                events.append(InputEvent(kind="input", data=self._buffer[0]))
-                self._buffer = self._buffer[1:]
+            if event.data.startswith(escape):
+                normalized.append(event)
                 continue
+            for char in event.data:
+                normalized.append(InputEvent(kind="input", data=char))
+        return normalized
 
-            sequence = self._consume_escape_sequence()
-            if sequence is None:
-                break
+    def hasPendingEscape(self) -> bool:
+        return (
+            self._pending.startswith(escape)
+            and not self._pending.startswith(pasteStart)
+            and self._pending != "\x1b[200"
+        )
 
-            events.append(InputEvent(kind="input", data=sequence))
-
-        return events
+    def flushPendingEscape(self) -> str | None:
+        if not self._pending.startswith(escape):
+            return None
+        pending_escape = self._pending
+        self._pending = ""
+        return pending_escape
 
     def flush(self) -> list[InputEvent]:
         """Flush any remaining buffered input as literal input events."""
 
-        if not self._buffer:
+        if not self._pending:
             return []
 
-        events = [InputEvent(kind="input", data=char) for char in self._buffer]
-        self._buffer = ""
+        events = [InputEvent(kind="input", data=char) for char in self._pending]
+        self._pending = ""
         return events
 
-    def _consume_escape_sequence(self) -> str | None:
-        parsed = _parseEscapeSequence(self._buffer, 0)
-        if parsed is _PENDING:
-            return None
-        if not parsed:
-            return None
-
-        sequence, next_index = parsed
-        self._buffer = self._buffer[next_index:]
-        return sequence
+    def reset(self) -> None:
+        self._pending = ""
 
 
 def isCsiParameterByte(byte: int) -> bool:
@@ -253,19 +245,66 @@ def _parseEscapeSequence(
 
 
 def splitDeleteAndBackspace(sequence: str) -> list[str]:
-    if sequence == "\x7f\x08":
-        return ["\x7f", "\x08"]
-    return [sequence]
+    pieces: list[str] = []
+    start = 0
+    for index, char in enumerate(sequence):
+        if char in {"\x7f", "\x08"}:
+            if index > start:
+                pieces.append(sequence[start:index])
+            pieces.append(char)
+            start = index + 1
+    if start < len(sequence):
+        pieces.append(sequence[start:])
+    return pieces
 
 
 def parseKeypresses(chunk: str) -> list[InputEvent]:
-    parser = InputParser()
-    events = parser.feed(chunk)
-    return [item for event in events for item in (
-        [InputEvent(kind=event.kind, data=piece) for piece in splitDeleteAndBackspace(event.data)]
-        if event.kind == "input"
-        else [event]
-    )]
+    return _parse_keypresses(chunk)["events"]
+
+
+def _parse_keypresses(chunk: str) -> dict[str, object]:
+    events: list[InputEvent] = []
+    index = 0
+
+    while index < len(chunk):
+        escape_index = chunk.find(escape, index)
+        if escape_index == -1:
+            for piece in splitDeleteAndBackspace(chunk[index:]):
+                events.append(InputEvent(kind="input", data=piece))
+            return {"events": events, "pending": ""}
+
+        if escape_index > index:
+            for piece in splitDeleteAndBackspace(chunk[index:escape_index]):
+                events.append(InputEvent(kind="input", data=piece))
+
+        parsed_escape = _parseEscapeSequence(chunk, escape_index)
+        if parsed_escape is _PENDING:
+            return {"events": events, "pending": chunk[escape_index:]}
+
+        if not parsed_escape:
+            next_index = min(len(chunk), escape_index + 2)
+            events.append(InputEvent(kind="input", data=chunk[escape_index:next_index]))
+            index = next_index
+            continue
+
+        sequence, next_index = parsed_escape
+        if sequence == pasteStart:
+            end_index = chunk.find(pasteEnd, next_index)
+            if end_index == -1:
+                return {"events": events, "pending": chunk[escape_index:]}
+            events.append(
+                InputEvent(
+                    kind="paste",
+                    data=chunk[next_index:end_index],
+                )
+            )
+            index = end_index + len(pasteEnd)
+            continue
+
+        events.append(InputEvent(kind="input", data=sequence))
+        index = next_index
+
+    return {"events": events, "pending": ""}
 
 
 def createInputParser() -> InputParser:

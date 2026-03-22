@@ -871,6 +871,55 @@ def _peek_pending_passive_unmount_fibers() -> list[HookFiber]:
     return _runtime.pending_passive_unmount_fibers[:]
 
 
+def _count_deferred_passive_mount_effects() -> int:
+    count = 0
+    for fiber in _runtime.fibers.values():
+        update_queue = fiber.update_queue
+        last_effect = update_queue.last_effect if update_queue is not None else None
+        if last_effect is None:
+            continue
+        current = last_effect.next
+        while current is not None:
+            if (current.tag & (HookPassive | HookHasEffect)) == (HookPassive | HookHasEffect):
+                count += 1
+            if current is last_effect:
+                break
+            current = current.next
+    return count
+
+
+def _get_passive_queue_state() -> dict[str, int | bool]:
+    deferred_passive_mount_effects = _count_deferred_passive_mount_effects()
+    pending_passive_unmount_fibers = len(_runtime.pending_passive_unmount_fibers)
+    return {
+        "deferred_passive_mount_effects": deferred_passive_mount_effects,
+        "pending_passive_unmount_fibers": pending_passive_unmount_fibers,
+        "has_deferred_passive_work": bool(
+            deferred_passive_mount_effects or pending_passive_unmount_fibers
+        ),
+    }
+
+
+def _flush_deferred_passive_effects() -> dict[str, int]:
+    drained_unmount_fibers = 0
+    drained_mount_fibers = 0
+    for fiber in _drain_pending_passive_unmount_fibers():
+        _commit_hook_passive_unmount_effects(fiber)
+        drained_unmount_fibers += 1
+    for fiber in list(_runtime.fibers.values()):
+        before = _count_deferred_passive_mount_effects()
+        if before <= 0:
+            break
+        _commit_hook_passive_mount_effects(fiber)
+        after = _count_deferred_passive_mount_effects()
+        if after < before:
+            drained_mount_fibers += 1
+    return {
+        "drained_unmount_fibers": drained_unmount_fibers,
+        "drained_mount_fibers": drained_mount_fibers,
+    }
+
+
 def _cleanup_unmounted_instances() -> None:
     removed_ids = [
         instance_id

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import codecs
 import os
+import select
 import signal
 import sys
 import threading
@@ -111,35 +112,96 @@ class Ink:
     Manages rendering, input handling, and application lifecycle.
     """
 
-    @staticmethod
-    def _throttle(func, wait: int):
-        last_call = [0.0]
-        pending = [False]
+    class _Throttle:
+        def __init__(self, func: Callable[..., None], wait_ms: int):
+            self._func = func
+            self._wait_ms = max(0, wait_ms)
+            self._lock = threading.Lock()
+            self._last_invoke_ms = 0.0
+            self._timer: threading.Timer | None = None
+            self._pending_args: tuple[Any, ...] = ()
+            self._pending_kwargs: dict[str, Any] = {}
+            self._has_pending = False
 
-        def throttled():
+        def __call__(self, *args: Any, **kwargs: Any) -> None:
+            if self._wait_ms <= 0:
+                self._func(*args, **kwargs)
+                return
+
+            invoke_now = False
+            call_args: tuple[Any, ...] = ()
+            call_kwargs: dict[str, Any] = {}
             now = time.time() * 1000
-            remaining = wait - (now - last_call[0])
+            with self._lock:
+                self._pending_args = args
+                self._pending_kwargs = dict(kwargs)
+                remaining = self._wait_ms - (now - self._last_invoke_ms)
+                if self._last_invoke_ms == 0.0 or remaining <= 0:
+                    if self._timer is not None:
+                        self._timer.cancel()
+                        self._timer = None
+                    self._has_pending = False
+                    self._last_invoke_ms = now
+                    call_args = self._pending_args
+                    call_kwargs = dict(self._pending_kwargs)
+                    invoke_now = True
+                elif self._timer is None:
+                    self._has_pending = True
+                    self._timer = threading.Timer(remaining / 1000, self._invoke_pending)
+                    self._timer.daemon = True
+                    self._timer.start()
 
-            if remaining <= 0:
-                last_call[0] = now
-                func()
-                pending[0] = False
-                return
+            if invoke_now:
+                self._func(*call_args, **call_kwargs)
 
-            if pending[0]:
-                return
+        def _invoke_pending(self) -> None:
+            call_args: tuple[Any, ...] = ()
+            call_kwargs: dict[str, Any] = {}
+            with self._lock:
+                self._timer = None
+                if not self._has_pending:
+                    return
+                self._has_pending = False
+                self._last_invoke_ms = time.time() * 1000
+                call_args = self._pending_args
+                call_kwargs = dict(self._pending_kwargs)
+            self._func(*call_args, **call_kwargs)
 
-            pending[0] = True
+        def flush(self) -> None:
+            call_args: tuple[Any, ...] = ()
+            call_kwargs: dict[str, Any] = {}
+            with self._lock:
+                if self._timer is None or not self._has_pending:
+                    return
+                self._timer.cancel()
+                self._timer = None
+                self._has_pending = False
+                self._last_invoke_ms = time.time() * 1000
+                call_args = self._pending_args
+                call_kwargs = dict(self._pending_kwargs)
+            self._func(*call_args, **call_kwargs)
 
-            def later():
-                time.sleep(remaining / 1000)
-                last_call[0] = time.time() * 1000
-                func()
-                pending[0] = False
+        def cancel(self) -> None:
+            with self._lock:
+                if self._timer is not None:
+                    self._timer.cancel()
+                    self._timer = None
+                self._has_pending = False
+                self._pending_args = ()
+                self._pending_kwargs = {}
 
-            threading.Thread(target=later, daemon=True).start()
+        def is_pending(self) -> bool:
+            with self._lock:
+                return self._timer is not None and self._has_pending
 
-        return throttled
+    @staticmethod
+    def _settle_throttle(throttled: Any, can_write_to_stdout: bool) -> None:
+        if throttled is None or not hasattr(throttled, "flush"):
+            return
+        if can_write_to_stdout:
+            throttled.flush()
+        elif hasattr(throttled, "cancel"):
+            throttled.cancel()
 
     @staticmethod
     def _resolve_interactive(stdout: TextIO, interactive: bool | None) -> bool:
@@ -243,11 +305,14 @@ class Ink:
         self._root_node = _create_root_node()
 
         # Set up render throttling
+        unthrottled = self._debug or self._is_screen_reader_enabled
         render_throttle_ms = (
             max(1, int(1000 / self._max_fps)) if self._max_fps > 0 else 0
         )
-        if not (self._debug or self._is_screen_reader_enabled):
-            self._throttled_render = self._throttle(
+        self._throttled_render = None
+        self._throttled_log = None
+        if not unthrottled:
+            self._throttled_render = self._Throttle(
                 self._on_render_callback,
                 render_throttle_ms,
             )
@@ -256,6 +321,11 @@ class Ink:
         self._log = LogUpdate(
             self._stdout,
             incremental=options.incremental_rendering,
+        )
+        self._throttled_log = (
+            self._log
+            if unthrottled
+            else self._Throttle(self._write_throttled_log, render_throttle_ms)
         )
 
         # Create reconciler
@@ -459,11 +529,14 @@ class Ink:
 
         self._is_unmounting = True
         self._pending_unmount_error = error
+        can_write_to_stdout = self._can_write_to_stdout()
+        self._settle_throttle(self._throttled_render, can_write_to_stdout)
 
         self._invoke_before_exit_handler()
         self._perform_final_render()
 
         self._is_unmounted = True
+        self._settle_throttle(self._throttled_log, can_write_to_stdout)
         self._restore_console_if_needed()
         self._cleanup()
         self._finalize_exit_state(error)
@@ -493,6 +566,8 @@ class Ink:
             return
 
         flushScheduledRerender()
+        self._settle_throttle(self._throttled_render, self._can_write_to_stdout())
+        self._settle_throttle(self._throttled_log, self._can_write_to_stdout())
         self._wait_for_render_flush(timeout=timeout)
         self._wait_for_transition_idle(timeout=timeout)
 
@@ -703,7 +778,25 @@ class Ink:
         if output == self._last_output and not self._log.is_cursor_dirty():
             return
 
-        self._with_synchronized_stdout(lambda: self._log(output_to_render))
+        if callable(self._throttled_log):
+            self._throttled_log(output_to_render)
+            return
+
+        self._write_throttled_log(output_to_render)
+
+    def _write_throttled_log(self, output: str) -> None:
+        should_write = self._log.will_render(output)
+        if not should_write:
+            return
+
+        sync = shouldSynchronize(self._stdout, self._interactive)
+        if sync:
+            self._write_stream(self._stdout, begin_synchronized_output())
+        try:
+            self._log(output)
+        finally:
+            if sync:
+                self._write_stream(self._stdout, end_synchronized_output())
 
     def _get_viewport_rows(self, is_tty: bool) -> int:
         return getWindowSize(self._stdout)["rows"] if is_tty else 24
@@ -750,6 +843,10 @@ class Ink:
         output_to_render: str,
     ) -> None:
         def write() -> None:
+            self._settle_throttle(
+                self._throttled_log,
+                self._can_write_to_stdout(),
+            )
             self._log.clear()
             payload = static_output if not static_output or static_output.endswith("\n") else static_output + "\n"
             self._write_stream(self._stdout, payload)
@@ -855,7 +952,10 @@ class Ink:
 
     def _schedule_throttled_render(self) -> None:
         self._has_pending_throttled_render = True
-        self._throttled_render()
+        if callable(self._throttled_render):
+            self._throttled_render()
+            return
+        self._on_render_callback()
 
     def _schedule_transition(
         self,
@@ -945,6 +1045,9 @@ class Ink:
 
     def _is_stdout_closed(self) -> bool:
         return hasattr(self._stdout, "closed") and self._stdout.closed
+
+    def _can_write_to_stdout(self) -> bool:
+        return not self._is_stdout_closed()
 
     def _write_debug_overlay(self, stream: TextIO, data: str) -> None:
         if stream is self._stderr:
@@ -1055,14 +1158,40 @@ class Ink:
 
         parser = InputParser()
         stdin_handle = useStdin()
+        pending_flush_timer: threading.Timer | None = None
+
+        def clear_pending_input_flush() -> None:
+            nonlocal pending_flush_timer
+            if pending_flush_timer is None:
+                return
+            pending_flush_timer.cancel()
+            pending_flush_timer = None
+
+        def schedule_pending_input_flush() -> None:
+            nonlocal pending_flush_timer
+            clear_pending_input_flush()
+
+            def flush_pending_escape() -> None:
+                nonlocal pending_flush_timer
+                pending_flush_timer = None
+                pending_escape = parser.flushPendingEscape()
+                if pending_escape is not None:
+                    _dispatch_input(pending_escape)
+
+            pending_flush_timer = threading.Timer(0.02, flush_pending_escape)
+            pending_flush_timer.daemon = True
+            pending_flush_timer.start()
 
         def read_input():
             try:
                 while not self._is_unmounted:
                     data = self._read_stdin_chunk()
                     if data:
-                        self._dispatch_parser_events(parser.feed(data), stdin_handle)
-
+                        clear_pending_input_flush()
+                        self._dispatch_parser_events(parser.push(data), stdin_handle)
+                        if parser.hasPendingEscape():
+                            schedule_pending_input_flush()
+                clear_pending_input_flush()
                 self._dispatch_parser_events(parser.flush(), stdin_handle)
             except Exception:
                 pass
@@ -1070,12 +1199,23 @@ class Ink:
         self._start_background_thread(read_input)
 
     def _read_stdin_chunk(self) -> str:
+        if hasattr(self._stdin, "fileno"):
+            ready, _, _ = select.select([self._stdin], [], [], 0.05)
+            if not ready:
+                return ""
+            try:
+                chunk = os.read(self._stdin.fileno(), 4096)
+            except Exception:
+                chunk = b""
+            if not chunk:
+                return self._stdin_decoder.decode(b"", final=True)
+            return self._stdin_decoder.decode(chunk, final=False)
+
         if hasattr(self._stdin, "buffer"):
             while True:
                 chunk = self._stdin.buffer.read(1)
                 if not chunk:
                     return self._stdin_decoder.decode(b"", final=True)
-
                 decoded = self._stdin_decoder.decode(chunk, final=False)
                 if decoded:
                     return decoded
@@ -1090,7 +1230,11 @@ class Ink:
                 else:
                     stdin_handle.emit("paste", event.data)
             else:
-                _dispatch_input(event.data)
+                if not event.data.startswith("\x1b") and len(event.data) > 1:
+                    for char in event.data:
+                        _dispatch_input(char)
+                else:
+                    _dispatch_input(event.data)
 
     def _set_alternate_screen(self, enabled: bool) -> None:
         """Set alternate screen mode."""

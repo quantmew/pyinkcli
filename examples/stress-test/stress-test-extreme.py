@@ -26,6 +26,10 @@ from typing import Any
 
 from pyinkcli import Box, Text, render, useInput
 from pyinkcli.hooks import useEffect, useMemo, useState, useTransition
+from perf_metrics import PerfMetricCollector, use_perf_metrics
+
+
+_PERF_COLLECTOR = PerfMetricCollector()
 
 
 # Simulate VERY expensive computation (intentionally slow)
@@ -71,12 +75,7 @@ def ExtremeStressApp(num_items: int, concurrent_mode: bool):
 
     multiplier, set_multiplier = useState(1)
     selected_id, set_selected_id = useState(0)
-    frame_count, set_frame_count = useState(0)
-    last_fps_time, set_last_fps_time = useState(time.time())
-    fps, set_fps = useState(0.0)
-
-    # For measuring render time
-    render_times_ref = {"times": [], "last_log": time.time()}
+    performance_metrics = use_perf_metrics(useEffect, useState, _PERF_COLLECTOR)
 
     is_pending, start_transition = useTransition()
 
@@ -112,27 +111,6 @@ def ExtremeStressApp(num_items: int, concurrent_mode: bool):
 
     useEffect(setup_auto_update, [])
 
-    # FPS counter
-    current_frame = frame_count + 1
-    set_frame_count(current_frame)
-
-    now = time.time()
-    if now - last_fps_time >= 1.0:
-        elapsed = now - last_fps_time
-        calculated_fps = current_frame / elapsed
-        set_fps(calculated_fps)
-        set_frame_count(0)
-        set_last_fps_time(now)
-
-        # Log render performance
-        render_times_ref["times"].append({
-            "time": now,
-            "fps": calculated_fps,
-            "pending": is_pending,
-        })
-        # Keep only last 10 entries
-        render_times_ref["times"] = render_times_ref["times"][-10:]
-
     # KEY: This expensive computation runs on EVERY render
     # This is what causes the freeze!
     computed_items = useMemo(
@@ -158,6 +136,7 @@ def ExtremeStressApp(num_items: int, concurrent_mode: bool):
     visible_items = computed_items[visible_start:visible_end]
 
     # Build status indicator
+    fps = performance_metrics["fps"]
     if fps > 30:
         fps_color = "green"
         fps_status = "GOOD"
@@ -208,6 +187,10 @@ def ExtremeStressApp(num_items: int, concurrent_mode: bool):
         Box(
             Text(" Performance: ", bold=True),
             Text(f"FPS: {fps:.1f} ({fps_status}) ", color=fps_color, bold=True),
+            Text(
+                f" | Render: {performance_metrics['render_time_ms']:.1f}ms",
+                color="green" if performance_metrics["render_time_ms"] < 50 else "yellow" if performance_metrics["render_time_ms"] < 200 else "red",
+            ),
             Text(f"  |  Pending: {'Yes' if is_pending else 'No'}", color="yellow" if is_pending else "green"),
             Text(f"  |  Selected: {selected_id}", color="cyan"),
             flexDirection="row",
@@ -287,7 +270,8 @@ def main():
             concurrent_mode=args.concurrent,
         )
 
-    render(app, concurrent=args.concurrent).wait_until_exit()
+    _PERF_COLLECTOR.reset()
+    render(app, concurrent=args.concurrent, on_render=_PERF_COLLECTOR.record_render).wait_until_exit()
 
 
 if __name__ == "__main__":

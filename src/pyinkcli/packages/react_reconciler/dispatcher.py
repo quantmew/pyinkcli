@@ -65,6 +65,14 @@ def hasRerenderTarget() -> bool:
     return _runtime._has_rerender_target()
 
 
+def getPassiveQueueState() -> dict[str, int | bool]:
+    return _runtime._get_passive_queue_state()
+
+
+def flushDeferredPassiveEffects() -> dict[str, int]:
+    return _runtime._flush_deferred_passive_effects()
+
+
 def queueAfterCurrentBatch(callback: Callable[[], None]) -> None:
     _runtime._queue_after_current_batch(callback)
 
@@ -89,8 +97,9 @@ __all__ = [
     "requestRerender",
     "flushScheduledRerender",
     "hasRerenderTarget",
+    "getPassiveQueueState",
+    "flushDeferredPassiveEffects",
     "queueAfterCurrentBatch",
     "batchedUpdates",
     "discreteUpdates",
 ]
-

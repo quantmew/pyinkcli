@@ -25,6 +25,8 @@ from pyinkcli.packages.react_reconciler.ReactFiberConcurrentUpdates import (
 )
 from pyinkcli.packages.react_reconciler.ReactFiberLane import (
     DefaultLane,
+    IdleLane,
+    InputContinuousLane,
     NoLanes,
     SyncLane,
     TransitionLane1,
@@ -47,6 +49,15 @@ from pyinkcli.packages.react_reconciler.ReactFiberHooks import (
     HooksDispatcherOnUpdate,
     finishRenderingHooks,
     renderWithHooks,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberWorkLoop import performWorkOnRoot
+from pyinkcli.packages.react_reconciler.ReactFiberWorkLoop import (
+    getWorkInProgressRoot,
+    getWorkInProgressRootRenderLanes,
+    getPendingPassiveEffectsLanes,
+    getRootWithPendingPassiveEffects,
+    flushPendingEffects,
+    hasPendingCommitEffects,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberNewContext import (
     checkIfContextChanged,
@@ -192,6 +203,8 @@ def test_root_scheduler_tracks_and_flushes_scheduled_roots() -> None:
         next=None,
         pending_updates=[("update", None)],
         pending_lanes=1,
+        callback_priority=0,
+        scheduled_callback_priority=0,
         update_running=False,
         _reconciler=FakeReconciler(),
     )
@@ -205,6 +218,359 @@ def test_root_scheduler_tracks_and_flushes_scheduled_roots() -> None:
     assert flushed == ["flush"]
     assert RootScheduler.firstScheduledRoot is None
     assert container.next is None
+    assert container.callback_priority == 0
+    assert container.scheduled_callback_priority == 0
+
+
+def test_root_scheduler_classifies_lane_families() -> None:
+    assert RootScheduler.getRootLaneFamily(SimpleNamespace(pending_lanes=0)) == "idle"
+    assert RootScheduler.getRootLaneFamily(SimpleNamespace(pending_lanes=SyncLane)) == "discrete"
+    assert (
+        RootScheduler.getRootLaneFamily(SimpleNamespace(pending_lanes=InputContinuousLane))
+        == "continuous"
+    )
+    assert RootScheduler.getRootLaneFamily(SimpleNamespace(pending_lanes=DefaultLane)) == "default"
+    assert (
+        RootScheduler.getRootLaneFamily(SimpleNamespace(pending_lanes=TransitionLane1))
+        == "transition"
+    )
+    assert RootScheduler.getRootLaneFamily(SimpleNamespace(pending_lanes=IdleLane)) == "idle"
+
+
+def test_root_scheduler_schedule_mode_maps_lane_families_to_execution_modes() -> None:
+    assert RootScheduler.getRootScheduleMode(SimpleNamespace(tag=1, pending_lanes=0)) == "idle"
+    assert RootScheduler.getRootScheduleMode(SimpleNamespace(tag=1, pending_lanes=SyncLane)) == "sync"
+    assert (
+        RootScheduler.getRootScheduleMode(SimpleNamespace(tag=1, pending_lanes=InputContinuousLane))
+        == "scheduled"
+    )
+    assert (
+        RootScheduler.getRootScheduleMode(SimpleNamespace(tag=1, pending_lanes=DefaultLane))
+        == "sync"
+    )
+    assert (
+        RootScheduler.getRootScheduleMode(SimpleNamespace(tag=1, pending_lanes=TransitionLane1))
+        == "scheduled"
+    )
+    assert RootScheduler.getRootScheduleMode(SimpleNamespace(tag=0, pending_lanes=DefaultLane)) == "sync"
+
+
+def test_root_scheduler_tracks_callback_priority_from_pending_lanes() -> None:
+    root = SimpleNamespace(
+        tag=1,
+        pending_lanes=InputContinuousLane,
+        callback_priority=0,
+        scheduled_callback_priority=0,
+    )
+
+    RootScheduler.ensureRootIsScheduled(root)
+
+    assert root.callback_priority == InputContinuousLane
+    assert root.scheduled_callback_priority == InputContinuousLane
+    RootScheduler.resetRootSchedule()
+
+
+def test_root_scheduler_reuses_same_priority_task_without_requeueing_root() -> None:
+    RootScheduler.resetRootSchedule()
+    root = SimpleNamespace(
+        tag=1,
+        next=None,
+        pending_lanes=InputContinuousLane,
+        callback_priority=0,
+        scheduled_callback_priority=0,
+    )
+
+    RootScheduler.ensureRootIsScheduled(root)
+    scheduled_root = RootScheduler.firstScheduledRoot
+    original = RootScheduler.scheduleImmediateRootScheduleTask
+    scheduled: list[str] = []
+    try:
+        RootScheduler.scheduleImmediateRootScheduleTask = lambda: scheduled.append("scheduled")
+        RootScheduler.didScheduleMicrotask = False
+        RootScheduler.ensureRootIsScheduled(root)
+    finally:
+        RootScheduler.scheduleImmediateRootScheduleTask = original
+        RootScheduler.resetRootSchedule()
+
+    assert RootScheduler.firstScheduledRoot is None
+    assert scheduled_root is root
+    assert scheduled == ["scheduled"]
+
+
+def test_root_scheduler_updates_callback_priority_when_higher_priority_arrives() -> None:
+    RootScheduler.resetRootSchedule()
+    root = SimpleNamespace(
+        tag=1,
+        next=None,
+        pending_lanes=InputContinuousLane,
+        callback_priority=0,
+        scheduled_callback_priority=0,
+    )
+
+    RootScheduler.ensureRootIsScheduled(root)
+    root.pending_lanes = SyncLane
+    RootScheduler.ensureRootIsScheduled(root)
+
+    assert root.callback_priority == SyncLane
+    assert root.scheduled_callback_priority == SyncLane
+    RootScheduler.resetRootSchedule()
+
+
+def test_root_scheduler_microtask_rebases_scheduled_priority_before_processing() -> None:
+    RootScheduler.resetRootSchedule()
+    flushed: list[str] = []
+
+    class FakeReconciler:
+        def flush_sync_work(self, container) -> None:
+            flushed.append("flush")
+            container.pending_lanes = 0
+
+    root = SimpleNamespace(
+        tag=1,
+        next=None,
+        pending_lanes=InputContinuousLane,
+        callback_priority=InputContinuousLane,
+        scheduled_callback_priority=InputContinuousLane,
+        _reconciler=FakeReconciler(),
+    )
+
+    RootScheduler.firstScheduledRoot = root
+    RootScheduler.lastScheduledRoot = root
+    RootScheduler.didScheduleMicrotask = True
+    root.pending_lanes = SyncLane
+
+    RootScheduler.processRootScheduleInMicrotask()
+
+    assert flushed == ["flush"]
+    assert root.callback_priority == 0
+    assert root.scheduled_callback_priority == 0
+
+
+def test_root_scheduler_builds_root_plan_before_processing() -> None:
+    root = SimpleNamespace(
+        tag=1,
+        pending_lanes=InputContinuousLane,
+        callback_priority=0,
+        scheduled_callback_priority=0,
+    )
+
+    plan = RootScheduler.scheduleTaskForRootDuringMicrotask(root)
+
+    assert plan["root"] is root
+    assert plan["next_lanes"] == InputContinuousLane
+    assert plan["callback_priority"] == InputContinuousLane
+    assert plan["mode"] == "scheduled"
+    assert root.callback_priority == InputContinuousLane
+    assert root.scheduled_callback_priority == InputContinuousLane
+
+
+def test_work_loop_passes_selected_lanes_to_reconciler_flush() -> None:
+    observed: list[tuple[object, int, int, bool]] = []
+
+    class FakeReconciler:
+        def flush_scheduled_updates(
+            self,
+            container=None,
+            priority=None,
+            lanes=None,
+            *,
+            consume_all=True,
+        ) -> None:
+            observed.append((container, priority, lanes, consume_all))
+
+    root = SimpleNamespace(
+        container="container",
+        _reconciler=FakeReconciler(),
+    )
+
+    performWorkOnRoot(root, InputContinuousLane | DefaultLane)
+
+    assert observed == [("container", InputContinuousLane, InputContinuousLane, False)]
+
+
+def test_reconciler_tracks_current_render_lanes_during_flush() -> None:
+    from pyinkcli.dom import createNode
+    from pyinkcli.packages.react_reconciler.ReactFiberReconciler import createReconciler
+
+    root_node = createNode("ink-root")
+    reconciler = createReconciler(root_node)
+    container = reconciler.create_container(root_node)
+    container.element = "element"
+    container.pending_render = True
+    container.pending_lanes = InputContinuousLane | DefaultLane
+
+    observed: list[tuple[object, int, int]] = []
+
+    def fake_render_tree(_element, _priority):
+        observed.append(
+            (
+                getWorkInProgressRoot(),
+                getWorkInProgressRootRenderLanes(),
+                container.current_render_lanes,
+            )
+        )
+        return "rendered"
+
+    reconciler._render_tree = fake_render_tree  # type: ignore[method-assign]
+    reconciler._attach_rendered_tree = lambda _container: None  # type: ignore[method-assign]
+    reconciler._request_host_render = lambda _container, _priority: None  # type: ignore[method-assign]
+
+    reconciler.flush_scheduled_updates(
+        container,
+        InputContinuousLane,
+        lanes=InputContinuousLane,
+        consume_all=False,
+    )
+
+    assert observed == [(container, InputContinuousLane, InputContinuousLane)]
+    assert container.current_render_lanes == 0
+    assert getWorkInProgressRoot() is None
+    assert getWorkInProgressRootRenderLanes() == 0
+
+
+def test_reconciler_tracks_commit_and_passive_effect_lanes_during_flush() -> None:
+    from pyinkcli.dom import createNode
+    from pyinkcli.packages.react_reconciler.ReactFiberReconciler import createReconciler
+
+    root_node = createNode("ink-root")
+    reconciler = createReconciler(root_node)
+    container = reconciler.create_container(root_node)
+    container.element = "element"
+    container.pending_render = True
+    container.pending_lanes = InputContinuousLane
+
+    observed: list[tuple[bool, object, int]] = []
+
+    reconciler._render_tree = lambda _element, _priority: "rendered"  # type: ignore[method-assign]
+    reconciler._request_host_render = lambda _container, _priority: None  # type: ignore[method-assign]
+
+    def fake_attach_rendered_tree(_container) -> None:
+        observed.append(
+            (
+                hasPendingCommitEffects(),
+                getRootWithPendingPassiveEffects(),
+                getPendingPassiveEffectsLanes(),
+            )
+        )
+
+    reconciler._attach_rendered_tree = fake_attach_rendered_tree  # type: ignore[method-assign]
+
+    reconciler.flush_scheduled_updates(
+        container,
+        InputContinuousLane,
+        lanes=InputContinuousLane,
+        consume_all=False,
+    )
+
+    assert observed == [(True, container, InputContinuousLane)]
+    assert hasPendingCommitEffects() is False
+    assert getRootWithPendingPassiveEffects() is None
+    assert getPendingPassiveEffectsLanes() == 0
+
+
+def test_prepared_commit_carries_explicit_passive_queue_state() -> None:
+    from pyinkcli.dom import createNode
+    from pyinkcli.packages.react_reconciler.ReactFiberReconciler import createReconciler
+
+    root_node = createNode("ink-root")
+    reconciler = createReconciler(root_node)
+    container = reconciler.create_container(root_node)
+    container.element = "element"
+    container.pending_render = True
+    container.pending_lanes = InputContinuousLane
+
+    reconciler._render_tree = lambda _element, _priority: "rendered"  # type: ignore[method-assign]
+    reconciler._attach_rendered_tree = lambda _container: None  # type: ignore[method-assign]
+    reconciler._request_host_render = lambda _container, _priority: None  # type: ignore[method-assign]
+
+    reconciler.flush_scheduled_updates(
+        container,
+        InputContinuousLane,
+        lanes=InputContinuousLane,
+        consume_all=False,
+    )
+
+    prepared = reconciler._last_prepared_commit
+    assert prepared is not None
+    assert prepared.passive_effect_state == {
+        "deferred_passive_mount_effects": 0,
+        "pending_passive_unmount_fibers": 0,
+        "has_deferred_passive_work": False,
+        "lanes": InputContinuousLane,
+    }
+
+
+def test_flush_pending_effects_drains_deferred_passive_mounts_and_unmounts() -> None:
+    from pyinkcli.hooks import _runtime as hooks_runtime
+
+    calls: list[str] = []
+    previous_fibers = hooks_runtime._runtime.fibers
+    previous_pending_unmounts = hooks_runtime._runtime.pending_passive_unmount_fibers
+    hooks_runtime._runtime.fibers = {}
+    hooks_runtime._runtime.pending_passive_unmount_fibers = []
+    try:
+        mount_fiber = hooks_runtime.HookFiber(component_id="mount", element_type="Mount")
+        mount_fiber.update_queue = hooks_runtime.FunctionComponentUpdateQueue()
+        effect = hooks_runtime.EffectRecord(
+            tag=hooks_runtime.HookPassive | hooks_runtime.HookHasEffect,
+            create=lambda: calls.append("mount") or None,
+            deps=None,
+            inst=hooks_runtime.EffectInstance(destroy=None),
+        )
+        effect.next = effect
+        mount_fiber.update_queue.last_effect = effect
+        hooks_runtime._runtime.fibers[mount_fiber.component_id] = mount_fiber
+
+        unmount_fiber = hooks_runtime.HookFiber(component_id="unmount", element_type="Unmount")
+        unmount_fiber.hook_head = hooks_runtime.HookNode(
+            index=0,
+            kind="Effect",
+            cleanup=lambda: calls.append("unmount"),
+        )
+        hooks_runtime._runtime.pending_passive_unmount_fibers.append(unmount_fiber)
+
+        flushPendingEffects()
+
+        assert calls == ["unmount", "mount"]
+        assert hooks_runtime._get_passive_queue_state()["has_deferred_passive_work"] is False
+    finally:
+        hooks_runtime._runtime.fibers = previous_fibers
+        hooks_runtime._runtime.pending_passive_unmount_fibers = previous_pending_unmounts
+
+
+def test_flush_sync_work_on_all_roots_skips_non_sync_roots() -> None:
+    RootScheduler.resetRootSchedule()
+    flushed: list[str] = []
+
+    class FakeReconciler:
+        def flush_sync_work(self, container) -> None:
+            flushed.append("flush")
+            container.pending_lanes = 0
+
+    root = SimpleNamespace(
+        tag=1,
+        next=None,
+        pending_lanes=InputContinuousLane,
+        callback_priority=0,
+        scheduled_callback_priority=0,
+        _reconciler=FakeReconciler(),
+    )
+
+    RootScheduler.firstScheduledRoot = root
+    RootScheduler.lastScheduledRoot = root
+
+    RootScheduler.flushSyncWorkOnAllRoots()
+
+    assert flushed == []
+    assert root.callback_priority == InputContinuousLane
+    assert root.scheduled_callback_priority == InputContinuousLane
+
+
+def test_root_scheduler_keeps_idle_roots_unscheduled_for_now() -> None:
+    root = SimpleNamespace(tag=1, pending_lanes=IdleLane)
+
+    assert RootScheduler.shouldScheduleIdleWork(root) is False
+    assert RootScheduler.getRootScheduleMode(root) == "idle"
 
 
 def test_react_hook_effect_tags_export_runtime_flags() -> None:

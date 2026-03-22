@@ -37,7 +37,15 @@ from pyinkcli.packages.react_reconciler.ReactEventPriorities import (
     DefaultEventPriority,
     DiscreteEventPriority,
     NoEventPriority,
+    TransitionEventPriority,
+    eventPriorityToLane,
     higherEventPriority,
+)
+from pyinkcli.packages.react_reconciler.ReactFiberLane import NoLanes, removeLanes
+from pyinkcli.packages.react_reconciler.ReactFiberRootScheduler import (
+    ensureRootIsScheduled,
+    getLaneFamilyForPriority,
+    getRootScheduleModeForFamily,
 )
 from pyinkcli.packages.react_reconciler.ReactFiberNewContext import (
     checkIfContextChanged,
@@ -49,6 +57,7 @@ from pyinkcli.packages.react_reconciler.dispatcher import (
     beginComponentRender,
     endComponentRender,
     finishHookState,
+    getPassiveQueueState,
     resetHookState,
 )
 from pyinkcli.packages.react_devtools_core.backend import initializeBackend
@@ -74,6 +83,13 @@ class Container:
     reconciler: "MinimalReconciler | None" = None
     rendered_tree: Any | None = None
     pending_work_version: int = 0
+    pending_lanes: int = NoLanes
+    current_render_lanes: int = NoLanes
+    callback_priority: int = NoEventPriority
+    scheduled_callback_priority: int = NoEventPriority
+    next: Any | None = None
+    _reconciler: "MinimalReconciler | None" = None
+    container: "Container | None" = None
 
 
 class MinimalReconciler:
@@ -130,6 +146,8 @@ class MinimalReconciler:
 
     def create_container(self, root_node: Any, tag: int = 0) -> Container:
         container = Container(root_node=root_node, tag=tag, reconciler=self)
+        container._reconciler = self
+        container.container = container
         self._containers.append(container)
         return container
 
@@ -206,6 +224,11 @@ class MinimalReconciler:
             self._scheduled_component_updates.add(component_id)
         else:
             self._scheduled_component_updates.update(self._component_render_cache)
+        should_defer_transition = (
+            container.tag == 1
+            and priority == TransitionEventPriority
+            and (container.pending_render or container.render_state is not None)
+        )
         if container.tag == 1 and priority != NoEventPriority and container.render_state is None:
             container.render_state = SimpleNamespace(
                 status="running",
@@ -214,10 +237,21 @@ class MinimalReconciler:
             )
         container.pending_render = True
         container.pending_priority = higherEventPriority(container.pending_priority, priority)
-        if not container.update_running:
-            self.flush_scheduled_updates(container)
+        container.pending_lanes |= eventPriorityToLane(priority)
+        self._schedule_or_flush_container(
+            container,
+            priority,
+            defer_transition=should_defer_transition,
+        )
 
-    def flush_scheduled_updates(self, container: Container | None = None) -> bool:
+    def flush_scheduled_updates(
+        self,
+        container: Container | None = None,
+        priority: int | None = None,
+        lanes: int | None = None,
+        *,
+        consume_all: bool = True,
+    ) -> bool:
         target = container or (self._containers[-1] if self._containers else None)
         if target is None or target.element is None:
             return False
@@ -229,24 +263,48 @@ class MinimalReconciler:
         target.update_running = True
         rendered = False
         highest_priority = NoEventPriority
+        render_lanes = NoLanes
+        passive_queue_state: dict[str, int | bool] = {
+            "deferred_passive_mount_effects": 0,
+            "pending_passive_unmount_fibers": 0,
+            "has_deferred_passive_work": False,
+        }
         try:
             iterations = 0
             self._post_commit_callbacks = []
             self._after_host_render_callbacks = []
             while (target.pending_render or not rendered) and iterations < 25:
                 iterations += 1
-                current_priority = target.pending_priority or DefaultEventPriority
+                current_priority = (
+                    priority
+                    if priority is not None and iterations == 1
+                    else target.pending_priority or DefaultEventPriority
+                )
+                current_render_lanes = (
+                    lanes
+                    if lanes is not None and iterations == 1
+                    else eventPriorityToLane(current_priority)
+                )
+                render_lanes = current_render_lanes
                 highest_priority = higherEventPriority(highest_priority, current_priority)
                 target.pending_render = False
                 target.pending_priority = NoEventPriority
+                target.current_render_lanes = current_render_lanes
                 self._begin_devtools_snapshot()
                 self._visited_class_component_ids = set()
                 resetHookState()
                 try:
+                    from . import ReactFiberWorkLoop as WorkLoop
+
+                    WorkLoop._work_in_progress_root = target
+                    WorkLoop._work_in_progress_root_render_lanes = current_render_lanes
                     target.rendered_tree = self._render_tree(
                         target.element,
                         current_priority,
                     )
+                    WorkLoop._has_pending_commit_effects = True
+                    WorkLoop._root_with_pending_passive_effects = target
+                    WorkLoop._pending_passive_effects_lanes = current_render_lanes
                     self._attach_rendered_tree(target)
                     self._flush_post_commit_callbacks()
                     self._cleanup_stale_class_instances()
@@ -257,28 +315,96 @@ class MinimalReconciler:
                         ),
                         mutations=[SimpleNamespace(tag="mutation")],
                         root_completion_state={"tag": 3, "containsSuspendedFibers": False},
+                        passive_effect_state=None,
                     )
                     rendered = True
                 finally:
+                    from . import ReactFiberWorkLoop as WorkLoop
+
+                    WorkLoop._work_in_progress_root = None
+                    WorkLoop._work_in_progress_root_render_lanes = NoLanes
                     finishHookState()
-                if not target.pending_render:
+                passive_queue_state = getPassiveQueueState()
+                if self._last_prepared_commit is not None:
+                    self._last_prepared_commit.passive_effect_state = {
+                        **passive_queue_state,
+                        "lanes": current_render_lanes,
+                    }
+                if not consume_all or not target.pending_render:
                     break
             if rendered:
                 self._updated_runtime_sources.clear()
                 self._scheduled_component_updates.clear()
-                target.render_state = None
+                completed_lanes = (
+                    lanes
+                    if lanes is not None
+                    else render_lanes
+                )
+                target.pending_lanes = removeLanes(
+                    target.pending_lanes,
+                    completed_lanes,
+                )
+                if not target.pending_lanes and not target.pending_render:
+                    target.render_state = None
                 self._request_host_render(target, highest_priority or DefaultEventPriority)
                 after_host_render_callbacks = self._after_host_render_callbacks
                 self._after_host_render_callbacks = []
                 for callback in after_host_render_callbacks:
                     callback()
+                if not passive_queue_state["has_deferred_passive_work"]:
+                    from . import ReactFiberWorkLoop as WorkLoop
+
+                    WorkLoop.flushPendingEffects()
+                if target.pending_lanes or target.pending_render:
+                    if target.tag == 1:
+                        from .ReactFiberRootScheduler import ensureRootIsScheduled
+
+                        ensureRootIsScheduled(target)
             return rendered
         finally:
+            target.current_render_lanes = NoLanes
             target.update_running = False
 
     def _queue_container_render(self, container: Container, priority: int) -> None:
         container.pending_render = True
         container.pending_priority = higherEventPriority(container.pending_priority, priority)
+        container.pending_lanes |= eventPriorityToLane(priority)
+        self._schedule_or_flush_container(container, priority, defer_transition=False)
+
+    def _schedule_or_flush_container(
+        self,
+        container: Container,
+        priority: int,
+        *,
+        defer_transition: bool,
+    ) -> None:
+        if container.update_running:
+            return
+
+        family = getLaneFamilyForPriority(priority)
+        schedule_mode = getRootScheduleModeForFamily(container, family)
+
+        if (
+            schedule_mode == "scheduled"
+            and family in ("continuous", "default")
+            and container.rendered_tree is not None
+        ):
+            ensureRootIsScheduled(container)
+            if defer_transition:
+                callback = (
+                    getattr(self._host_config, "schedule_resume", None) if self._host_config else None
+                )
+                if callable(callback):
+                    callback(priority)
+            return
+
+        # Only defer transition work when another transition is already pending.
+        if defer_transition:
+            callback = getattr(self._host_config, "schedule_resume", None) if self._host_config else None
+            if callable(callback):
+                callback(priority)
+                return
+
         self.flush_scheduled_updates(container)
 
     def _capture_component_error(self, error: Exception, instance: _Component | None = None) -> None:

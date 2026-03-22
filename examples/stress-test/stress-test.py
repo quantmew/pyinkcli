@@ -22,6 +22,10 @@ from typing import Any
 
 from pyinkcli import Box, Text, render, useInput
 from pyinkcli.hooks import useEffect, useMemo, useState, useTransition
+from perf_metrics import PerfMetricCollector, use_perf_metrics
+
+
+_PERF_COLLECTOR = PerfMetricCollector()
 
 
 # Colors for list items
@@ -132,31 +136,7 @@ def StressTestApp(num_items: int, update_interval: float, concurrent_mode: bool)
     # Transition for concurrent updates
     is_pending, start_transition = useTransition()
 
-    # Performance metrics
-    fps_ref, set_fps_ref = useState({"fps": 0.0, "render_time": 0.0, "last_update": time.time()})
-    frame_count_ref = {"count": 0, "start_time": time.time()}
-
-    # Track render times
-    render_start_ref = {"time": 0}
-
-    def update_frame_metrics():
-        """Update FPS and render time metrics."""
-        now = time.time()
-        frame_count_ref["count"] += 1
-
-        # Calculate FPS every second
-        elapsed = now - frame_count_ref["start_time"]
-        if elapsed >= 1.0:
-            fps = frame_count_ref["count"] / elapsed
-            frame_count_ref["count"] = 0
-            frame_count_ref["start_time"] = now
-
-            render_time = now - render_start_ref["time"] if render_start_ref["time"] > 0 else 0
-            set_fps_ref({
-                "fps": fps,
-                "render_time": render_time * 1000,  # Convert to ms
-                "last_update": now,
-            })
+    performance_metrics = use_perf_metrics(useEffect, useState, _PERF_COLLECTOR)
 
     # Auto-update items periodically
     def setup_auto_update():
@@ -212,22 +192,26 @@ def StressTestApp(num_items: int, update_interval: float, concurrent_mode: bool)
                 return
             if input_char == "t":
                 # Toggle running state
-                set_is_running(not is_running)
+                set_is_running(lambda previous: not previous)
                 return
 
         # Arrow keys for navigation
         if key.up_arrow:
-            set_selected_index(max(0, selected_index - 1))
+            set_selected_index(lambda previous: max(0, previous - 1))
         elif key.down_arrow:
-            set_selected_index(min(len(items) - 1, selected_index + 1))
+            set_selected_index(
+                lambda previous: min(len(items) - 1, previous + 1)
+            )
         elif key.page_up:
-            set_selected_index(max(0, selected_index - 20))
+            set_selected_index(lambda previous: max(0, previous - 20))
         elif key.page_down:
-            set_selected_index(min(len(items) - 1, selected_index + 20))
+            set_selected_index(
+                lambda previous: min(len(items) - 1, previous + 20)
+            )
         elif key.home:
-            set_selected_index(0)
+            set_selected_index(lambda _previous: 0)
         elif key.end:
-            set_selected_index(len(items) - 1)
+            set_selected_index(lambda _previous: len(items) - 1)
 
     useInput(handle_input)
 
@@ -236,9 +220,6 @@ def StressTestApp(num_items: int, update_interval: float, concurrent_mode: bool)
         lambda: _compute_intensive(items, multiplier),
         (items, multiplier),
     )
-
-    # Update render metrics
-    update_frame_metrics()
 
     # Build visible items (limit to avoid terminal overflow)
     max_visible = 30  # Show max 30 items on screen
@@ -287,8 +268,8 @@ def StressTestApp(num_items: int, update_interval: float, concurrent_mode: bool)
         StatusBar(
             total_items=num_items,
             updating_items=num_items // 10,
-            fps=fps_ref["fps"],
-            render_time_ms=fps_ref["render_time"],
+            fps=performance_metrics["fps"],
+            render_time_ms=performance_metrics["render_time_ms"],
             is_pending=is_pending,
             concurrent_mode=concurrent_mode,
         ),
@@ -375,7 +356,12 @@ def main():
             concurrent_mode=args.concurrent,
         )
 
-    render(app, concurrent=args.concurrent).wait_until_exit()
+    _PERF_COLLECTOR.reset()
+
+    def on_render(metrics):
+        _PERF_COLLECTOR.record_render(metrics)
+
+    render(app, concurrent=args.concurrent, on_render=on_render).wait_until_exit()
 
 
 if __name__ == "__main__":

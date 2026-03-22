@@ -9,10 +9,11 @@ from .ReactEventPriorities import (
     DefaultEventPriority,
     DiscreteEventPriority,
     TransitionEventPriority,
+    lanesToEventPriority,
 )
 from .ReactFiberLane import NoLanes, getHighestPriorityLane, mergeLanes, removeLanes
 from .ReactSharedInternals import shared_internals
-from .dispatcher import batchedUpdates, discreteUpdates
+from .dispatcher import batchedUpdates, discreteUpdates, flushDeferredPassiveEffects
 
 NoContext = 0
 RenderContext = 1 << 0
@@ -55,18 +56,30 @@ def isWorkLoopSuspendedOnData() -> bool:
     return _work_loop_suspended_on_data
 
 
-def performWorkOnRoot(root: Any, _lanes: int) -> None:
+def performWorkOnRoot(root: Any, lanes: int) -> None:
     reconciler = getattr(root, "reconciler", None) or getattr(root, "_reconciler", None)
     if reconciler is not None and hasattr(reconciler, "flush_scheduled_updates"):
-        reconciler.flush_scheduled_updates(getattr(root, "container", None))
+        selected_lanes = getHighestPriorityLane(lanes)
+        if selected_lanes == NoLanes:
+            return
+        reconciler.flush_scheduled_updates(
+            getattr(root, "container", None),
+            lanesToEventPriority(selected_lanes),
+            lanes=selected_lanes,
+            consume_all=False,
+        )
 
 
 def flushPendingEffects() -> None:
-    return None
+    global _root_with_pending_passive_effects, _pending_passive_effects_lanes, _has_pending_commit_effects
+    flushDeferredPassiveEffects()
+    _root_with_pending_passive_effects = None
+    _pending_passive_effects_lanes = NoLanes
+    _has_pending_commit_effects = False
 
 
 def flushPendingEffectsDelayed() -> None:
-    return None
+    flushPendingEffects()
 
 
 def isAlreadyRendering() -> bool:
