@@ -23,9 +23,9 @@ def _style_category(sequence: str) -> str | None:
     params = token.parameter_string
     if params == "0":
         return "reset"
-    if params == "39" or params.startswith("38;"):
+    if params == "39" or params.startswith("38;") or params in {str(code) for code in range(30, 38)} | {str(code) for code in range(90, 98)}:
         return "fg"
-    if params == "49" or params.startswith("48;"):
+    if params == "49" or params.startswith("48;") or params in {str(code) for code in range(40, 48)} | {str(code) for code in range(100, 108)}:
         return "bg"
     return None
 
@@ -133,4 +133,3 @@ class Output:
 
 
 __all__ = ["Output"]
-

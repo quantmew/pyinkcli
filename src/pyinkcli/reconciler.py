@@ -57,6 +57,36 @@ class _Container:
     pending_work_version: int = 0
 
 
+class _ClassComponentUpdater:
+    def __init__(self, reconciler: "_Reconciler", component_id: str) -> None:
+        self._reconciler = reconciler
+        self._component_id = component_id
+
+    def enqueueSetState(self, public_instance, partial_state, callback=None, callerName=None):
+        if callable(partial_state):
+            partial_state = partial_state(public_instance.state, public_instance.props)
+        if isinstance(partial_state, dict):
+            public_instance.state.update(partial_state)
+        self._reconciler._class_dirty.add(self._component_id)
+        from .hooks.use_app import useApp
+
+        app = useApp()
+        if app is not None:
+            app._schedule_render("default")
+        if callback:
+            callback()
+
+    def enqueueForceUpdate(self, public_instance, callback=None, callerName=None):
+        self._reconciler._class_dirty.add(self._component_id)
+        from .hooks.use_app import useApp
+
+        app = useApp()
+        if app is not None:
+            app._schedule_render("default")
+        if callback:
+            callback()
+
+
 class _Reconciler:
     def __init__(self, root_node) -> None:
         self.root_node = root_node
@@ -69,6 +99,12 @@ class _Reconciler:
         self._devtools_state_overrides = {}
         self._forced_suspense_ids = set()
         self._forced_error_ids = set()
+        self._forced_error_state = {}
+        self._class_instances = {}
+        self._class_dirty = set()
+        self._pending_class_mounts = []
+        self._pending_class_updates = []
+        self._pending_errors = []
 
     def create_container(self, root_node, tag: int = 0):
         container = _Container(root=root_node, tag=tag)
@@ -121,11 +157,14 @@ class _Reconciler:
         if callable(container.root.onComputeLayout):
             container.root.onComputeLayout()
         emitLayoutListeners(container.root)
+        self._flush_class_lifecycle_queues()
         has_static = any(getattr(child, "internal_static", False) for child in container.root.childNodes)
         if has_static and self._commit_handlers["on_immediate_commit"]:
             self._commit_handlers["on_immediate_commit"]()
         elif self._commit_handlers["on_commit"]:
             self._commit_handlers["on_commit"]()
+        if self._pending_errors:
+            raise self._pending_errors.pop(0)
 
     def _render_component(self, vnode: RenderableNode, instance_id: str):
         if vnode.type is react.Fragment:
@@ -173,7 +212,7 @@ class _Reconciler:
                     ]
                 return fallback
         if vnode.type == "__router_provider__":
-            with react_router._push_router_context(vnode.props["internal_router_context"]):
+            with react_router.push_router_context(vnode.props["internal_router_context"]):
                 if not vnode.children:
                     return None
                 return self._render_component(vnode.children[0], instance_id)
@@ -181,17 +220,46 @@ class _Reconciler:
             owner_id = f"{instance_id}:{getattr(vnode.type, '__name__', 'anonymous')}"
             effective_props = _safe_copy(self._devtools_prop_overrides.get(owner_id, vnode.props))
             effective_props.setdefault("children", vnode.children if len(vnode.children) != 1 else vnode.children[0])
-            instance = vnode.type(props=effective_props)
+            instance = self._class_instances.get(owner_id)
+            is_new = instance is None or not isinstance(instance, vnode.type)
+            prev_props = {}
+            prev_state = {}
+            if is_new:
+                instance = vnode.type(props=effective_props)
+                instance.updater = _ClassComponentUpdater(self, owner_id)
+                self._class_instances[owner_id] = instance
+            else:
+                prev_props = _safe_copy(getattr(instance, "_committed_props", instance.props))
+                prev_state = _safe_copy(getattr(instance, "_committed_state", instance.state))
+            instance.props = effective_props
             if owner_id in self._devtools_state_overrides:
                 instance.state = _safe_copy(self._devtools_state_overrides[owner_id])
             if owner_id in self._forced_error_ids and hasattr(vnode.type, "getDerivedStateFromError"):
                 derived = vnode.type.getDerivedStateFromError(RuntimeError("DevTools forced error"))
                 if isinstance(derived, dict):
                     instance.state.update(derived)
+            if not is_new and hasattr(instance, "shouldComponentUpdate"):
+                try:
+                    should_update = instance.shouldComponentUpdate(effective_props, instance.state)
+                except Exception as error:  # noqa: BLE001
+                    self._pending_errors.append(error)
+                    return getattr(instance, "_last_rendered", None)
+                if should_update is False:
+                    return getattr(instance, "_last_rendered", None)
             result = instance.render()
+            instance._last_rendered = result
             if isinstance(result, RenderableNode):
                 result._class_instance = instance
                 result._devtools_owner_id = owner_id
+            if is_new and hasattr(instance, "componentDidMount"):
+                self._pending_class_mounts.append((owner_id, instance))
+            elif (
+                not is_new
+                and hasattr(instance, "componentDidUpdate")
+                and (prev_props != instance.props or prev_state != instance.state or owner_id in self._class_dirty)
+            ):
+                self._pending_class_updates.append((owner_id, instance, prev_props, prev_state))
+            self._class_dirty.discard(owner_id)
             return result
         if callable(vnode.type):
             component_instance_id = f"{instance_id}:{getattr(vnode.type, '__name__', 'anonymous')}"
@@ -279,14 +347,22 @@ class _Reconciler:
             return existing
         rendered = self._render_component(vnode, instance_id)
         if rendered is not vnode:
+            component_id = f"{instance_id}:{getattr(vnode.type, '__name__', 'anonymous')}" if callable(vnode.type) else None
+            if existing is not None:
+                existing_component_id = getattr(existing, "_component_instance_id", None)
+                if existing_component_id is not None and existing_component_id != component_id:
+                    self._invoke_component_will_unmount(existing)
+                    existing = None
             result = self._reconcile_node(existing, rendered, instance_id)
             if result is not None and getattr(rendered, "_suspended_by", None):
                 result._suspended_by = rendered._suspended_by
             if result is not None and callable(vnode.type):
-                component_id = f"{instance_id}:{getattr(vnode.type, '__name__', 'anonymous')}"
                 result._component_type = vnode.type
                 result._component_props = _safe_copy(self._devtools_prop_overrides.get(component_id, vnode.props))
-                result._component_instance_id = component_id
+                if getattr(result, "_component_instance_id", None) is None:
+                    result._component_instance_id = component_id
+                if getattr(result, "_class_instance", None) is None and getattr(rendered, "_class_instance", None) is not None:
+                    result._class_instance = rendered._class_instance
                 owner_infos = list(getattr(result, "_owner_infos", []))
                 owner_infos.insert(
                     0,
@@ -350,6 +426,7 @@ class _Reconciler:
         for child in list(parent.childNodes):
             if id(child) not in next_ids:
                 self._detach_ref(getattr(child, "ref", None))
+                self._invoke_component_will_unmount(child)
                 deletions.append(child)
         parent.childNodes = [child for child in next_children if child is not None]
         for child in parent.childNodes:
@@ -373,6 +450,40 @@ class _Reconciler:
                         )
         for child in getattr(node, "childNodes", []):
             self._queue_passive_unmount(child)
+
+    def _invoke_component_will_unmount(self, node) -> None:
+        instance = getattr(node, "_class_instance", None)
+        component_id = getattr(node, "_component_instance_id", None)
+        if instance is not None and hasattr(instance, "componentWillUnmount"):
+            try:
+                instance.componentWillUnmount()
+            except Exception as error:  # noqa: BLE001
+                self._pending_errors.append(error)
+        if component_id is not None:
+            self._class_instances.pop(component_id, None)
+            self._class_dirty.discard(component_id)
+        for child in getattr(node, "childNodes", []):
+            self._invoke_component_will_unmount(child)
+
+    def _flush_class_lifecycle_queues(self) -> None:
+        mounts = list(self._pending_class_mounts)
+        updates = list(self._pending_class_updates)
+        self._pending_class_mounts.clear()
+        self._pending_class_updates.clear()
+        for component_id, instance in mounts:
+            instance._committed_props = _safe_copy(instance.props)
+            instance._committed_state = _safe_copy(instance.state)
+            try:
+                instance.componentDidMount()
+            except Exception as error:  # noqa: BLE001
+                self._pending_errors.append(error)
+        for component_id, instance, prev_props, prev_state in updates:
+            try:
+                instance.componentDidUpdate(prev_props, prev_state)
+            except Exception as error:  # noqa: BLE001
+                self._pending_errors.append(error)
+            instance._committed_props = _safe_copy(instance.props)
+            instance._committed_state = _safe_copy(instance.state)
 
     def _abort_container_render(self, container, reason="aborted") -> None:
         state = container.render_state
@@ -1107,14 +1218,37 @@ class _Reconciler:
 
         def override_error(node_id, force_error):
             build_snapshot()
-            entry = id_map[node_id]
+            entry = id_map.get(node_id)
+            if entry is None:
+                if not force_error and self._forced_error_ids:
+                    for boundary_id, state_value in list(self._forced_error_state.items()):
+                        self._devtools_state_overrides[boundary_id] = _safe_copy(state_value)
+                    self._forced_error_ids.clear()
+                    self._forced_error_state.clear()
+                    from .hooks.use_app import useApp
+
+                    app = useApp()
+                    if app is not None:
+                        app.render(app._current_node)
+                    return True
+                return False
             error_owner = next((info for info in entry.get("ownerInfos", []) if info.get("isErrorBoundary")), None)
             if error_owner is None:
                 return False
+            boundary_id = error_owner["componentID"]
             if force_error:
-                self._forced_error_ids.add(error_owner["componentID"])
+                self._forced_error_ids.add(boundary_id)
+                class_instance = error_owner.get("classInstance")
+                if class_instance is not None:
+                    self._forced_error_state[boundary_id] = _safe_copy(getattr(class_instance, "state", {}))
             else:
-                self._forced_error_ids.discard(error_owner["componentID"])
+                self._forced_error_ids.discard(boundary_id)
+                if boundary_id in self._forced_error_state:
+                    restored_state = _safe_copy(self._forced_error_state.pop(boundary_id))
+                    self._devtools_state_overrides[boundary_id] = restored_state
+                    class_instance = error_owner.get("classInstance")
+                    if class_instance is not None:
+                        class_instance.state = _safe_copy(restored_state)
             schedule_update(node_id)
             return True
 

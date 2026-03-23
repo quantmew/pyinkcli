@@ -89,7 +89,7 @@ _runtime = SimpleNamespace(
 
 
 def _clear_hook_state() -> None:
-    global _hook_state, _render_phase_rerender_count
+    global _hook_state, _render_phase_rerender_count, _pending_rerender_priority, _auto_batch_timer
     for state in _hook_state.values():
         for hook in state.hooks:
             if isinstance(hook, _EffectRecord) and hook.cleanup:
@@ -98,6 +98,10 @@ def _clear_hook_state() -> None:
     _active_component_ids.clear()
     _dirty_components.clear()
     _render_phase_rerender_count = 0
+    _pending_rerender_priority = None
+    if _auto_batch_timer is not None:
+        _auto_batch_timer.cancel()
+        _auto_batch_timer = None
     _runtime.fibers = {}
     _runtime.pending_passive_unmount_fibers = []
 
@@ -178,6 +182,9 @@ def _schedule_rerender(priority: str) -> None:
     global _pending_rerender_priority, _batched_pending, _auto_batch_timer, _render_phase_rerender_count
     _pending_rerender_priority = priority
     if _rendering:
+        if _batched_mode is not None:
+            _batched_pending = True
+            return
         _render_phase_rerender_count += 1
         return
     if _batched_mode is not None:
@@ -185,11 +192,20 @@ def _schedule_rerender(priority: str) -> None:
         return
     if _schedule_update_callback:
         if _auto_batch_timer is None:
-            _auto_batch_timer = threading.Timer(0, lambda: (_schedule_update_callback(_current_component_id, priority), _clear_auto_batch()))
+            scheduled_callback = _schedule_update_callback
+            component_id = _current_component_id
+            _auto_batch_timer = threading.Timer(
+                0.001,
+                lambda: ((scheduled_callback(component_id, priority) if callable(scheduled_callback) else None), _clear_auto_batch()),
+            )
             _auto_batch_timer.start()
         return
     if _auto_batch_timer is None:
-        _auto_batch_timer = threading.Timer(0, lambda: (_rerender_callback and _rerender_callback(), _clear_auto_batch()))
+        rerender_callback = _rerender_callback
+        _auto_batch_timer = threading.Timer(
+            0.001,
+            lambda: ((rerender_callback() if callable(rerender_callback) else None), _clear_auto_batch()),
+        )
         _auto_batch_timer.start()
 
 

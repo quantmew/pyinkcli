@@ -11,11 +11,13 @@ class LogUpdate:
         self.previous_output: str | None = None
         self.previous_line_count = 0
         self.cursor_position = None
+        self._cursor_position = (0, 0)
         self.previous_cursor_position = None
         self.cursor_was_shown = False
 
     def set_cursor_position(self, position) -> None:
         self.cursor_position = position
+        self._cursor_position = position
 
     def _normalize(self, text: str) -> str:
         if hasattr(self.stream, "isatty") and self.stream.isatty():
@@ -115,6 +117,18 @@ class LogUpdate:
         self.previous_line_count = 0
         self.previous_cursor_position = None
         self.cursor_was_shown = False
+
+    def reset(self) -> None:
+        self.previous_output = None
+        self.previous_line_count = 0
+        self.previous_cursor_position = None
+        self.cursor_was_shown = False
+
+    def is_cursor_dirty(self) -> bool:
+        return self.cursor_position != self.previous_cursor_position
+
+    def will_render(self, text: str) -> bool:
+        return self.previous_output != text or self.is_cursor_dirty()
 
     def done(self) -> None:
         if self.previous_output is not None and hasattr(self.stream, "isatty") and self.stream.isatty():

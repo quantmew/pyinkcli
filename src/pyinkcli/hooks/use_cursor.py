@@ -19,7 +19,7 @@ def useCursor():
             return
         x = max(int(position["x"]), 0)
         y = max(int(position["y"]), 0)
-        app._log._cursor_position = (x, y)
+        app._set_cursor_position((x, y))
 
     return SimpleNamespace(setCursorPosition=set_cursor_position)
 

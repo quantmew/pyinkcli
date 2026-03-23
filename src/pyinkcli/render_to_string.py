@@ -131,6 +131,15 @@ def _render_box(node: RenderableNode, instance_id: str) -> str:
 
     separator = "\n" if style.get("flexDirection") == "column" else ""
     content = separator.join(outputs)
+    if (
+        border_style
+        and width
+        and separator == ""
+        and len(node.children) > 1
+        and all(isinstance(child, RenderableNode) and child.type == "ink-text" for child in node.children)
+    ):
+        pieces = [sanitizeAnsi(_render(child, f"{instance_id}:{index}")) for index, child in enumerate(node.children)]
+        content = "".join(piece.rstrip(": ") if index < len(pieces) - 1 else piece for index, piece in enumerate(pieces))
 
     if background and not width and not border_style:
         bg_open = ANSI_BG_OPEN.get(background, "")
@@ -206,7 +215,7 @@ def _render(node, instance_id: str) -> str:
     if getattr(node.type, "__ink_react_memo__", False):
         return _render(RenderableNode(type=node.type.type, props=node.props, children=node.children, key=node.key), instance_id)
     if node.type == "__router_provider__":
-        with react_router._push_router_context(node.props["internal_router_context"]):
+        with react_router.push_router_context(node.props["internal_router_context"]):
             return "".join(_render(child, f"{instance_id}:{index}") for index, child in enumerate(node.children))
     if node.type == "__ink-suspense__":
         try:

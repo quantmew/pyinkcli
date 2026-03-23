@@ -45,8 +45,19 @@ def readResource(key: str, loader):
         except Exception as error:  # noqa: BLE001
             entry["error"] = error
             entry["status"] = "rejected"
-        if callable(_renderer_rerender):
-            _renderer_rerender()
+        callback = _renderer_rerender
+        owner = getattr(callback, "__self__", None)
+        if owner is not None and getattr(owner, "_is_unmounted", False):
+            from .hooks import _runtime as hooks_runtime
+
+            hooks_runtime._pending_rerender_priority = None
+            return
+        if callable(callback):
+            callback()
+            return
+        from .hooks import _runtime as hooks_runtime
+
+        hooks_runtime._pending_rerender_priority = None
 
     thread = threading.Thread(target=run, daemon=True)
     entry["thread"] = thread

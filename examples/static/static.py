@@ -14,13 +14,13 @@ from pyinkcli.hooks import useEffect, useState
 
 def static_example():
     """Render incrementally completed tests using Static."""
-    tests, set_tests = useState([])
+    tests, set_tests = useState([{"id": index, "title": f"Test #{index + 1}"} for index in range(10)])
 
     def setup_runner():
         running = True
 
         def run_tests():
-            completed = 0
+            completed = len(tests)
             while running and completed < 10:
                 time.sleep(0.1)
                 completed += 1

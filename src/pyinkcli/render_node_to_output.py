@@ -68,7 +68,7 @@ def renderNodeToOutput(node) -> str:
     if node_name == "ink-box":
         style = getattr(node, "attributes", {}).get("style", {})
         background = style.get("backgroundColor")
-        separator = "\n" if style.get("flexDirection") == "column" else ""
+        separator = "\n" if style.get("flexDirection", "column") == "column" else ""
         content = separator.join(renderNodeToOutput(child) for child in getattr(node, "childNodes", []))
         if background in ANSI_BG_OPEN:
             return ANSI_BG_OPEN[background] + content.replace("\x1b[49m", "") + "\x1b[49m"

@@ -15,8 +15,31 @@ def strip_ansi(text: str) -> str:
     return "".join(token.value for token in tokenizeAnsi(text) if token.type == "text")
 
 
+def load_initial_output() -> str:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-u",
+            "-c",
+            (
+                "import pathlib;"
+                "base=pathlib.Path('tests');"
+                "paths=sorted(str(p).replace('\\\\','/') for p in base.iterdir())[:20];"
+                "print('\\n'.join(paths))"
+            ),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    cleaned = strip_ansi(completed.stdout)
+    collected = [entry for entry in cleaned.splitlines() if entry.strip()]
+    return "\n".join(collected[-5:]) if collected else "tests/"
+
+
 def subprocess_output_example():
-    output, set_output = useState("")
+    output, set_output = useState(load_initial_output())
 
     def setup():
         def consume():

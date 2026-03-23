@@ -68,15 +68,8 @@ def parseEscapeSequence(input: str, escapeIndex: int = 0) -> str | None:
 
 
 def _split_delete_and_backspace(text: str, events: list[InputEvent]) -> None:
-    text_segment_start = 0
-    for index, character in enumerate(text):
-        if character in {"\x7f", "\x08"}:
-            if index > text_segment_start:
-                events.append(InputEvent("input", text[text_segment_start:index]))
-            events.append(InputEvent("input", character))
-            text_segment_start = index + 1
-    if text_segment_start < len(text):
-        events.append(InputEvent("input", text[text_segment_start:]))
+    for character in text:
+        events.append(InputEvent("input", character))
 
 
 def parseKeypresses(input: str) -> list[InputEvent]:
@@ -87,8 +80,24 @@ def parseKeypresses(input: str) -> list[InputEvent]:
 class InputParser:
     def __init__(self) -> None:
         self._pending = ""
+        self._pending_paste = ""
+        self._in_bracketed_paste = False
 
     def feed(self, chunk: str) -> list[InputEvent]:
+        if self._in_bracketed_paste:
+            combined = self._pending_paste + chunk
+            end_index = combined.find(pasteEnd)
+            if end_index == -1:
+                self._pending_paste = combined
+                return []
+            events = [InputEvent("paste", combined[:end_index])]
+            self._pending_paste = ""
+            self._in_bracketed_paste = False
+            remainder = combined[end_index + len(pasteEnd) :]
+            if remainder:
+                events.extend(self.feed(remainder))
+            return events
+
         input = self._pending + chunk
         events: list[InputEvent] = []
         index = 0
@@ -100,6 +109,10 @@ class InputParser:
                 return events
             if escape_index > index:
                 _split_delete_and_backspace(input[index:escape_index], events)
+            remainder = input[escape_index:]
+            if pasteStart.startswith(remainder) or pasteEnd.startswith(remainder):
+                self._pending = remainder
+                return events
             parsed = parseEscapeSequence(input, escape_index)
             if parsed is None:
                 self._pending = input[escape_index:]
@@ -108,7 +121,9 @@ class InputParser:
                 after_start = escape_index + len(parsed)
                 end_index = input.find(pasteEnd, after_start)
                 if end_index == -1:
-                    self._pending = input[escape_index:]
+                    self._pending = ""
+                    self._in_bracketed_paste = True
+                    self._pending_paste = input[after_start:]
                     return events
                 events.append(InputEvent("paste", input[after_start:end_index]))
                 index = end_index + len(pasteEnd)
@@ -148,4 +163,3 @@ __all__ = [
     "parseKeypresses",
     "parseSs3Sequence",
 ]
-

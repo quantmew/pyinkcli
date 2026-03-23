@@ -59,6 +59,34 @@ class Key:
     text: str | None = None
     isPrintable: bool = True
 
+    @property
+    def up_arrow(self) -> bool:
+        return self.name == "up"
+
+    @property
+    def down_arrow(self) -> bool:
+        return self.name == "down"
+
+    @property
+    def left_arrow(self) -> bool:
+        return self.name == "left"
+
+    @property
+    def right_arrow(self) -> bool:
+        return self.name == "right"
+
+    @property
+    def return_pressed(self) -> bool:
+        return self.name == "return"
+
+    @property
+    def backspace(self) -> bool:
+        return self.name == "backspace"
+
+    @property
+    def delete(self) -> bool:
+        return self.name == "delete"
+
 
 def _kitty_modifier_flags(modifiers_value: int) -> dict[str, bool]:
     bits = max(modifiers_value - 1, 0)
@@ -183,4 +211,3 @@ __all__ = [
     "parseKittyKeypress",
     "parseKittySpecialKey",
 ]
-

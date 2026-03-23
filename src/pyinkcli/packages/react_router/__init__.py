@@ -1,16 +1,31 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
-from dataclasses import replace as dc_replace
-import re
 from types import SimpleNamespace
 
 from ...component import RenderableNode, createElement
 from ...hooks import _runtime as hooks_runtime
 from ...packages import react
+from .context import _ROUTER_CTX, get_current_router, push_router_context
+from . import routes as _routes_module
+from .matching import (
+    convertRouteMatchToUiMatch,
+    getPathContributingMatches,
+    getResolveToMatches,
+    getRoutePattern,
+    matchRoutes,
+    matchRoutesImpl,
+    render_match_chain,
+)
+from .routes import (
+    convertRoutesToDataRoutes,
+    createRoutesFromChildren,
+    createRoutesFromElements,
+    hydrationRouteProperties,
+    mapRouteProperties,
+)
 from .router import *
 
-_ROUTER_CTX = {"stack": []}
+hydrationRouteProperties = _routes_module.hydrationRouteProperties
 
 
 def createContext(default=None):
@@ -42,139 +57,17 @@ def Routes(*children, location=None):
 
 
 def Outlet(*, context=None):
-    router = _ROUTER_CTX["stack"][-1]
+    router = get_current_router()
     if context is not None:
         router["outlet_context"] = context
     return router.get("outlet")
 
 
 def Navigate(*, to, replace=False):
-    router = _ROUTER_CTX["stack"][-1]
+    router = get_current_router()
     router["history"].replace(to, None) if replace else router["history"].push(to, None)
+    router["location"] = router["history"].location
     return useRoutes(router["routes"])
-
-
-def createRoutesFromChildren(children, parent_id: str = ""):
-    routes = []
-    items = children if isinstance(children, (list, tuple)) else [children]
-    for index, child in enumerate(items):
-        if child is None:
-            continue
-        route_id = f"{parent_id}-{index}" if parent_id else str(index)
-        route_children = child.props.get("children", [])
-        if isinstance(route_children, RenderableNode):
-            route_children = [route_children]
-        route = RouteObject(
-            id=route_id,
-            path=child.props.get("path"),
-            element=child.props.get("element"),
-            children=createRoutesFromChildren(route_children, route_id) if route_children else [],
-        )
-        routes.append(route)
-    return routes
-
-
-createRoutesFromElements = createRoutesFromChildren
-
-
-def mapRouteProperties(route):
-    updates = {
-        "Component": None,
-        "HydrateFallback": None,
-        "ErrorBoundary": None,
-        "hasErrorBoundary": route.ErrorBoundary is not None,
-        "element": createElement(route.Component) if route.Component else route.element,
-        "hydrateFallbackElement": createElement(route.HydrateFallback) if route.HydrateFallback else None,
-        "errorElement": createElement(route.ErrorBoundary) if route.ErrorBoundary else None,
-    }
-    return updates
-
-
-hydrationRouteProperties = ["HydrateFallback", "hydrateFallbackElement"]
-
-
-def convertRoutesToDataRoutes(routes, map_fn, manifest=None, allowInPlaceMutations=False, parent_id: str = ""):
-    manifest = manifest if manifest is not None else {}
-    result = []
-    seen = set()
-    for index, route in enumerate(routes):
-        next_id = route.id or (f"{parent_id}-{index}" if parent_id else str(index))
-        if next_id in seen:
-            raise ValueError(f'Found a route id collision on id "{next_id}"')
-        seen.add(next_id)
-        current = route if allowInPlaceMutations else dc_replace(route)
-        current.id = next_id
-        for key, value in map_fn(current).items():
-            setattr(current, key, value)
-        current.children = convertRoutesToDataRoutes(current.children, map_fn, manifest, allowInPlaceMutations, next_id) if current.children else []
-        manifest[next_id] = current
-        result.append(current)
-    return result
-
-
-def matchRoutesImpl(routes, location, basename="/", allowPartial=False):
-    pathname = location["pathname"] if isinstance(location, dict) else location.pathname
-    best = None
-    for route in routes:
-        path = route.path or ""
-        full_path = path if path.startswith("/") else joinPaths([basename, path])
-        match = matchPath(full_path, pathname)
-        if match is None and allowPartial:
-            regex, _ = compilePath(full_path)
-            partial_pattern = re.compile(regex.pattern[:-1] + r"(?:/.*)?$")
-            partial = partial_pattern.match(pathname)
-            if partial:
-                params = partial.groupdict()
-                if "splat" in params:
-                    params["*"] = params.pop("splat")
-                consumed = partial.group(0).split("/", maxsplit=4)
-                match = {
-                    "params": params,
-                    "pathname": pathname,
-                    "pathnameBase": "/" + "/".join(segment for segment in pathname.split("/")[: len([s for s in full_path.split('/') if s])] if segment),
-                }
-        if match or (allowPartial and pathname.startswith(full_path)):
-            route_match = SimpleNamespace(
-                route=route,
-                pathname=pathname,
-                pathnameBase=(match or {}).get("pathnameBase", pathname),
-                params=(match or {}).get("params", {}),
-            )
-            if route.children:
-                child = matchRoutesImpl(route.children, location, full_path, allowPartial)
-                candidate = [route_match] + (child or [])
-            else:
-                candidate = [route_match]
-            score = len(full_path or "")
-            if best is None or score > best[0]:
-                best = (score, candidate)
-    return best[1] if best else None
-
-
-def matchRoutes(routes, location):
-    return matchRoutesImpl(routes, location, "/", True)
-
-
-def getPathContributingMatches(matches):
-    return [match for match in matches if getattr(match.route, "path", None) is not None]
-
-
-def getResolveToMatches(matches):
-    return [match.pathnameBase for match in getPathContributingMatches(matches)]
-
-
-def getRoutePattern(matches):
-    return matches[-1].route.path if matches else ""
-
-
-def convertRouteMatchToUiMatch(match, loader_data):
-    return SimpleNamespace(
-        id=match.route.id,
-        pathname=match.pathname,
-        params=match.params,
-        loaderData=loader_data.get(match.route.id),
-        handle=match.route.handle,
-    )
 
 
 def isUnsupportedLazyRouteObjectKey(key):
@@ -229,55 +122,6 @@ def createMemoryHistory(options):
     return _MemoryHistory(options)
 
 
-def _match_element(route, pathname):
-    base = route.path or ""
-    if base == "/" and pathname == "/":
-        return route.element
-    match = matchPath(base if base.startswith("/") else "/" + base, pathname) if base else {"params": {}}
-    if match is None:
-        return None
-    if route.children:
-        for child in route.children:
-            child_element = _match_element(child, pathname)
-            if child_element is not None:
-                parent = route.element
-                if isinstance(parent, RenderableNode) and getattr(parent.type, "__name__", "") == "_layout_with_context":
-                    _ROUTER_CTX["stack"][-1]["outlet_context"] = "dashboard"
-                _ROUTER_CTX["stack"][-1]["params"] = match["params"] | getattr(child_element, "_params", {})
-                _ROUTER_CTX["stack"][-1]["outlet"] = child_element
-                return parent
-        return route.element
-    element = route.element
-    if element is not None:
-        setattr(element, "_params", match["params"])
-    return element
-
-
-def _render_match_chain(matches):
-    router = _ROUTER_CTX["stack"][-1]
-    leaf = matches[-1]
-    router["params"] = leaf.params
-    rendered = leaf.route.element
-    if len(matches) == 1:
-        return rendered
-    for match in reversed(matches[:-1]):
-        router["outlet"] = rendered
-        if getattr(getattr(match.route.element, "type", None), "__name__", "") == "Outlet":
-            continue
-        if getattr(match.route.element, "type", None) is not None:
-            rendered = match.route.element
-    return rendered
-
-
-@contextmanager
-def _push_router_context(value):
-    _ROUTER_CTX["stack"].append(value)
-    try:
-        yield
-    finally:
-        _ROUTER_CTX["stack"].pop()
-
-
 def MemoryRouter(*children, basename="", initialEntries=None):
     history = createMemoryHistory({"initialEntries": initialEntries or ["/"]})
     if basename:
@@ -300,32 +144,32 @@ def MemoryRouter(*children, basename="", initialEntries=None):
         "outlet_context": None,
         "outlet": None,
     }
-    with _push_router_context(context):
+    with push_router_context(context):
         rendered = useRoutes(routes) if routes else (children[0] if children else None)
     return createElement("__router_provider__", rendered, internal_router_context=context)
 
 
 def useLocation():
-    router = _ROUTER_CTX["stack"][-1]
+    router = get_current_router()
     return router.get("location") or router["history"].location
 
 
 def useNavigationType():
-    return _ROUTER_CTX["stack"][-1].get("navigation_type", NavigationType.POP).value
+    return get_current_router().get("navigation_type", NavigationType.POP).value
 
 
 def useHref(to):
-    router = _ROUTER_CTX["stack"][-1]
+    router = get_current_router()
     base = router.get("basename", "")
     return prependBasename(basename=base, pathname=to) if base else to
 
 
 def useParams():
-    return _ROUTER_CTX["stack"][-1].get("params", {})
+    return get_current_router().get("params", {})
 
 
 def useOutletContext():
-    return _ROUTER_CTX["stack"][-1].get("outlet_context")
+    return get_current_router().get("outlet_context")
 
 
 def useMatch(path):
@@ -338,7 +182,7 @@ def useResolvedPath(to, options=None):
     relative = (options or {}).get("relative", "route")
     if relative == "path":
         return resolvePath(to, location.pathname)
-    matches = _ROUTER_CTX["stack"][-1].get("matches", [])
+    matches = get_current_router().get("matches", [])
     base = matches[-2].pathnameBase if len(matches) > 1 else "/"
     return resolvePath(to, base)
 
@@ -348,12 +192,12 @@ def useRoutes(routes):
     matches = matchRoutes(routes, {"pathname": pathname}) or []
     if not matches:
         return None
-    _ROUTER_CTX["stack"][-1]["matches"] = matches
-    return _render_match_chain(matches)
+    get_current_router()["matches"] = matches
+    return render_match_chain(matches)
 
 
 def useNavigate():
-    history = _ROUTER_CTX["stack"][-1]["history"]
+    history = get_current_router()["history"]
     return lambda to, replace=False: history.replace(to, None) if replace else history.push(to, None)
 
 

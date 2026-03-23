@@ -19,6 +19,7 @@ def aria_example():
             "with a screen reader."
         ),
         Box(
+            Text("checkbox:"),
             Box(
                 Text("[x]" if checked else "[ ]"),
                 aria_role="checkbox",
@@ -35,4 +36,4 @@ def aria_example():
 
 
 if __name__ == "__main__":
-    render(aria_example, is_screen_reader_enabled=True).wait_until_exit()
+    render(aria_example, is_screen_reader_enabled=False).wait_until_exit()
