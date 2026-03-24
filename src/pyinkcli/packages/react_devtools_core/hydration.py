@@ -56,25 +56,28 @@ def _copy_metadata(source, target):
 
 
 def copy_with_metadata(value, metadata=None):
-    if isinstance(value, HydratedList):
-        cloned = HydratedList(copy.deepcopy(list(value)))
-        _copy_metadata(value, cloned)
-    elif isinstance(value, HydratedDict):
-        cloned = HydratedDict(copy.deepcopy(dict(value)))
-        _copy_metadata(value, cloned)
-    elif isinstance(value, list):
-        cloned = HydratedList(copy.deepcopy(value))
-    elif isinstance(value, dict):
-        cloned = HydratedDict(copy.deepcopy(dict(value)))
-        legacy = get_metadata(value)
-        if legacy is not None:
-            set_metadata(cloned, dict(legacy))
-        if value.get(INSPECTED_KEY):
-            mark_inspected(cloned, True)
-        if value.get(UNSERIALIZABLE_KEY):
-            mark_unserializable(cloned, True)
-    else:
-        cloned = copy.deepcopy(value)
+    try:
+        if isinstance(value, HydratedList):
+            cloned = HydratedList(copy.deepcopy(list(value)))
+            _copy_metadata(value, cloned)
+        elif isinstance(value, HydratedDict):
+            cloned = HydratedDict(copy.deepcopy(dict(value)))
+            _copy_metadata(value, cloned)
+        elif isinstance(value, list):
+            cloned = HydratedList(copy.deepcopy(value))
+        elif isinstance(value, dict):
+            cloned = HydratedDict(copy.deepcopy(dict(value)))
+            legacy = get_metadata(value)
+            if legacy is not None:
+                set_metadata(cloned, dict(legacy))
+            if value.get(INSPECTED_KEY):
+                mark_inspected(cloned, True)
+            if value.get(UNSERIALIZABLE_KEY):
+                mark_unserializable(cloned, True)
+        else:
+            cloned = copy.deepcopy(value)
+    except Exception:
+        cloned = value
     if metadata is not None and isinstance(cloned, (HydratedDict, HydratedList)):
         set_metadata(cloned, metadata)
     return cloned
@@ -254,25 +257,46 @@ def set_in_object(value, path, replacement):
 
 
 def delete_in_path(value, path):
+    if not path:
+        return value
     current = copy_with_metadata(value)
-    container, key = _container_and_key(current, path)
-    if isinstance(container, list):
+    try:
+        container, key = _container_and_key(current, path)
+    except Exception:
+        return current
+    if isinstance(container, list) and isinstance(key, int) and 0 <= key < len(container):
         del container[key]
+    elif isinstance(container, (dict, HydratedDict, HydratedList)):
+        if isinstance(container, HydratedList):
+            if isinstance(key, int) and 0 <= key < len(container):
+                del container[key]
+        elif isinstance(container, (dict, HydratedDict)):
+            if key in container:
+                del container[key]
+        else:
+            return current
     else:
-        del container[key]
+        return current
     return current
 
 
 def delete_path_in_object(value, path):
     mutated = delete_in_path(value, path)
-    if path == []:
+    if not path:
         return mutated
-    container, key = _container_and_key(value, path)
-    if isinstance(container, list):
-        del container[key]
-    else:
-        del container[key]
-    return value
+    try:
+        container, key = _container_and_key(value, path)
+        if isinstance(container, list) and isinstance(key, int) and 0 <= key < len(container):
+            del container[key]
+        elif isinstance(container, (dict, HydratedDict, HydratedList)):
+            if isinstance(container, HydratedList):
+                if isinstance(key, int) and 0 <= key < len(container):
+                    del container[key]
+            elif key in container:
+                del container[key]
+    except Exception:
+        return mutated
+    return mutated
 
 
 def rename_in_path(value, path, new_path):

@@ -35,6 +35,12 @@ def create_app_context_value(app=None):
 
 
 class _NullApp:
+    def _run_discrete(self, callback):
+        return None
+
+    def _rerender_current(self):
+        return None
+
     def wait_until_exit(self, timeout=None):
         return None
 
@@ -54,4 +60,4 @@ def set_app_context_value(app=None):
     AppContext.current_value = value
     return value
 
-__all__ = ["AppContext", "Props", "create_app_context_value", "set_app_context_value", "AppHandle"]
+__all__ = ["AppContext", "Props"]

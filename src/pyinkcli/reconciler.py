@@ -1090,7 +1090,7 @@ class _Reconciler:
 
                 app = useApp()
                 if app is not None:
-                    app.render(app._current_node)
+                    app._rerender_current()
             finally:
                 self._force_rerender = False
             return True
@@ -1266,7 +1266,7 @@ class _Reconciler:
 
                     app = useApp()
                     if app is not None:
-                        app.render(app._current_node)
+                        app._rerender_current()
                     return True
                 return False
             error_owner = next((info for info in entry.get("ownerInfos", []) if info.get("isErrorBoundary")), None)
