@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..component import createElement
+from ..colorize import colorize
 
 ANSI_OPEN = {
     "black": "\x1b[30m",
@@ -37,13 +38,11 @@ def _transform_text(text: str, props: dict) -> str:
         prefixes.append("\x1b[4m")
         suffixes.insert(0, "\x1b[24m")
     color = props.get("color")
-    if color in ANSI_OPEN:
-        prefixes.append(ANSI_OPEN[color])
-        suffixes.append("\x1b[39m")
+    if isinstance(color, str):
+        output = colorize(output, color, "foreground")
     background = props.get("backgroundColor")
-    if background in ANSI_BG_OPEN:
-        prefixes.append(ANSI_BG_OPEN[background])
-        suffixes.append("\x1b[49m")
+    if isinstance(background, str):
+        output = colorize(output, background, "background")
     return "".join(prefixes) + output + "".join(suffixes)
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import codecs
+import concurrent.futures
 import contextlib
 import os
 from collections.abc import Callable
@@ -51,7 +52,12 @@ class TerminalSession:
 
     def set_raw_mode(self, enabled: bool) -> None:
         if self._loop_thread is not None:
-            self._loop_thread.submit(self._set_raw_mode_on_loop, enabled).result(timeout=1.0)
+            future = self._loop_thread.submit(self._set_raw_mode_on_loop, enabled)
+            try:
+                future.result(timeout=1.0)
+            except concurrent.futures.TimeoutError:
+                # Avoid deadlocking effect cleanup while the loop is busy handling input/render work.
+                self._loop_thread.call_soon(self._set_raw_mode_on_loop, enabled)
 
     def set_bracketed_paste_mode(self, enabled: bool) -> None:
         if self._loop_thread is not None:

@@ -102,6 +102,36 @@ def test_box_background_with_padding_fills_padded_area():
     assert "\x1b[45m Hi       \x1b[49m" in output
 
 
+def test_box_supports_hex_background_color():
+    output = renderToString(
+        Box(
+            Text("Hi"),
+            backgroundColor="#00FF00",
+            width=4,
+            alignSelf="flex-start",
+        )
+    )
+
+    assert output.startswith("\x1b[48;2;0;255;0m")
+    assert output.endswith("\x1b[49m")
+    assert "Hi" in output
+
+
+def test_box_supports_rgb_background_color():
+    output = renderToString(
+        Box(
+            Text("Hi"),
+            backgroundColor="rgb(0, 255, 0)",
+            width=4,
+            alignSelf="flex-start",
+        )
+    )
+
+    assert output.startswith("\x1b[48;2;0;255;0m")
+    assert output.endswith("\x1b[49m")
+    assert "Hi" in output
+
+
 class _TTYStringIO(io.StringIO):
     def isatty(self) -> bool:
         return True

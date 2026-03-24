@@ -5,6 +5,7 @@ import contextlib
 import os
 import signal
 import threading
+import traceback
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
@@ -399,7 +400,9 @@ class Ink:
                 self._exit_manager.set_error(None)
             except Exception as error:  # noqa: BLE001
                 self._exit_manager.set_error(error)
-                self._rendered_output = f"ERROR\n{error}"
+                self._rendered_output = "ERROR\n" + "".join(
+                    traceback.format_exception(type(error), error, error.__traceback__)
+                ).rstrip()
                 self._output_driver.render_frame(self._rendered_output, force_clear=True)
             finally:
                 if self._pending_session_exit_result is not None and self._session is not None:

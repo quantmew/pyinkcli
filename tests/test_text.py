@@ -56,6 +56,30 @@ def test_text_accepts_camel_case_background_color():
     assert output == "\x1b[41mHello\x1b[49m"
 
 
+def test_text_supports_hex_color():
+    """Test Text with hex color."""
+    output = renderToString(Text("Hello", color="#FF8800"))
+    assert output == "\x1b[38;2;255;136;0mHello\x1b[39m"
+
+
+def test_text_supports_rgb_color():
+    """Test Text with rgb color."""
+    output = renderToString(Text("Hello", color="rgb(255, 136, 0)"))
+    assert output == "\x1b[38;2;255;136;0mHello\x1b[39m"
+
+
+def test_text_supports_hex_background_color():
+    """Test Text with hex backgroundColor."""
+    output = renderToString(Text("Hello", backgroundColor="#00FF00"))
+    assert output == "\x1b[48;2;0;255;0mHello\x1b[49m"
+
+
+def test_text_supports_rgb_background_color():
+    """Test Text with rgb backgroundColor."""
+    output = renderToString(Text("Hello", backgroundColor="rgb(0, 255, 0)"))
+    assert output == "\x1b[48;2;0;255;0mHello\x1b[49m"
+
+
 def test_text_accepts_camel_case_dim_color():
     """Test Text with JS-style dimColor prop."""
     output = renderToString(Text("Hello", dimColor=True))

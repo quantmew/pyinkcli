@@ -9,6 +9,7 @@ from typing import Any
 import yoga
 
 from .components.Text import ANSI_BG_OPEN, ANSI_OPEN
+from .colorize import color_sequence
 from .output import Output, _style_category
 from .squash_text_nodes import squashTextNodes
 from .utils.cli_boxes import get_box_style
@@ -148,6 +149,8 @@ def _edge_values(style: dict[str, Any], prefix: str) -> dict[int, int]:
 def _background_sequence(name: str | None) -> str | None:
     if not name:
         return None
+    if (sequence := color_sequence(name, "background")) is not None:
+        return sequence
     return ANSI_BG_OPEN.get(name)
 
 
