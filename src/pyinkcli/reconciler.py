@@ -375,30 +375,35 @@ class _Reconciler:
                 if existing_component_id is not None and existing_component_id != component_id:
                     self._invoke_component_will_unmount(existing)
                     existing = None
-                result = self._reconcile_node(existing, rendered, instance_id)
-                if result is not None and getattr(rendered, "_suspended_by", None):
-                    result._suspended_by = rendered._suspended_by
-                if result is not None and callable(vnode.type):
-                    result._component_type = vnode.type
-                    component_props_id = component_id if component_id is not None else ""
-                    result._component_props = _safe_copy(self._devtools_prop_overrides.get(component_props_id, vnode.props))
-                if getattr(result, "_component_instance_id", None) is None:
-                    result._component_instance_id = component_id
-                if getattr(result, "_class_instance", None) is None and getattr(rendered, "_class_instance", None) is not None:
-                    result._class_instance = rendered._class_instance
-                owner_infos = list(getattr(result, "_owner_infos", []))
-                owner_infos.insert(
-                    0,
-                    self._make_owner_info(
-                        vnode.type,
-                        component_id,
-                        result._component_props,
-                        class_instance=getattr(rendered, "_class_instance", None),
-                    ),
-                )
-                result._owner_infos = owner_infos
-                if getattr(rendered, "_suspended_by", None):
-                    result._suspended_by = rendered._suspended_by
+            result = self._reconcile_node(existing, rendered, instance_id)
+            if result is None:
+                return None
+            if getattr(rendered, "_suspended_by", None):
+                result._suspended_by = rendered._suspended_by
+            if callable(vnode.type):
+                result._component_type = vnode.type
+                component_props_id = component_id if component_id is not None else ""
+                component_props = self._devtools_prop_overrides.get(component_props_id, vnode.props)
+                result._component_props = _safe_copy(component_props)
+            if getattr(result, "_component_props", None) is None:
+                result._component_props = _safe_copy(vnode.props)
+            if getattr(result, "_component_instance_id", None) is None:
+                result._component_instance_id = component_id
+            if getattr(result, "_class_instance", None) is None and getattr(rendered, "_class_instance", None) is not None:
+                result._class_instance = rendered._class_instance
+            owner_infos = list(getattr(result, "_owner_infos", []))
+            owner_infos.insert(
+                0,
+                self._make_owner_info(
+                    vnode.type,
+                    component_id,
+                    result._component_props,
+                    class_instance=getattr(rendered, "_class_instance", None),
+                ),
+            )
+            result._owner_infos = owner_infos
+            if getattr(rendered, "_suspended_by", None):
+                result._suspended_by = rendered._suspended_by
             return result
         if isinstance(vnode.type, str):
             parent = getattr(existing, "parentNode", None)

@@ -31,6 +31,14 @@ def performWorkOnRoot(root, lanes: int) -> None:
     root._reconciler.flush_scheduled_updates(root.container, selected, lanes=selected, consume_all=False)
 
 
+def mergeLanes(a: int, b: int) -> int:
+    return a | b
+
+
+def removeLanes(a: int, b: int) -> int:
+    return a & ~b
+
+
 def getWorkInProgressRoot():
     return _work_in_progress_root
 
