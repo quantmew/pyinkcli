@@ -17,8 +17,9 @@ from .hooks._runtime import _clear_hook_state, _set_rerender_callback, _set_sche
 from .hooks.use_app import _set_current_app
 from .hooks.use_input import _clear_input_handlers
 from .hooks.use_paste import _clear_paste_handlers, _dispatch_paste
-from .hooks.use_stderr import _set_stderr_handle, _StderrHandle
-from .hooks.use_stdout import _set_stdout_handle, _StdoutHandle
+from .hooks.use_stdin import _set_stdin
+from .hooks.use_stderr import _set_stderr_handle
+from .hooks.use_stdout import _set_stdout_handle
 from .hooks.use_window_size import _set_window_size
 from .instances import delete_instance
 from .packages.react_reconciler.ReactFiberWorkLoop import flushPendingEffects
@@ -77,8 +78,6 @@ class Ink:
         self._scheduler: RenderScheduler | None = None
         self._session: TerminalSession | None = None
         self._exit_manager = ExitManager()
-        self._input_interest_count = 0
-        self._paste_interest_count = 0
         self._pending_session_exit_result: Any | None = None
         self._console_patch = ConsolePatch(self._write_to_stdout, self._write_to_stderr, self.stdout, self.stderr)
         self._previous_sigint_handler = None
@@ -111,12 +110,9 @@ class Ink:
         _set_schedule_update_callback(lambda fiber, priority: self._schedule_render(priority))
         _set_renderer_rerender(self._rerender_current)
 
-        stdout_handle = _StdoutHandle(self.stdout)
-        stderr_handle = _StderrHandle(self.stderr)
-        stdout_handle.bind_overlay_writer(self._write_to_stdout)
-        stderr_handle.bind_overlay_writer(self._write_to_stderr)
-        _set_stdout_handle(stdout_handle)
-        _set_stderr_handle(stderr_handle)
+        _set_stdin(handle=self._runtime_contexts["stdin"])
+        _set_stdout_handle(self._runtime_contexts["stdout"])
+        _set_stderr_handle(self._runtime_contexts["stderr"])
 
         _set_window_size(
             initial_width,
@@ -139,10 +135,13 @@ class Ink:
                 max_fps=options.max_fps,
             )
             self._session = TerminalSession(self.stdin, self.stdout, self._loop_thread)
+            self._runtime_contexts["stdin"].bind_runtime(
+                session=self._session,
+                loop_thread=self._loop_thread,
+                on_exit=self.exit,
+            )
             self._session.on_input(self._on_session_input)
-            self._session.on_paste(self._on_session_paste)
             self._session.start()
-            self._session.set_raw_mode(True)
 
         if options.alternate_screen and options.interactive:
             self._write_stream(self.stdout, enter_alternative_screen() + hide_cursor_escape)
@@ -165,11 +164,7 @@ class Ink:
         raw_node = createElement(node) if callable(node) and not getattr(node, "type", None) else node
         self._current_node = create_app_tree(
             raw_node,
-            app=self,
-            stdin=self.stdin,
-            stdout=self.stdout,
-            stderr=self.stderr,
-            interactive=self.options.interactive,
+            contexts=self._runtime_contexts,
         )
         self._reconciler._force_rerender = True
         try:
@@ -433,41 +428,7 @@ class Ink:
         self._schedule_render("discrete")
 
     def _on_session_input(self, value: str) -> None:
-        from .hooks.use_input import _dispatch_input
-
-        if value == "\x03":
-            self.exit()
-            return
-        _dispatch_input(value)
-
-    def _on_session_paste(self, value: str) -> None:
-        _dispatch_paste(value)
-
-    def _register_input_interest(self) -> None:
-        self._input_interest_count += 1
-        if self._session is not None:
-            self._session.set_raw_mode(True)
-
-    def _unregister_input_interest(self) -> None:
-        if self._input_interest_count == 0:
-            return
-        self._input_interest_count -= 1
-        if self._session is not None:
-            self._session.set_raw_mode(False)
-
-    def _register_paste_interest(self) -> None:
-        self._paste_interest_count += 1
-        if self._session is not None:
-            self._session.set_raw_mode(True)
-            self._session.set_bracketed_paste_mode(True)
-
-    def _unregister_paste_interest(self) -> None:
-        if self._paste_interest_count == 0:
-            return
-        self._paste_interest_count -= 1
-        if self._session is not None:
-            self._session.set_bracketed_paste_mode(False)
-            self._session.set_raw_mode(False)
+        self._runtime_contexts["stdin"].process_input_chunk(value)
 
 
 

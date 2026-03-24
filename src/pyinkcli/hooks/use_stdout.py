@@ -4,9 +4,11 @@ from ..sanitize_ansi import sanitizeAnsi
 
 
 class _StdoutHandle:
-    def __init__(self, stream) -> None:
+    def __init__(self, stream, *, write=None) -> None:
         self.stream = stream
+        self.stdout = stream
         self._overlay_writer = None
+        self._write = write
         self.columns = getattr(stream, "columns", 80)
         self.rows = getattr(stream, "rows", 24)
 
@@ -15,6 +17,9 @@ class _StdoutHandle:
 
     def write(self, data: str) -> None:
         payload = sanitizeAnsi(data)
+        if self._write is not None:
+            self._write(payload)
+            return
         if self._overlay_writer is not None:
             self._overlay_writer(payload)
             return
@@ -29,11 +34,16 @@ _stdout_handle = None
 
 def _set_stdout_handle(handle) -> None:
     global _stdout_handle
+    from ..components.StdoutContext import StdoutContext
+
     _stdout_handle = handle
+    StdoutContext.current_value = handle
 
 
 def useStdout():
-    return _stdout_handle
+    from ..components.StdoutContext import StdoutContext
+
+    return StdoutContext.current_value
 
 
 __all__ = ["useStdout", "_StdoutHandle", "_set_stdout_handle"]

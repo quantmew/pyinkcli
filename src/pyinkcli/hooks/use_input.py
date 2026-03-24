@@ -1,52 +1,60 @@
 from __future__ import annotations
 
 from ..parse_keypress import Key, parseKeypress
-from ._runtime import useEffect, useRef
+from ._runtime import useLayoutEffect, useRef
 from .use_app import useApp
-from .use_stdin import useStdin
-
-_input_handlers: dict[str, object] = {}
-
+from .use_stdin import useStdinContext
 
 def _dispatch_input(value: str) -> None:
-    key = parseKeypress(value)
-    app = useApp()
-    if app is not None:
-        app._run_discrete(lambda: [handler(value, key) for handler in list(_input_handlers.values())])
-        return
-    for handler in list(_input_handlers.values()):
-        handler(value, key)
+    useStdinContext().internal_eventEmitter.emit("input", value)
 
 
 def _clear_input_handlers() -> None:
-    _input_handlers.clear()
-    useStdin().clear("input")
+    useStdinContext().internal_eventEmitter.clear("input")
 
 
-def useInput(handler) -> None:
+def useInput(handler, *, is_active: bool = True, isActive: bool | None = None) -> None:
     handler_ref = useRef(handler)
     handler_ref.current = handler
     app = useApp()
-    stdin = useStdin()
+    stdin = useStdinContext()
+    active = is_active if isActive is None else bool(isActive)
 
-    def effect():
-        component_key = str(id(handler_ref))
-        _input_handlers[component_key] = lambda input_char, key: handler_ref.current(input_char, key)
-        stdin.on("input", _input_handlers[component_key])
-        if app is not None:
-            app._register_input_interest()
+    def manage_raw_mode():
+        if not active:
+            return None
+        stdin.setRawMode(True)
 
         def cleanup():
-            _input_handlers.pop(component_key, None)
-            stdin.clear("input")
-            for existing in list(_input_handlers.values()):
-                stdin.on("input", existing)
-            if app is not None:
-                app._unregister_input_interest()
+            stdin.setRawMode(False)
 
         return cleanup
 
-    useEffect(effect, ())
+    useLayoutEffect(manage_raw_mode, (active,))
+
+    def effect():
+        if not active:
+            return None
+
+        def handle_data(value: str) -> None:
+            keypress = parseKeypress(value)
+            key = keypress
+            input_value = keypress.name if keypress.ctrl else keypress.sequence
+            if input_value == "c" and key.ctrl and stdin.internal_exitOnCtrlC:
+                return
+            if app is not None:
+                app._run_discrete(lambda: handler_ref.current(input_value, key))
+            else:
+                handler_ref.current(input_value, key)
+
+        stdin.internal_eventEmitter.on("input", handle_data)
+
+        def cleanup():
+            stdin.internal_eventEmitter.off("input", handle_data)
+
+        return cleanup
+
+    useLayoutEffect(effect, (active,))
 
 
 __all__ = ["Key", "useInput", "_clear_input_handlers", "_dispatch_input"]

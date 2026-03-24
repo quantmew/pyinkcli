@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..packages.react_context import createContext
+
 Props = dict
 
 
@@ -28,13 +30,28 @@ class AppHandle:
 
 def create_app_context_value(app=None):
     if app is None:
-        return {
-            "exit": lambda error_or_result=None: None,
-            "waitUntilRenderFlush": lambda timeout=None: None,
-        }
+        return AppHandle(_NullApp())
     return AppHandle(app)
 
 
-AppContext = create_app_context_value()
+class _NullApp:
+    def wait_until_exit(self, timeout=None):
+        return None
 
-__all__ = ["AppContext", "Props"]
+    def wait_until_render_flush(self, timeout=None):
+        return None
+
+    def exit(self, error_or_result=None):
+        return None
+
+
+AppContext = createContext(create_app_context_value())
+AppContext.displayName = "InternalAppContext"
+
+
+def set_app_context_value(app=None):
+    value = create_app_context_value(app)
+    AppContext.current_value = value
+    return value
+
+__all__ = ["AppContext", "Props", "create_app_context_value", "set_app_context_value", "AppHandle"]

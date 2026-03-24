@@ -1,45 +1,58 @@
 from __future__ import annotations
 
-from ._runtime import useEffect, useRef
+from ._runtime import useLayoutEffect, useRef
 from .use_app import useApp
-
-_paste_handlers: dict[str, object] = {}
-
+from .use_stdin import useStdinContext
 
 def _dispatch_paste(value: str) -> None:
-    app = useApp()
-    if app is not None:
-        app._run_discrete(lambda: [handler(value) for handler in list(_paste_handlers.values())])
-        return
-    for handler in list(_paste_handlers.values()):
-        handler(value)
+    useStdinContext().internal_eventEmitter.emit("paste", value)
 
 
 def _clear_paste_handlers() -> None:
-    _paste_handlers.clear()
+    useStdinContext().internal_eventEmitter.clear("paste")
 
 
-def usePaste(handler=None):
+def usePaste(handler=None, *, is_active: bool = True, isActive: bool | None = None):
     if handler is None:
         return None
     handler_ref = useRef(handler)
     handler_ref.current = handler
     app = useApp()
+    stdin = useStdinContext()
+    active = is_active if isActive is None else bool(isActive)
 
-    def effect():
-        component_key = str(id(handler_ref))
-        _paste_handlers[component_key] = lambda value: handler_ref.current(value)
-        if app is not None:
-            app._register_paste_interest()
+    def manage_terminal_modes():
+        if not active:
+            return None
+        stdin.setRawMode(True)
+        stdin.setBracketedPasteMode(True)
 
         def cleanup():
-            _paste_handlers.pop(component_key, None)
-            if app is not None:
-                app._unregister_paste_interest()
+            stdin.setRawMode(False)
+            stdin.setBracketedPasteMode(False)
 
         return cleanup
 
-    useEffect(effect, ())
+    useLayoutEffect(manage_terminal_modes, (active,))
+
+    def effect():
+        if not active:
+            return None
+
+        def handle_paste(value: str) -> None:
+            if app is not None:
+                app._run_discrete(lambda: handler_ref.current(value))
+            else:
+                handler_ref.current(value)
+
+        stdin.internal_eventEmitter.on("paste", handle_paste)
+
+        def cleanup():
+            stdin.internal_eventEmitter.off("paste", handle_paste)
+
+        return cleanup
+
+    useLayoutEffect(effect, (active,))
     return handler
 
 
