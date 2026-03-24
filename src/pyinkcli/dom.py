@@ -13,8 +13,8 @@ class DOMNodeAttribute:
 @dataclass
 class DOMNode:
     nodeName: str
-    childNodes: list["DOMNode"] = field(default_factory=list)
-    parentNode: "DOMNode | None" = None
+    childNodes: list[DOMNode] = field(default_factory=list)
+    parentNode: DOMNode | None = None
     attributes: dict[str, Any] = field(default_factory=dict)
     style: dict[str, Any] = field(default_factory=dict)
     internal_layoutListeners: list[Any] = field(default_factory=list)

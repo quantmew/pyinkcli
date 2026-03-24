@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from ...hooks import _runtime as hooks_runtime
-from .ReactFiberBeginWork import _mark_received_update
 from . import ReactFiberNewContext as new_context
+from .ReactFiberBeginWork import _mark_received_update
 from .ReactSharedInternals import shared_internals
 
 HooksDispatcherOnMount = object()

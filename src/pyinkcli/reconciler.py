@@ -6,24 +6,21 @@ import json
 import math
 import re
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import SimpleNamespace
+from typing import Any, cast
 
-from .component import RenderableNode
 from ._component_runtime import _Component
+from .component import RenderableNode
 from .dom import (
-    addLayoutListener,
-    appendChildNode,
     createNode,
     createTextNode,
     emitLayoutListeners,
-    removeChildNode,
     setAttribute,
     setTextNodeValue,
 )
 from .hooks import _runtime as hooks_runtime
-from .packages import react
-from .packages import react_router
+from .packages import react, react_router
 from .suspense_runtime import SuspendSignal
 
 
@@ -50,15 +47,17 @@ def consumePendingRerenderPriority():
 class _Container:
     root: object
     tag: int = 0
-    current_vnode: object = None
+    current_vnode: object | None = None
     scheduled_timer: threading.Timer | None = None
-    pending_vnode: object = None
-    render_state: object = None
+    pending_vnode: object | None = None
+    render_state: Any | None = None
+    force_rerender: bool = False
     pending_work_version: int = 0
+    _last_deletions: list[object] = field(default_factory=list)
 
 
 class _ClassComponentUpdater:
-    def __init__(self, reconciler: "_Reconciler", component_id: str) -> None:
+    def __init__(self, reconciler: _Reconciler, component_id: str) -> None:
         self._reconciler = reconciler
         self._component_id = component_id
 
@@ -90,24 +89,24 @@ class _ClassComponentUpdater:
 class _Reconciler:
     def __init__(self, root_node) -> None:
         self.root_node = root_node
-        self._commit_handlers = {"on_commit": None, "on_immediate_commit": None}
+        self._commit_handlers: dict[str, Any] = {"on_commit": None, "on_immediate_commit": None}
         self._root_fiber = SimpleNamespace(child=None)
-        self._last_prepared_commit = None
-        self._last_root_completion_state = None
+        self._last_prepared_commit: SimpleNamespace | None = None
+        self._last_root_completion_state: SimpleNamespace | None = None
         self._last_root_commit_suspended = None
-        self._devtools_prop_overrides = {}
-        self._devtools_state_overrides = {}
-        self._forced_suspense_ids = set()
-        self._forced_error_ids = set()
-        self._forced_error_state = {}
-        self._class_instances = {}
-        self._class_dirty = set()
-        self._pending_class_mounts = []
-        self._pending_class_updates = []
-        self._pending_errors = []
-        self._owner_source_cache = {}
+        self._devtools_prop_overrides: dict[str, Any] = {}
+        self._devtools_state_overrides: dict[str, dict[str, Any]] = {}
+        self._forced_suspense_ids: set[str] = set()
+        self._forced_error_ids: set[str] = set()
+        self._forced_error_state: dict[str, Any] = {}
+        self._class_instances: dict[str, _Component] = {}
+        self._class_dirty: set[str] = set()
+        self._pending_class_mounts: list[Any] = []
+        self._pending_class_updates: list[Any] = []
+        self._pending_errors: list[Exception] = []
+        self._owner_source_cache: dict[str, Any] = {}
 
-    def create_container(self, root_node, tag: int = 0):
+    def create_container(self, root_node, tag: int = 0) -> _Container:
         container = _Container(root=root_node, tag=tag)
         container._last_deletions = []
         return container
@@ -227,7 +226,7 @@ class _Reconciler:
             effective_props = _safe_copy(self._devtools_prop_overrides.get(owner_id, vnode.props))
             effective_props.setdefault("children", vnode.children if len(vnode.children) != 1 else vnode.children[0])
             instance = self._class_instances.get(owner_id)
-            is_new = instance is None or not isinstance(instance, vnode.type)
+            is_new = True if instance is None else not isinstance(instance, vnode.type)
             prev_props = {}
             prev_state = {}
             if is_new:
@@ -235,8 +234,10 @@ class _Reconciler:
                 instance.updater = _ClassComponentUpdater(self, owner_id)
                 self._class_instances[owner_id] = instance
             else:
+                assert instance is not None
                 prev_props = _safe_copy(getattr(instance, "_committed_props", instance.props))
                 prev_state = _safe_copy(getattr(instance, "_committed_state", instance.state))
+            instance = cast(Any, instance)
             instance.props = effective_props
             if owner_id in self._devtools_state_overrides:
                 instance.state = _safe_copy(self._devtools_state_overrides[owner_id])
@@ -374,12 +375,13 @@ class _Reconciler:
                 if existing_component_id is not None and existing_component_id != component_id:
                     self._invoke_component_will_unmount(existing)
                     existing = None
-            result = self._reconcile_node(existing, rendered, instance_id)
-            if result is not None and getattr(rendered, "_suspended_by", None):
-                result._suspended_by = rendered._suspended_by
-            if result is not None and callable(vnode.type):
-                result._component_type = vnode.type
-                result._component_props = _safe_copy(self._devtools_prop_overrides.get(component_id, vnode.props))
+                result = self._reconcile_node(existing, rendered, instance_id)
+                if result is not None and getattr(rendered, "_suspended_by", None):
+                    result._suspended_by = rendered._suspended_by
+                if result is not None and callable(vnode.type):
+                    result._component_type = vnode.type
+                    component_props_id = component_id if component_id is not None else ""
+                    result._component_props = _safe_copy(self._devtools_prop_overrides.get(component_props_id, vnode.props))
                 if getattr(result, "_component_instance_id", None) is None:
                     result._component_instance_id = component_id
                 if getattr(result, "_class_instance", None) is None and getattr(rendered, "_class_instance", None) is not None:
@@ -440,7 +442,7 @@ class _Reconciler:
             else:
                 normalized.append(child)
         keyed_existing = {}
-        for index, child in enumerate(parent.childNodes):
+        for _index, child in enumerate(parent.childNodes):
             key = getattr(child, "key", None)
             if key is not None:
                 keyed_existing[key] = child
@@ -469,7 +471,7 @@ class _Reconciler:
         parent.childNodes = [child for child in next_children if child is not None]
         for child in parent.childNodes:
             child.parentNode = parent
-        setattr(parent, "deletions", deletions)
+        parent.deletions = deletions
 
     def _queue_passive_unmount(self, node) -> None:
         component_id = getattr(node, "_component_instance_id", None)
@@ -508,14 +510,14 @@ class _Reconciler:
         updates = list(self._pending_class_updates)
         self._pending_class_mounts.clear()
         self._pending_class_updates.clear()
-        for component_id, instance in mounts:
+        for _component_id, instance in mounts:
             instance._committed_props = _safe_copy(instance.props)
             instance._committed_state = _safe_copy(instance.state)
             try:
                 instance.componentDidMount()
             except Exception as error:  # noqa: BLE001
                 self._pending_errors.append(error)
-        for component_id, instance, prev_props, prev_state in updates:
+        for _component_id, instance, prev_props, prev_state in updates:
             try:
                 instance.componentDidUpdate(prev_props, prev_state)
             except Exception as error:  # noqa: BLE001
@@ -561,7 +563,6 @@ class _Reconciler:
         }
 
     def injectIntoDevTools(self) -> bool:
-        from builtins import __dict__ as builtins_dict
         from .packages.react_devtools_core.backend import initializeBackend
         from .packages.react_devtools_core.hydration import (
             delete_path_in_object,
@@ -582,13 +583,13 @@ class _Reconciler:
         scope = installDevtoolsWindowPolyfill()
         renderer_id = id(self)
         scope["__INK_DEVTOOLS_RENDERERS__"][renderer_id] = self
-        nodes = []
-        id_map = {}
-        host_instance_map = {}
-        inspect_cache = {}
-        backend_notification_log = []
-        stored_globals = {}
-        backend_state = {
+        nodes: list[dict[str, Any]] = []
+        id_map: dict[int | str, Any] = {}
+        host_instance_map: dict[int, int | str] = {}
+        inspect_cache: dict[int | str, str] = {}
+        backend_notification_log: list[Any] = []
+        stored_globals: dict[str, Any] = {}
+        backend_state: dict[str, Any] = {
             "lastNotification": None,
             "lastSelectedElementID": None,
             "lastSelectedRendererID": None,
@@ -679,7 +680,7 @@ class _Reconciler:
                     values = [serialize(item, path + [index]) for index, item in enumerate(current)]
                     if wrap_root or path != base_path:
                         return {
-                            **{index: value for index, value in enumerate(values)},
+                            **dict(enumerate(values)),
                             "type": "array",
                             "preview_short": "{…}",
                             "preview_long": "{…}",
@@ -698,7 +699,7 @@ class _Reconciler:
                             "inspectable": True,
                             "size": len(current),
                         }
-                        for key, value in current.items():
+                        for _key, value in current.items():
                             if isinstance(value, (str, int, float, bool, type(None))):
                                 continue
                             if isinstance(value, dict):
@@ -983,12 +984,7 @@ class _Reconciler:
                         data[key] = child["data"]
                         cleaned.extend(child["cleaned"])
                         unserializable.extend(child["unserializable"])
-                    elif isinstance(item, dict):
-                        child = dehydrate_shell(item, base_path + [key])
-                        data[key] = child["data"]
-                        cleaned.extend(child["cleaned"])
-                        unserializable.extend(child["unserializable"])
-                    elif isinstance(item, list):
+                    elif isinstance(item, (dict, list)):
                         child = dehydrate_shell(item, base_path + [key])
                         data[key] = child["data"]
                         cleaned.extend(child["cleaned"])
@@ -1002,25 +998,23 @@ class _Reconciler:
             if isinstance(value, list):
                 cleaned = []
                 unserializable = []
-                data = []
+                list_data: list[Any] = []
                 for index, item in enumerate(value):
                     if isinstance(item, (dict, list)):
                         child = dehydrate_shell(item, base_path + [index])
                     else:
                         child = dehydrate(item, base_path + [index], wrap_root=True)
-                    data.append(child["data"])
+                    list_data.append(child["data"])
                     cleaned.extend(child["cleaned"])
                     unserializable.extend(child["unserializable"])
-                return {"data": data, "cleaned": cleaned, "unserializable": unserializable}
+                return {"data": list_data, "cleaned": cleaned, "unserializable": unserializable}
             return dehydrate(value, base_path, wrap_root=True)
 
         def inspect_target(entry, path):
             raw = get_raw_data(entry)
             def access(current, parts):
                 for part in parts:
-                    if isinstance(current, dict):
-                        current = current[part]
-                    elif isinstance(current, (list, tuple)):
+                    if isinstance(current, (dict, list, tuple)):
                         current = current[part]
                     else:
                         current = getattr(current, part)
@@ -1044,13 +1038,7 @@ class _Reconciler:
                 return {"type": "full-data", "value": value}
             root_key = path[0]
             root_value = raw.get(root_key)
-            if root_key == "props":
-                target = root_value if len(path) == 1 else access(root_value, path[1:])
-            elif root_key == "state":
-                target = root_value if len(path) == 1 else access(root_value, path[1:])
-            elif root_key == "hooks":
-                target = root_value if len(path) == 1 else access(root_value, path[1:])
-            elif root_key == "suspendedBy":
+            if root_key == "props" or root_key == "state" or root_key == "hooks" or root_key == "suspendedBy":
                 target = root_value if len(path) == 1 else access(root_value, path[1:])
             else:
                 target = raw.get(root_key)
@@ -1060,7 +1048,7 @@ class _Reconciler:
         def inspect_element(request_id, node_id, path, force_full_data):
             build_snapshot()
             entry = id_map[node_id]
-            payload = inspect_target(entry, list(path) if path else None)
+            payload = inspect_target(entry, list(path) if path else [])
             if not path and not force_full_data:
                 signature = repr(payload)
                 if inspect_cache.get(node_id) == signature:
@@ -1074,7 +1062,7 @@ class _Reconciler:
 
         def inspect_screen(request_id, root_id, path, force_full_data):
             global_renderers = scope.get("__INK_DEVTOOLS_RENDERERS__", {})
-            suspended_by = []
+            suspended_by: list[Any] = []
             for other_renderer in global_renderers.values():
                 for node in getattr(other_renderer.root_node, "childNodes", []):
                     suspended_by.extend(getattr(node, "_suspended_by", []))
@@ -1459,7 +1447,7 @@ class _Reconciler:
         def agent_notification(method_name, payload):
             return dispatch_bridge(make_bridge_notification(method_name, payload))
 
-        renderer = {
+        renderer: dict[str, Any] = {
             "bundleType": 1,
             "rendererPackageName": "pyinkcli",
             "version": "0.1.0",
@@ -1494,7 +1482,7 @@ class _Reconciler:
             "getLastLoggedElement": lambda: last_logged_element,
             "getTrackedPath": lambda: tracked_path,
         }
-        renderer["backend"] = {
+        backend: dict[str, Any] = {
             "backendState": backend_state,
             "dispatchBridgeMessage": dispatch_bridge,
             "inspectElement": inspect_element_agent,
@@ -1516,11 +1504,7 @@ class _Reconciler:
                 {"ok": True, "failure": None, "bridgeProtocol": {"version": 2}},
                 payload.get("requestID"),
             ),
-            "logElementToConsole": lambda payload: (
-                scope.__setitem__("__INK_DEVTOOLS_LAST_LOGGED_ELEMENT__", {"id": payload["id"], "rendererID": payload["rendererID"]}),
-                log_notification("logElementToConsole", payload),
-                locals().update(),
-            ) and None,
+            "logElementToConsole": lambda payload: _log_element_to_console(payload),
             "getProfilingStatus": lambda payload: make_bridge_response(
                 "profilingStatus",
                 {"ok": True, "failure": None, "isProfiling": False},
@@ -1534,17 +1518,15 @@ class _Reconciler:
                 payload.get("requestID"),
             ),
             "getPathForElement": get_path_for_element,
-            "setTrackedPath": lambda path: globals().update() or None,
-            "stopInspectingNative": lambda host_selected: (
-                backend_state.__setitem__("lastStopInspectingHostSelected", host_selected),
-                scope.__setitem__("__INK_DEVTOOLS_STOP_INSPECTING_HOST__", host_selected),
-            ) and None,
+            "setTrackedPath": lambda path: _set_tracked_path(path),
+            "stopInspectingNative": lambda payload: _set_stop_inspecting_host(payload),
             "setPersistedSelection": lambda payload: _set_persisted_selection(payload),
             "getPersistedSelection": lambda: persisted_selection,
             "setPersistedSelectionMatch": lambda payload: _set_persisted_selection_match(payload),
             "getPersistedSelectionMatch": lambda: persisted_selection_match,
             "clearPersistedSelection": clear_persisted_selection,
         }
+        renderer["backend"] = backend
 
         def _set_persisted_selection(payload):
             nonlocal persisted_selection, tracked_path
@@ -1558,6 +1540,10 @@ class _Reconciler:
         def _set_tracked_path(path):
             nonlocal tracked_path
             tracked_path = path
+
+        def _set_stop_inspecting_host(host_selected):
+            backend_state["lastStopInspectingHostSelected"] = host_selected
+            scope["__INK_DEVTOOLS_STOP_INSPECTING_HOST__"] = host_selected
 
         def _log_element_to_console(payload):
             nonlocal last_logged_element

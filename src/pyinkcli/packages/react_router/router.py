@@ -4,7 +4,6 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 from fnmatch import fnmatch
-from types import SimpleNamespace
 from urllib.parse import urlparse
 
 
@@ -63,7 +62,7 @@ class RouteObject:
     id: str = ""
     path: str | None = None
     element: object = None
-    children: list["RouteObject"] = field(default_factory=list)
+    children: list[RouteObject] = field(default_factory=list)
     handle: object = None
     Component: object = None
     HydrateFallback: object = None
@@ -222,9 +221,9 @@ def compilePath(path: str):
         elif part.startswith(":"):
             compiled.append({"paramName": part[1:].rstrip("?")})
             if part.endswith("?"):
-                pattern += "(?P<%s>[^/]*)?" % part[1:-1]
+                pattern += f"(?P<{part[1:-1]}>[^/]*)?"
             else:
-                pattern += "(?P<%s>[^/]+)" % part[1:]
+                pattern += f"(?P<{part[1:]}>[^/]+)"
         else:
             pattern += re.escape(part)
     pattern += "$"

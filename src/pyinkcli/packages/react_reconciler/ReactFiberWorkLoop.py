@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .ReactEventPriorities import DefaultEventPriority
-from .ReactFiberLane import DefaultLane, SyncLane, getHighestPriorityLane, mergeLanes, removeLanes
+from .ReactFiberLane import getHighestPriorityLane
 from .ReactSharedInternals import shared_internals
 
 _work_in_progress_root = None

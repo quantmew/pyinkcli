@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+import contextlib
 import os
 import signal
 import threading
+from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
 
@@ -15,18 +16,33 @@ from .hooks._runtime import _clear_hook_state, _set_rerender_callback, _set_sche
 from .hooks.use_app import _set_current_app
 from .hooks.use_input import _clear_input_handlers
 from .hooks.use_paste import _clear_paste_handlers, _dispatch_paste
-from .hooks.use_stderr import _StderrHandle, _set_stderr_handle
-from .hooks.use_stdout import _StdoutHandle, _set_stdout_handle
+from .hooks.use_stderr import _set_stderr_handle, _StderrHandle
+from .hooks.use_stdout import _set_stdout_handle, _StdoutHandle
 from .hooks.use_window_size import _set_window_size
 from .instances import delete_instance
 from .packages.react_reconciler.ReactFiberWorkLoop import flushPendingEffects
 from .reconciler import createReconciler, discreteUpdates
-from .renderer import RenderResult, render_dom
 from .render_to_string import create_root_node
-from .runtime import AsyncLoopThread, ConsolePatch, ExitManager, OutputDriver, RenderScheduler, TerminalSession
-from .suspense_runtime import _set_renderer_rerender
-from .utils.ansi_escapes import enter_alternative_screen, exit_alternative_screen, hide_cursor_escape, show_cursor_escape
+from .renderer import RenderResult as _RenderResult
+from .renderer import render_dom
+from .runtime import (
+    AsyncLoopThread,
+    ConsolePatch,
+    ExitManager,
+    OutputDriver,
+    RenderScheduler,
+    TerminalSession,
+)
 from .sanitize_ansi import sanitizeAnsi
+from .suspense_runtime import _set_renderer_rerender
+from .utils.ansi_escapes import (
+    enter_alternative_screen,
+    exit_alternative_screen,
+    hide_cursor_escape,
+    show_cursor_escape,
+)
+
+RenderResult = _RenderResult
 
 
 @dataclass
@@ -199,15 +215,11 @@ class Ink:
                 show_cursor_escape + show_cursor_escape + show_cursor_escape + exit_alternative_screen(),
             )
         if self._previous_sigint_handler is not None:
-            try:
+            with contextlib.suppress(Exception):  # noqa: BLE001
                 signal.signal(signal.SIGINT, self._previous_sigint_handler)
-            except Exception:  # noqa: BLE001
-                pass
         if self._previous_sigwinch_handler is not None and hasattr(signal, "SIGWINCH"):
-            try:
+            with contextlib.suppress(Exception):  # noqa: BLE001
                 signal.signal(signal.SIGWINCH, self._previous_sigwinch_handler)
-            except Exception:  # noqa: BLE001
-                pass
         if self._loop_thread is not None:
             self._loop_thread.stop()
 
@@ -258,10 +270,8 @@ class Ink:
         remaining_timers = []
         for timer in self._transition_threads:
             if self._current_node is None:
-                try:
+                with contextlib.suppress(RuntimeError):
                     timer.join(timeout or 0.1)
-                except RuntimeError:
-                    pass
             if timer.is_alive():
                 remaining_timers.append(timer)
         self._transition_threads = remaining_timers
@@ -328,12 +338,10 @@ class Ink:
         if isinstance(columns, int) and columns > 0 and isinstance(rows, int) and rows > 0:
             return columns, rows
         if hasattr(self.stdout, "isatty") and self.stdout.isatty() and hasattr(self.stdout, "fileno"):
-            try:
+            with contextlib.suppress(OSError):
                 size = os.get_terminal_size(self.stdout.fileno())
                 if size.columns > 0 and size.lines > 0:
                     return size.columns, size.lines
-            except OSError:
-                pass
         return 80, 24
 
     def _reset_rendered_frame(self, *, preserve_height: bool = False) -> None:

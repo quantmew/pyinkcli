@@ -9,7 +9,6 @@ from .cursor_helpers import (
     buildReturnToBottomPrefix,
 )
 from .output import Output
-from .sanitize_ansi import sanitizeAnsi
 from .utils.ansi_escapes import (
     cursor_left,
     cursor_next_line,

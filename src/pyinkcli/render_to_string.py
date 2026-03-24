@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from .dom import createNode
 from .packages.react_reconciler.ReactFiberWorkLoop import flushPendingEffects
 from .reconciler import createReconciler
@@ -7,7 +9,7 @@ from .renderer import render_dom
 
 
 def create_root_node(width: int = 80, height: int = 24):
-    root = createNode("ink-root")
+    root: Any = createNode("ink-root")
     root.width = width
     root.height = height
     return root

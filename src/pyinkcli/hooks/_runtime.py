@@ -38,7 +38,7 @@ class EffectRecord:
     create: Any
     deps: tuple[Any, ...] | None
     inst: EffectInstance
-    next: "EffectRecord | None" = None
+    next: EffectRecord | None = None
 
 
 @dataclass
@@ -457,7 +457,5 @@ def _component_can_bail_out(instance_id: str) -> bool:
         return True
     if state.context_dependent:
         return False
-    for hook in state.hooks:
-        if isinstance(hook, _EffectRecord) and hook.deps is None:
-            return False
+    return all(not (isinstance(hook, _EffectRecord) and hook.deps is None) for hook in state.hooks)
     return True

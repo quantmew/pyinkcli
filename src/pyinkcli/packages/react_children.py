@@ -26,12 +26,12 @@ def children_to_array(children: Any, *, keep_primitives: bool = False, prefix: s
     if isElement(children):
         if children.key is not None:
             if prefix.startswith(".") and prefix.count(":") == 0:
-                computed_key = f".$%s" % children.key
+                computed_key = ".$" + str(children.key)
             elif prefix:
                 parent_prefix = prefix.rsplit(":", 1)[0] if ":" in prefix else ""
-                computed_key = f"{parent_prefix}:$%s" % children.key if parent_prefix else f".$%s" % children.key
+                computed_key = f"{parent_prefix}:${children.key}" if parent_prefix else f".${children.key}"
             else:
-                computed_key = f".$%s" % children.key
+                computed_key = f".${children.key}"
         else:
             computed_key = prefix or ".0"
         result.append(_clone_element_with_key(children, computed_key))

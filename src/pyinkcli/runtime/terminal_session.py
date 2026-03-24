@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import codecs
+import contextlib
 import os
-from typing import Callable
+from collections.abc import Callable
+from typing import Any
 
 from ..input_parser import createInputParser
+from .loop_thread import AsyncLoopThread
+
+termios: Any | None
+tty: Any | None
 
 try:  # pragma: no cover
     import termios
@@ -19,17 +25,17 @@ class TerminalSession:
     def __init__(self, stdin, stdout, loop_thread) -> None:
         self.stdin = stdin
         self.stdout = stdout
-        self._loop_thread = loop_thread
+        self._loop_thread: AsyncLoopThread | None = loop_thread
         self._input_parser = createInputParser()
         self._decoder = codecs.getincrementaldecoder("utf-8")("replace")
         self._input_callbacks: list[Callable[[str], None]] = []
         self._paste_callbacks: list[Callable[[str], None]] = []
         self._exit_event: asyncio.Event | None = None
         self._reader_installed = False
-        self._escape_flush_handle = None
+        self._escape_flush_handle: Any | None = None
         self._raw_mode_depth = 0
         self._bracketed_paste_depth = 0
-        self._term_attrs = None
+        self._term_attrs: Any | None = None
         self._exit_result = None
 
     def start(self) -> None:
@@ -67,6 +73,9 @@ class TerminalSession:
             self._loop_thread.submit(self._stop_on_loop).result(timeout=1.0)
 
     def _start_on_loop(self) -> None:
+        loop_thread = self._loop_thread
+        if loop_thread is None:
+            return
         if self._exit_event is None:
             self._exit_event = asyncio.Event()
         if not hasattr(self.stdin, "fileno"):
@@ -77,20 +86,21 @@ class TerminalSession:
             fileno = self.stdin.fileno()
         except Exception:  # noqa: BLE001
             return
-        loop = self._loop_thread.loop
+        loop = loop_thread.loop
         if hasattr(loop, "add_reader"):
             loop.add_reader(fileno, self._handle_readable)
             self._reader_installed = True
 
     def _stop_on_loop(self) -> None:
+        loop_thread = self._loop_thread
+        if loop_thread is None:
+            return
         if self._escape_flush_handle is not None:
             self._escape_flush_handle.cancel()
             self._escape_flush_handle = None
         if self._reader_installed and hasattr(self.stdin, "fileno"):
-            try:
-                self._loop_thread.loop.remove_reader(self.stdin.fileno())
-            except Exception:  # noqa: BLE001
-                pass
+            with contextlib.suppress(Exception):  # noqa: BLE001
+                loop_thread.loop.remove_reader(self.stdin.fileno())
             self._reader_installed = False
         self._restore_raw_mode()
         self._set_bracketed_paste_mode_on_loop(False, force=True)
@@ -120,9 +130,12 @@ class TerminalSession:
             self._schedule_pending_escape_flush()
 
     def _schedule_pending_escape_flush(self) -> None:
+        loop_thread = self._loop_thread
+        if loop_thread is None:
+            return
         if self._escape_flush_handle is not None:
             self._escape_flush_handle.cancel()
-        self._escape_flush_handle = self._loop_thread.loop.call_later(0.025, self._flush_pending_escape)
+        self._escape_flush_handle = loop_thread.loop.call_later(0.025, self._flush_pending_escape)
 
     def _flush_pending_escape(self) -> None:
         self._escape_flush_handle = None

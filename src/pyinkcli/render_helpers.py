@@ -17,18 +17,18 @@ def get_options(stdout_or_options=None, **overrides):
     return options
 
 
+def _stream_is_tty(stream: object) -> bool:
+    isatty = getattr(stream, "isatty", None)
+    return bool(callable(isatty) and isatty())
+
+
 def create_ink_options(resolved_options: dict) -> Options:
     stream = resolved_options.get("stdout", sys.stdout)
     input_stream = resolved_options.get("stdin", sys.stdin)
     error_stream = resolved_options.get("stderr", sys.stderr)
     interactive = resolved_options.get("interactive")
     if interactive is None:
-        interactive = bool(
-            callable(getattr(stream, "isatty", None))
-            and stream.isatty()
-            and callable(getattr(input_stream, "isatty", None))
-            and input_stream.isatty()
-        )
+        interactive = bool(_stream_is_tty(stream) and _stream_is_tty(input_stream))
     return Options(
         stdout=stream,
         stdin=input_stream,

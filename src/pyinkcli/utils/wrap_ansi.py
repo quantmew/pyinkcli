@@ -8,18 +8,18 @@ def wrap_ansi(text: str, columns: int, *, hard: bool = False) -> str:
     sanitized = sanitizeAnsi(text)
     if not hard:
         words = sanitized.split(" ")
-        lines: list[str] = []
+        wrapped_lines: list[str] = []
         current = ""
-        for index, word in enumerate(words):
+        for _index, word in enumerate(words):
             candidate = word if not current else current + " " + word
             if string_width(candidate) <= columns or not current:
                 current = candidate
                 continue
-            lines.append(current)
+            wrapped_lines.append(current)
             current = word
-        if current or not lines:
-            lines.append(current)
-        return "\n".join(lines)
+        if current or not wrapped_lines:
+            wrapped_lines.append(current)
+        return "\n".join(wrapped_lines)
     lines: list[str] = []
     current = ""
     for character in sanitized:

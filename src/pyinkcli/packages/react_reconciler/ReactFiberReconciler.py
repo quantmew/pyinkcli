@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 from ...reconciler import createReconciler as create_host_reconciler
 from .ReactFiberCommitWork import CommitList, PreparedCommit
-from .ReactFiberWorkLoop import _has_pending_commit_effects, _pending_passive_effect_lanes, _root_with_pending_passive_effects
 
 
 class _FiberReconciler:

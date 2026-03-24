@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import math
 from dataclasses import dataclass
 from functools import lru_cache
@@ -9,7 +10,6 @@ import yoga
 
 from .components.Text import ANSI_BG_OPEN, ANSI_OPEN
 from .output import Output, _style_category
-from .sanitize_ansi import sanitizeAnsi
 from .squash_text_nodes import squashTextNodes
 from .utils.cli_boxes import get_box_style
 from .utils.string_width import string_width
@@ -23,11 +23,9 @@ from .yoga_compat import (
     DIRECTION_LTR,
     EDGE_ALL,
     EDGE_BOTTOM,
-    EDGE_HORIZONTAL,
     EDGE_LEFT,
     EDGE_RIGHT,
     EDGE_TOP,
-    EDGE_VERTICAL,
     FLEX_DIRECTION_COLUMN,
     FLEX_DIRECTION_ROW,
     GUTTER_ALL,
@@ -37,9 +35,9 @@ from .yoga_compat import (
     JUSTIFY_SPACE_AROUND,
     JUSTIFY_SPACE_BETWEEN,
     JUSTIFY_SPACE_EVENLY,
-    Node,
     WRAP_NO_WRAP,
     WRAP_WRAP,
+    Node,
 )
 
 LAYOUT_STYLE_KEYS = {
@@ -336,7 +334,7 @@ def _apply_yoga_style(layout_node: Node, node) -> None:
                 "center": ALIGN_CENTER,
                 "flex-end": ALIGN_FLEX_END,
                 "stretch": ALIGN_STRETCH,
-            }.get(style.get("alignItems"), ALIGN_STRETCH)
+            }.get(str(style.get("alignItems", "")) if style.get("alignItems") is not None else "", ALIGN_STRETCH)
         )
         layout_node.set_justify_content(
             {
@@ -345,7 +343,9 @@ def _apply_yoga_style(layout_node: Node, node) -> None:
                 "space-around": JUSTIFY_SPACE_AROUND,
                 "space-between": JUSTIFY_SPACE_BETWEEN,
                 "space-evenly": JUSTIFY_SPACE_EVENLY,
-            }.get(style.get("justifyContent"), JUSTIFY_FLEX_START)
+            }.get(
+                str(style.get("justifyContent", "")) if style.get("justifyContent") is not None else "", JUSTIFY_FLEX_START
+            )
         )
         layout_node.set_flex_wrap(WRAP_WRAP if style.get("flexWrap") == "wrap" else WRAP_NO_WRAP)
     else:
@@ -360,7 +360,7 @@ def _apply_yoga_style(layout_node: Node, node) -> None:
                 "flex-start": ALIGN_FLEX_START,
                 "flex-end": ALIGN_FLEX_END,
                 "stretch": ALIGN_STRETCH,
-            }.get(align_self, ALIGN_AUTO)
+            }.get(str(align_self) if isinstance(align_self, str) else "", ALIGN_AUTO)
         )
 
     _set_length(layout_node, "set_width", style.get("width", getattr(node, "width", None)))
@@ -397,10 +397,8 @@ def _build_layout_tree(node):
         previous_children = list(getattr(node, "_layout_children", []))
         if previous_layout is not None:
             for child_layout in previous_children:
-                try:
+                with contextlib.suppress(Exception):  # noqa: BLE001
                     previous_layout.remove_child(child_layout)
-                except Exception:  # noqa: BLE001
-                    pass
         layout_node = Node.create()
         node._layout_node = layout_node
         node._layout_signature = style_signature
@@ -413,10 +411,8 @@ def _build_layout_tree(node):
         measure_signature = _text_measure_signature(node, text_content)
         previous_signature = getattr(node, "_layout_measure_signature", None)
         if previous_signature is not None and previous_signature != measure_signature:
-            try:
+            with contextlib.suppress(Exception):  # noqa: BLE001
                 layout_node.mark_dirty()
-            except Exception:  # noqa: BLE001
-                pass
         node._layout_measure_signature = measure_signature
         layout_node._node.setMeasureFunc(_text_measure(node))
         node._layout_children = []
@@ -432,10 +428,8 @@ def _build_layout_tree(node):
     existing_children = getattr(node, "_layout_children", [])
     if existing_children != new_children:
         for child_layout in existing_children:
-            try:
+            with contextlib.suppress(Exception):  # noqa: BLE001
                 layout_node.remove_child(child_layout)
-            except Exception:  # noqa: BLE001
-                pass
         for child_index, child_layout in enumerate(new_children):
             layout_node.insert_child(child_layout, child_index)
         node._layout_children = new_children
@@ -482,7 +476,7 @@ def _render_border(
     if width < 2 or height < 2:
         return
     style = get_box_style(style_name)
-    prefix = ANSI_OPEN.get(border_color, "")
+    prefix = ANSI_OPEN.get(border_color, "") if border_color is not None else ""
     suffix = "\x1b[39m" if prefix else ""
     output.write(
         x,
@@ -761,7 +755,7 @@ def _render_natural_box(
 
     cursor_x = border_size + padding[EDGE_LEFT]
     cursor_y = border_size + padding[EDGE_TOP]
-    for index, block in enumerate(child_blocks):
+    for _index, block in enumerate(child_blocks):
         for line_index, line in enumerate(block.lines):
             output.write(cursor_x, cursor_y + line_index, line, {"transformers": []})
         if direction == "row":

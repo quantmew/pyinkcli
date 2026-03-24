@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from ..parse_keypress import Key, parseKeypress
 from ._runtime import useEffect, useRef
 from .use_app import useApp
 from .use_stdin import useStdin
-from ..parse_keypress import Key, parseKeypress
 
 _input_handlers: dict[str, object] = {}
 

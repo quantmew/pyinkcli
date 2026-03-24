@@ -5,7 +5,6 @@ from .components.Static import Static
 from .components.Text import Text
 from .components.Transform import Transform
 from .dom import DOMElement
-from .measure_element import measureElement
 from .hooks import (
     useApp,
     useBoxMetrics,
@@ -21,6 +20,7 @@ from .hooks import (
     useWindowSize,
 )
 from .kitty_keyboard import kittyFlags, kittyModifiers
+from .measure_element import measureElement
 from .parse_keypress import Key
 from .render import render
 from .render_to_string import renderToString

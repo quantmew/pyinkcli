@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import sys
+
 from ..hooks.use_stdin import _StdinHandle
 
 PublicProps = dict

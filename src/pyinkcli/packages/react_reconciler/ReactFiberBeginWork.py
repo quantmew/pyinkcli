@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from .ReactFiberNewContext import checkIfContextChanged
-
 _did_receive_update = False
 
 

@@ -108,7 +108,7 @@ def match_element(route, pathname):
         return route.element
     element = route.element
     if element is not None:
-        setattr(element, "_params", match["params"])
+        element._params = match["params"]
     return element
 
 

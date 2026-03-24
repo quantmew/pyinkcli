@@ -10,6 +10,13 @@ class RenderableNode:
     props: dict[str, Any] = field(default_factory=dict)
     children: list[Any] = field(default_factory=list)
     key: str | None = None
+    _suspended_by: list[dict[str, Any]] | None = None
+    _class_instance: Any | None = None
+    _devtools_owner_id: str | None = None
+    _component_instance_id: str | None = None
+    _component_type: Any = None
+    _component_props: dict[str, Any] = field(default_factory=dict)
+    _owner_infos: list[Any] = field(default_factory=list)
 
 
 def _flatten_children(values: tuple[Any, ...]) -> list[Any]:
@@ -39,4 +46,3 @@ def isElement(value: Any) -> bool:
 
 
 __all__ = ["createElement", "component", "isElement", "RenderableNode"]
-

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import json
 from dataclasses import dataclass
 
 META_KEY = "__meta__"
@@ -139,10 +138,10 @@ def _iter_transport_paths(items):
 
 
 def _wrapped_from_meta_payload(data: dict):
-    wrapper = HydratedList() if all(isinstance(key, int) for key in data.keys() if not isinstance(key, str) or key.isdigit()) and data.get("type") in {"iterator", "typed_array", "html_all_collection", "array"} else HydratedDict()
-    metadata = {k: v for k, v in data.items() if isinstance(k, str) and not isinstance(wrapper, HydratedList) and k not in {META_KEY, INSPECTED_KEY, UNSERIALIZABLE_KEY}}
+    wrapper = HydratedList() if all(isinstance(key, int) for key in data if not isinstance(key, str) or key.isdigit()) and data.get("type") in {"iterator", "typed_array", "html_all_collection", "array"} else HydratedDict()
+    _metadata = {k: v for k, v in data.items() if isinstance(k, str) and not isinstance(wrapper, HydratedList) and k not in {META_KEY, INSPECTED_KEY, UNSERIALIZABLE_KEY}}
     if isinstance(wrapper, HydratedList):
-        numeric_keys = sorted(k for k in data.keys() if isinstance(k, int))
+        numeric_keys = sorted(k for k in data if isinstance(k, int))
         for key in numeric_keys:
             wrapper.append(data[key])
     else:
@@ -391,7 +390,7 @@ def apply_serialized_mutations(value, operations, mode="fail-fast", rollback=Fal
                 "errors": errors,
             }
             if mode == "fail-fast":
-                raise SerializedMutationError(index, operation, error, partial)
+                raise SerializedMutationError(index, operation, error, partial) from error
     return {
         "mode": mode,
         "applied": len(applied_indices),
@@ -414,7 +413,7 @@ def serialize_serialized_mutation_result(result):
 def serialize_serialized_mutation_error(error):
     return {
         "ok": False,
-        **{k: v for k, v in error.partial_result.items()},
+        **dict(error.partial_result.items()),
         "failure": {
             "index": error.index,
             "operation": error.operation,
@@ -677,7 +676,9 @@ def handle_override_suspense_milestone_bridge_notification(message, handler):
 
 
 def make_devtools_backend_notification_handlers(**handlers):
-    noop = lambda payload, message: None
+    def noop(payload, message):  # noqa: ARG001
+        return None
+
     return {
         "clearErrorsAndWarnings": make_clear_errors_and_warnings_bridge_handler(handlers.get("clear_errors_and_warnings", noop)),
         "clearErrorsForElementID": lambda payload, message: handlers.get("clear_errors_for_element", noop)(normalize_clear_errors_for_element_bridge_payload(payload), message),

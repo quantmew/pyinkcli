@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from itertools import count
+from typing import Any
 
 from ..component import RenderableNode, createElement, isElement
 from ..hooks import _runtime as hooks_runtime

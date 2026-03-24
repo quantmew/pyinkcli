@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import threading
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 class AsyncLoopThread:

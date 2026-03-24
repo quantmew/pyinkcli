@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from ..component import createElement
 from .AppContext import create_app_context_value
 from .StderrContext import create_stderr_context_value
 from .StdinContext import create_stdin_context_value

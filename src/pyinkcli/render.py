@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import sys
 
+from .component import createElement
 from .hooks.use_app import _set_current_app
 from .ink import Ink
-from .component import createElement
 from .render_helpers import create_ink_options, get_options
 from .render_instance import get_instance
 

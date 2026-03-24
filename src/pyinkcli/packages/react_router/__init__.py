@@ -1,12 +1,10 @@
 from __future__ import annotations
 
+# ruff: noqa: F401,F403,F405,F811
 from types import SimpleNamespace
 
 from ...component import RenderableNode, createElement
-from ...hooks import _runtime as hooks_runtime
-from ...packages import react
 from .context import _ROUTER_CTX, get_current_router, push_router_context
-from . import routes as _routes_module
 from .matching import (
     convertRouteMatchToUiMatch,
     getPathContributingMatches,
@@ -16,6 +14,7 @@ from .matching import (
     matchRoutesImpl,
     render_match_chain,
 )
+from .router import *
 from .routes import (
     convertRoutesToDataRoutes,
     createRoutesFromChildren,
@@ -23,9 +22,6 @@ from .routes import (
     hydrationRouteProperties,
     mapRouteProperties,
 )
-from .router import *
-
-hydrationRouteProperties = _routes_module.hydrationRouteProperties
 
 
 def createContext(default=None):

@@ -69,7 +69,7 @@ GUTTER_ALL = yoga.YGGutter.YGGutterAll
 
 class Config:
     @classmethod
-    def create(cls) -> "Config":
+    def create(cls) -> Config:
         return cls()
 
 
@@ -86,13 +86,13 @@ class Node:
         self._node = yoga.Node()
 
     @classmethod
-    def create(cls, config: Config | None = None) -> "Node":
+    def create(cls, config: Config | None = None) -> Node:
         return cls()
 
-    def insert_child(self, child: "Node", index: int) -> None:
+    def insert_child(self, child: Node, index: int) -> None:
         yoga.YGNodeInsertChild(self._node, child._node, index)
 
-    def remove_child(self, child: "Node") -> None:
+    def remove_child(self, child: Node) -> None:
         yoga.YGNodeRemoveChild(self._node, child._node)
 
     def calculate_layout(

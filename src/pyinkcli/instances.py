@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Callable
+import contextlib
+from collections.abc import Callable
+from typing import Any
 
-_instances: dict[int, object] = {}
+_instances: dict[int, Any] = {}
 
 
 def _stream_key(stream) -> int:
@@ -36,10 +38,8 @@ def delete_instance(stream) -> None:
 
 def cleanup() -> None:
     for instance in list(_instances.values()):
-        try:
+        with contextlib.suppress(Exception):  # noqa: BLE001
             instance.unmount()
-        except Exception:  # noqa: BLE001
-            pass
     _instances.clear()
 
 

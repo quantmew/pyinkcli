@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import os
 
-from ..log_update import LogUpdate
-from ..sanitize_ansi import sanitizeAnsi
 from ..log_update import logUpdate
-from ..utils.ansi_escapes import clear_terminal, hide_cursor_escape
+from ..sanitize_ansi import sanitizeAnsi
+from ..utils.ansi_escapes import clear_terminal
 from ..write_synchronized import bsu, esu, shouldSynchronize
 
 

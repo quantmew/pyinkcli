@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from .components import _accessibility_runtime
 from .layout_render import render_node_output
 from .squash_text_nodes import squashTextNodes
 
@@ -43,9 +42,7 @@ def _screen_reader_lines(node) -> list[str]:
     for child in getattr(node, "childNodes", []):
         if getattr(child, "aria_hidden", False):
             continue
-        if getattr(child, "aria_role", None):
-            lines.extend(_screen_reader_lines(child))
-        elif getattr(child, "nodeName", None) != "#text":
+        if getattr(child, "aria_role", None) or getattr(child, "nodeName", None) != "#text":
             lines.extend(_screen_reader_lines(child))
     return lines
 

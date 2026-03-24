@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import threading
-from typing import Callable
+from collections.abc import Callable
 
 from .loop_thread import AsyncLoopThread
 
@@ -23,7 +24,7 @@ class RenderScheduler:
         self._loop_thread = loop_thread
         self._render_callback = render_callback
         self._max_fps = max_fps
-        self._pending_handle = None
+        self._pending_handle: asyncio.Handle | None = None
         self._pending_priority: str | None = None
         self._pending_due = 0.0
         self._last_render_at = 0.0
@@ -46,6 +47,9 @@ class RenderScheduler:
         return self._idle.wait(timeout)
 
     def _schedule_on_loop(self, priority: str) -> None:
+        if self._loop_thread is None:
+            self._render_callback(priority)
+            return
         now = self._loop_thread.loop.time()
         self._idle.clear()
         if self._pending_priority is None or _PRIORITY_ORDER[priority] > _PRIORITY_ORDER[self._pending_priority]:
@@ -76,5 +80,8 @@ class RenderScheduler:
         self._pending_due = 0.0
         self._pending_handle = None
         self._render_callback(priority)
-        self._last_render_at = self._loop_thread.loop.time() if self._loop_thread is not None else 0.0
+        if self._loop_thread is not None:
+            self._last_render_at = self._loop_thread.loop.time()
+        else:
+            self._last_render_at = 0.0
         self._idle.set()

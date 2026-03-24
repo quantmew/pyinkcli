@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from types import SimpleNamespace
 from typing import Any
 
 from .ansi_tokenizer import tokenizeAnsi
@@ -15,6 +14,12 @@ class StyledCell:
     styles: tuple[str, ...]
     suffix: str = ""
     width: int = 1
+
+
+@dataclass
+class _OutputResult:
+    output: str
+    height: int
 
 
 def _style_category(sequence: str) -> str | None:
@@ -44,7 +49,7 @@ class Output:
         self.width = dimensions["width"]
         self.height = dimensions["height"]
         self._operations: list[dict[str, Any]] = []
-        self._cached_result = None
+        self._cached_result: _OutputResult | None = None
 
     @staticmethod
     def _styled_cells(text: str) -> list[StyledCell]:
@@ -98,7 +103,7 @@ class Output:
         return cells
 
     @staticmethod
-    def _styled_cells_to_string(cells: list[StyledCell]) -> str:
+    def _styled_cells_to_string(cells: list[StyledCell] | tuple[StyledCell, ...]) -> str:
         def append_resets(previous_categories: set[str | None], next_categories: set[str | None]) -> list[str]:
             resets: list[str] = []
             if "fg" in previous_categories and "fg" not in next_categories:
@@ -153,7 +158,7 @@ class Output:
     def _visible_width(text: str) -> int:
         return sum(cell.width for cell in Output._styled_cells(text))
 
-    def clip(self, bounds: dict[str, int]) -> None:
+    def clip(self, bounds: dict[str, int | None]) -> None:
         self._cached_result = None
         self._operations.append({"type": "clip", "clip": bounds})
 
@@ -168,9 +173,9 @@ class Output:
         transformers = list(options.get("transformers", []))
         sanitized = text if options.get("sanitized") else sanitizeAnsi(text)
         lines = tuple(sanitized.split("\n"))
-        prepared_cells = None
+        prepared_cells: tuple[tuple[StyledCell, ...], ...] | None = None
         if not transformers:
-            prepared_cells = tuple(Output._styled_cells(line) for line in lines)
+            prepared_cells = tuple(tuple(Output._styled_cells(line)) for line in lines)
         self._operations.append(
             {
                 "type": "write",
@@ -186,7 +191,7 @@ class Output:
             }
         )
 
-    def get(self):
+    def get(self) -> _OutputResult:
         if self._cached_result is not None:
             return self._cached_result
         rows: list[list[StyledCell | None]] = [[None for _ in range(self.width)] for _ in range(self.height)]
@@ -206,7 +211,7 @@ class Output:
             y = operation["y"]
             lines = list(operation["lines"])
             line_widths = list(operation["line_widths"])
-            prepared_cells = operation["prepared_cells"]
+            prepared_cells = tuple(operation["prepared_cells"]) if operation["prepared_cells"] is not None else None
             clip = clips[-1] if clips else None
 
             if clip:
@@ -225,7 +230,7 @@ class Output:
 
                 if clip_horizontally:
                     sliced_lines = []
-                    sliced_cells = [] if prepared_cells is not None else None
+                    sliced_cells: list[list[StyledCell]] = [] if prepared_cells is not None else []
                     sliced_widths = []
                     for index, line in enumerate(lines):
                         width = line_widths[index]
@@ -235,7 +240,7 @@ class Output:
                         end = max(end, 0)
                         if prepared_cells is not None:
                             line_cells = self._slice_cells_columns(prepared_cells[index], start, end)
-                            sliced_cells.append(tuple(line_cells))
+                            sliced_cells.append(line_cells)
                             sliced_widths.append(sum(cell.width for cell in line_cells))
                             sliced_lines.append(self._styled_cells_to_string(line_cells))
                         else:
@@ -245,7 +250,7 @@ class Output:
                     lines = sliced_lines
                     line_widths = sliced_widths
                     if sliced_cells is not None:
-                        prepared_cells = tuple(sliced_cells)
+                        prepared_cells = tuple(tuple(cells) for cells in sliced_cells)
                     if x < clip["x1"]:
                         x = clip["x1"]
 
@@ -269,7 +274,7 @@ class Output:
                     rendered = sanitizeAnsi(transformer(rendered, line_index))
 
                 if prepared_cells is not None and not operation["transformers"]:
-                    cells = prepared_cells[line_index]
+                    cells = list(prepared_cells[line_index])
                 else:
                     cells = self._styled_cells(rendered)
                 column = x
@@ -293,7 +298,7 @@ class Output:
                 continue
             cells = [cell if cell is not None else StyledCell(" ", (), width=1) for cell in row[: last_index + 1]]
             lines.append(self._styled_cells_to_string(cells))
-        self._cached_result = SimpleNamespace(output="\n".join(lines).rstrip("\n"), height=len(rows))
+        self._cached_result = _OutputResult(output="\n".join(lines).rstrip("\n"), height=len(rows))
         return self._cached_result
 
 

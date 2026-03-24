@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from .ReactFiberLane import DefaultLane, IdleLane, InputContinuousLane, SyncLane, TransitionLane1, getHighestPriorityLane
+from .ReactFiberLane import (
+    DefaultLane,
+    InputContinuousLane,
+    SyncLane,
+    TransitionLane1,
+    getHighestPriorityLane,
+)
 
 firstScheduledRoot = None
 lastScheduledRoot = None

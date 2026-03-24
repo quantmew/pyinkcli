@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from typing import TextIO
 
 
 class PatchedConsoleStream:
@@ -40,8 +41,8 @@ class ConsolePatch:
         self._stderr_writer = stderr_writer
         self._stdout_stream = stdout_stream
         self._stderr_stream = stderr_stream
-        self._restore_stdout = None
-        self._restore_stderr = None
+        self._restore_stdout: TextIO | None = None
+        self._restore_stderr: TextIO | None = None
 
     def patch(self) -> None:
         if self._restore_stdout is not None or self._restore_stderr is not None:

@@ -57,10 +57,7 @@ def Text(*children, **props):
     }
     if "background_color" in props and "backgroundColor" not in props:
         props["backgroundColor"] = props["background_color"]
-    if "wrap" in props:
-        style["textWrap"] = props["wrap"]
-    else:
-        style["textWrap"] = "wrap"
+    style["textWrap"] = props.get("wrap", "wrap")
     props = dict(props)
     props["style"] = style
     props["internal_transform"] = lambda text: _transform_text(text, props)

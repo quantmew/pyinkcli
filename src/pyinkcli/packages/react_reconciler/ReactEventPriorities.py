@@ -1,4 +1,4 @@
-from .ReactFiberLane import DefaultLane, InputContinuousLane, SyncLane, TransitionLane1
+from .ReactFiberLane import DefaultLane, SyncLane, TransitionLane1
 
 DiscreteEventPriority = SyncLane
 DefaultEventPriority = DefaultLane
