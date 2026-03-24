@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 from . import component, cursor_helpers, dom, render_node_to_output, yoga_compat
 

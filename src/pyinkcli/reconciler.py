@@ -141,31 +141,36 @@ class _Reconciler:
             self._flush_pending(container)
 
     def update_container_sync(self, vnode, container) -> None:
+        previous_suppress = hooks_runtime._suppress_immediate_passive_flush
+        hooks_runtime._suppress_immediate_passive_flush = True
         hooks_runtime._reset_hook_state()
-        self._reconcile_children(container.root, [vnode], "root")
-        hooks_runtime._finish_hook_state()
-        container.current_vnode = vnode
-        container.render_state = None
-        container.force_rerender = False
-        container.root.force_rerender = False
-        first_child = container.root.childNodes[0] if container.root.childNodes else None
-        container._last_deletions = list(getattr(first_child, "deletions", [])) if first_child is not None else []
-        self._root_fiber.child = SimpleNamespace(deletions=list(getattr(container, "_last_deletions", [])))
-        self._last_prepared_commit = SimpleNamespace(
-            commit_list=SimpleNamespace(effects=[1], layout_effects=[1]),
-            mutations=[1],
-        )
-        if callable(container.root.onComputeLayout):
-            container.root.onComputeLayout()
-        emitLayoutListeners(container.root)
-        self._flush_class_lifecycle_queues()
-        has_static = any(getattr(child, "internal_static", False) for child in container.root.childNodes)
-        if has_static and self._commit_handlers["on_immediate_commit"]:
-            self._commit_handlers["on_immediate_commit"]()
-        elif self._commit_handlers["on_commit"]:
-            self._commit_handlers["on_commit"]()
-        if self._pending_errors:
-            raise self._pending_errors.pop(0)
+        try:
+            self._reconcile_children(container.root, [vnode], "root")
+            hooks_runtime._finish_hook_state()
+            container.current_vnode = vnode
+            container.render_state = None
+            container.force_rerender = False
+            container.root.force_rerender = False
+            first_child = container.root.childNodes[0] if container.root.childNodes else None
+            container._last_deletions = list(getattr(first_child, "deletions", [])) if first_child is not None else []
+            self._root_fiber.child = SimpleNamespace(deletions=list(getattr(container, "_last_deletions", [])))
+            self._last_prepared_commit = SimpleNamespace(
+                commit_list=SimpleNamespace(effects=[1], layout_effects=[1]),
+                mutations=[1],
+            )
+            if callable(container.root.onComputeLayout):
+                container.root.onComputeLayout()
+            emitLayoutListeners(container.root)
+            self._flush_class_lifecycle_queues()
+            has_static = any(getattr(child, "internal_static", False) for child in container.root.childNodes)
+            if has_static and self._commit_handlers["on_immediate_commit"]:
+                self._commit_handlers["on_immediate_commit"]()
+            elif self._commit_handlers["on_commit"]:
+                self._commit_handlers["on_commit"]()
+            if self._pending_errors:
+                raise self._pending_errors.pop(0)
+        finally:
+            hooks_runtime._suppress_immediate_passive_flush = previous_suppress
 
     def _render_component(self, vnode: RenderableNode, instance_id: str):
         if vnode.type is react.Fragment:

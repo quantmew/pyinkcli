@@ -81,11 +81,7 @@ class OutputDriver:
             if self._can_rewrite_stream():
                 self.stream.seek(0)
                 self.stream.truncate(0)
-            if sync:
-                self.stream.write(bsu)
             self.stream.write(sanitizeAnsi(self.full_static_output + output))
-            if sync:
-                self.stream.write(esu)
             self.last_output = output
             self.last_output_to_render = output
             self.last_output_height = output_height

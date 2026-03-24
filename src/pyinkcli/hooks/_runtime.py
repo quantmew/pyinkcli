@@ -67,6 +67,7 @@ class _ComponentState:
     cursor: int = 0
     seen: bool = False
     component_type: Any = None
+    context_dependent: bool = False
 
 
 _hook_state: dict[str, _ComponentState] = {}
@@ -89,6 +90,7 @@ _runtime = SimpleNamespace(
     pending_passive_unmount_fibers=[],
     pending_passive_mount_effects=[],
 )
+_suppress_immediate_passive_flush = False
 
 
 def _clear_hook_state() -> None:
@@ -129,6 +131,7 @@ def _begin_component_render(instance_id: str, component_type: Any = None) -> Non
     _dirty_components.discard(instance_id)
     state.cursor = 0
     state.seen = True
+    state.context_dependent = False
     _active_component_ids.add(instance_id)
 
 
@@ -188,6 +191,11 @@ def _finish_hook_state() -> None:
             _runtime.pending_passive_mount_effects.append(hook)
     finally:
         _running_effect_kind = None
+
+    if _runtime.pending_passive_mount_effects and not _suppress_immediate_passive_flush:
+        from ..packages.react_reconciler.ReactFiberWorkLoop import flushPendingEffects
+
+        flushPendingEffects()
 
 
 def _set_rerender_callback(callback) -> None:
@@ -378,6 +386,10 @@ def useTransition():
 
 
 def useContext(context):
+    if _current_component_id is not None:
+        state = _hook_state.get(_current_component_id)
+        if state is not None:
+            state.context_dependent = True
     stack = _current_context_values.get(id(context))
     if stack:
         return stack[-1]
@@ -443,6 +455,8 @@ def _component_can_bail_out(instance_id: str) -> bool:
     state = _hook_state.get(instance_id)
     if state is None:
         return True
+    if state.context_dependent:
+        return False
     for hook in state.hooks:
         if isinstance(hook, _EffectRecord) and hook.deps is None:
             return False

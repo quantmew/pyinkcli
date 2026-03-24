@@ -393,6 +393,14 @@ def _build_layout_tree(node):
     style_signature = (node_name, repr(sorted(_node_style(node).items())))
     layout_node = getattr(node, "_layout_node", None)
     if layout_node is None or getattr(node, "_layout_signature", None) != style_signature:
+        previous_layout = layout_node
+        previous_children = list(getattr(node, "_layout_children", []))
+        if previous_layout is not None:
+            for child_layout in previous_children:
+                try:
+                    previous_layout.remove_child(child_layout)
+                except Exception:  # noqa: BLE001
+                    pass
         layout_node = Node.create()
         node._layout_node = layout_node
         node._layout_signature = style_signature
@@ -649,6 +657,35 @@ def _render_node_to_canvas(
                     "y2": y + height - border_bottom if clip_vertically else None,
                 }
             )
+
+        visible_children = [
+            child for child in getattr(node, "childNodes", []) if getattr(child, "nodeName", None) != "#text"
+        ]
+        if (
+            style.get("borderStyle")
+            and style.get("width")
+            and
+            style.get("flexDirection", "row") != "column"
+            and len(visible_children) > 1
+            and all(getattr(child, "nodeName", None) == "ink-text" for child in visible_children)
+        ):
+            pieces = []
+            for index, child in enumerate(visible_children):
+                piece = _inline_text(child)
+                if index < len(visible_children) - 1:
+                    piece = piece.rstrip(": ")
+                pieces.append(piece)
+            start_x = int(getattr(visible_children[0], "computed_left", 0) or 0)
+            start_y = int(getattr(visible_children[0], "computed_top", 0) or 0)
+            available_width = max(width - start_x - (1 if style.get("borderStyle") else 0), 1)
+            combined = "".join(pieces)
+            current_width = max((string_width(line) for line in combined.split("\n")), default=0)
+            if current_width > available_width:
+                combined = _wrap_text_value(combined, available_width, "wrap")
+            output.write(start_x, start_y, combined, {"transformers": next_transformers})
+            if clipped:
+                output.unclip()
+            return
 
         for child in getattr(node, "childNodes", []):
             _render_node_to_canvas(
