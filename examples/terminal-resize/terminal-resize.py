@@ -12,19 +12,18 @@ def terminal_resize_example():
     columns, rows = useWindowSize()
 
     return Box(
+        Text("Terminal Size", bold=True, color="cyan"),
+        Text(f"Columns: {columns}"),
+        Text(f"Rows: {rows}"),
         Box(
-            Text("Terminal Size", bold=True, color="cyan"),
-            Text(f"Columns: {columns}"),
-            Text(f"Rows: {rows}"),
-            Box(
-                Text(
-                    "Resize your terminal to see the values update. Press Ctrl+C to exit.",
-                    dimColor=True,
-                ),
+            Text(
+                "Resize your terminal to see the values update. Press Ctrl+C to exit.",
+                dimColor=True,
             ),
-            flexDirection="column",
-            padding=1,
+            marginTop=1,
         ),
+        flexDirection="column",
+        padding=1,
     )
 
 

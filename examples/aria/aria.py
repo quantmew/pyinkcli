@@ -15,11 +15,10 @@ def aria_example():
 
     return Box(
         Text(
-            "Press spacebar to toggle the checkbox. This example is best experienced "
-            "with a screen reader."
+            "Press spacebar to toggle the checkbox. This example is best experienced with a\n"
+            "screen reader."
         ),
         Box(
-            Text("checkbox:"),
             Box(
                 Text("[x]" if checked else "[ ]"),
                 aria_role="checkbox",

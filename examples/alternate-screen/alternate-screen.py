@@ -5,13 +5,14 @@ import threading
 import time
 
 from pyinkcli import Box, Text, render, useApp, useInput, useWindowSize
-from pyinkcli.hooks import useEffect, useRef, useState
+from pyinkcli.example_data import ALTERNATE_SCREEN_FOOD
+from pyinkcli.hooks import useEffect, useReducer, useRef
 
 HEAD = "🦄"
 BODY = "✨"
 FOOD = "🌈"
 EMPTY = "  "
-TICK_MS = 0.15
+TICK_MS = 0.24
 BOARD_WIDTH = 20
 BOARD_HEIGHT = 15
 BORDER_H = "─" * (BOARD_WIDTH * 2)
@@ -27,18 +28,12 @@ OFFSETS = {
     "right": (1, 0),
 }
 
-OPPOSITES = {
-    "up": "down",
-    "down": "up",
-    "left": "right",
-    "right": "left",
-}
-
 INITIAL_SNAKE = [
     {"x": 10, "y": 7},
     {"x": 9, "y": 7},
     {"x": 8, "y": 7},
 ]
+FIXED_FOOD = dict(ALTERNATE_SCREEN_FOOD)
 
 
 def random_position(exclude):
@@ -54,7 +49,7 @@ def random_position(exclude):
 def initial_state():
     return {
         "snake": INITIAL_SNAKE,
-        "food": random_position(INITIAL_SNAKE),
+        "food": FIXED_FOOD,
         "score": 0,
         "game_over": False,
         "won": False,
@@ -62,11 +57,15 @@ def initial_state():
     }
 
 
-def tick_state(state, direction):
+def game_reducer(state, action):
+    if action["type"] == "restart":
+        return initial_state()
+
     if state["game_over"]:
         return state
 
     head = state["snake"][0]
+    direction = action["direction"]
     offset_x, offset_y = OFFSETS[direction]
     new_head = {"x": head["x"] + offset_x, "y": head["y"] + offset_y}
 
@@ -135,7 +134,7 @@ def build_board(snake, food):
 def alternate_screen_example():
     app = useApp()
     columns, _ = useWindowSize()
-    game, set_game = useState(initial_state())
+    game, dispatch = useReducer(game_reducer, None, lambda _arg: initial_state())
     direction = useRef("right")
 
     def setup():
@@ -144,7 +143,7 @@ def alternate_screen_example():
         def run():
             while running:
                 time.sleep(TICK_MS)
-                set_game(lambda state: tick_state(state, direction.current))
+                dispatch({"type": "tick", "direction": direction.current})
 
         thread = threading.Thread(target=run, daemon=True)
         thread.start()
@@ -164,7 +163,7 @@ def alternate_screen_example():
 
         if game["game_over"] and char == "r":
             direction.current = "right"
-            set_game(initial_state())
+            dispatch({"type": "restart"})
             return
 
         if game["game_over"]:
@@ -217,7 +216,6 @@ def alternate_screen_example():
         ),
         status,
         flexDirection="column",
-        paddingY=1,
     )
 
 

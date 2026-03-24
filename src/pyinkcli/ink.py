@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+import os
 import signal
 import threading
 from types import SimpleNamespace
@@ -61,14 +62,18 @@ class Ink:
         self._exit_manager = ExitManager()
         self._input_interest_count = 0
         self._paste_interest_count = 0
+        self._pending_session_exit_result: Any | None = None
         self._console_patch = ConsolePatch(self._write_to_stdout, self._write_to_stderr, self.stdout, self.stderr)
         self._previous_sigint_handler = None
+        self._previous_sigwinch_handler = None
         self._force_next_render = False
         hooks_runtime._dirty_components.clear()
         hooks_runtime._render_phase_rerender_count = 0
+        initial_width, initial_height = self._get_stream_dimensions()
+        self._last_terminal_width = initial_width
         self._root_node = create_root_node(
-            getattr(self.stdout, "columns", 80),
-            getattr(self.stdout, "rows", 24),
+            initial_width,
+            None,
         )
         self._root_node.onComputeLayout = lambda: None
         self._root_node.onRender = lambda: None
@@ -97,8 +102,8 @@ class Ink:
         _set_stderr_handle(stderr_handle)
 
         _set_window_size(
-            getattr(self.stdout, "columns", 80),
-            getattr(self.stdout, "rows", 24),
+            initial_width,
+            initial_height,
         )
 
         self._output_driver = OutputDriver(
@@ -132,6 +137,12 @@ class Ink:
                 signal.signal(signal.SIGINT, lambda _signum, _frame: self.exit())
             except Exception:  # noqa: BLE001
                 self._previous_sigint_handler = None
+            if hasattr(signal, "SIGWINCH"):
+                try:
+                    self._previous_sigwinch_handler = signal.getsignal(signal.SIGWINCH)
+                    signal.signal(signal.SIGWINCH, lambda _signum, _frame: self._handle_resize())
+                except Exception:  # noqa: BLE001
+                    self._previous_sigwinch_handler = None
 
     def render(self, node) -> None:
         raw_node = createElement(node) if callable(node) and not getattr(node, "type", None) else node
@@ -192,6 +203,11 @@ class Ink:
                 signal.signal(signal.SIGINT, self._previous_sigint_handler)
             except Exception:  # noqa: BLE001
                 pass
+        if self._previous_sigwinch_handler is not None and hasattr(signal, "SIGWINCH"):
+            try:
+                signal.signal(signal.SIGWINCH, self._previous_sigwinch_handler)
+            except Exception:  # noqa: BLE001
+                pass
         if self._loop_thread is not None:
             self._loop_thread.stop()
 
@@ -220,6 +236,12 @@ class Ink:
     def exit(self, error_or_result: Any = None) -> None:
         self._exit_manager.set_result(error_or_result)
         if self._session is not None:
+            if getattr(hooks_runtime, "_batched_mode", None) is not None and self._loop_thread is not None:
+                if getattr(hooks_runtime, "_batched_pending", False):
+                    self._pending_session_exit_result = error_or_result
+                    return
+                self._loop_thread.call_soon(self._session.exit, error_or_result)
+                return
             self._session.exit(error_or_result)
             return
         self.unmount()
@@ -290,17 +312,36 @@ class Ink:
         self.stderr.write(payload)
 
     def _handle_resize(self) -> None:
-        self._root_node.width = getattr(self.stdout, "columns", 80)
-        self._root_node.height = getattr(self.stdout, "rows", 24)
-        _set_window_size(self._root_node.width, self._root_node.height)
+        width, height = self._get_stream_dimensions()
+        if width < self._last_terminal_width:
+            self._reset_rendered_frame(preserve_height=True)
+        self._root_node.width = width
+        self._root_node.height = None
+        _set_window_size(width, height)
+        self._last_terminal_width = width
         self._force_next_render = True
-        self._schedule_render("default")
+        self._schedule_render("discrete")
 
-    def _reset_rendered_frame(self) -> None:
+    def _get_stream_dimensions(self) -> tuple[int, int]:
+        columns = getattr(self.stdout, "columns", None)
+        rows = getattr(self.stdout, "rows", None)
+        if isinstance(columns, int) and columns > 0 and isinstance(rows, int) and rows > 0:
+            return columns, rows
+        if hasattr(self.stdout, "isatty") and self.stdout.isatty() and hasattr(self.stdout, "fileno"):
+            try:
+                size = os.get_terminal_size(self.stdout.fileno())
+                if size.columns > 0 and size.lines > 0:
+                    return size.columns, size.lines
+            except OSError:
+                pass
+        return 80, 24
+
+    def _reset_rendered_frame(self, *, preserve_height: bool = False) -> None:
         self._output_driver.log.clear()
         self._output_driver.last_output = ""
         self._output_driver.last_output_to_render = ""
-        self._output_driver.last_output_height = 0
+        if not preserve_height:
+            self._output_driver.last_output_height = 0
 
     def _on_render_callback(self) -> None:
         self._perform_render(self._current_node)
@@ -340,19 +381,23 @@ class Ink:
                 self._reconciler.update_container_sync(node, self._container)
                 if self.options.concurrent and self._transition_pending:
                     self._container.render_state = SimpleNamespace(status="pending", abort_reason=None)
-                flushPendingEffects()
                 render_result = render_dom(self._root_node, self.options.screen_reader_enabled)
                 self._rendered_output = render_result.output
                 self._output_driver.render_frame(
                     self._rendered_output,
                     static_output=render_result.staticOutput,
                 )
+                flushPendingEffects()
                 self._exit_manager.set_error(None)
             except Exception as error:  # noqa: BLE001
                 self._exit_manager.set_error(error)
                 self._rendered_output = f"ERROR\n{error}"
                 self._output_driver.render_frame(self._rendered_output, force_clear=True)
             finally:
+                if self._pending_session_exit_result is not None and self._session is not None:
+                    pending_result = self._pending_session_exit_result
+                    self._pending_session_exit_result = None
+                    self._session.exit(pending_result)
                 if self._force_next_render:
                     self._reconciler._force_rerender = False
                     self._force_next_render = False

@@ -172,6 +172,16 @@ def parseKeypress(value: str | bytes) -> Key:
     kitty = parseKittyKeypress(value) or parseKittySpecialKey(value)
     if kitty is not None:
         return kitty
+    if value in {"\r", "\n"}:
+        return Key(name="return", sequence=value, raw=value, isPrintable=False)
+    if value == "\t":
+        return Key(name="tab", sequence=value, raw=value, isPrintable=False)
+    if value == "\x7f":
+        return Key(name="delete", sequence=value, raw=value, isPrintable=False)
+    if value == "\x08":
+        return Key(name="backspace", sequence=value, raw=value, isPrintable=False)
+    if value == "\x1b":
+        return Key(name="escape", sequence=value, raw=value, isPrintable=False)
     if value == "\x03":
         return Key(name="c", ctrl=True, sequence=value, raw=value, isPrintable=False)
     if len(value) == 1 and value.isalpha():

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .layout_render import compute_layout
 from .render_node_to_output import renderNodeToOutput, renderNodeToScreenReaderOutput
-from .sanitize_ansi import sanitizeAnsi
 
 
 @dataclass
@@ -18,6 +18,24 @@ def _join_parts(parts: list[str], separator: str) -> str:
     if not filtered:
         return ""
     return separator.join(filtered)
+
+
+def _style_int(style: dict, *keys: str) -> int:
+    for key in keys:
+        value = style.get(key)
+        if value is None:
+            continue
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return 0
+
+
+def _has_static_subtree(node) -> bool:
+    if getattr(node, "internal_static", False):
+        return True
+    return any(_has_static_subtree(child) for child in getattr(node, "childNodes", []))
 
 
 def _split_static_output(node) -> tuple[str, str]:
@@ -40,11 +58,28 @@ def _split_static_output(node) -> tuple[str, str]:
     if not static_parts:
         return renderNodeToOutput(node), ""
     if node_name in {"ink-root", "ink-box", "ink-fragment"}:
-        separator = "\n"
         style = getattr(node, "attributes", {}).get("style", {})
         if node_name == "ink-box" and style.get("flexDirection", "column") != "column":
-            separator = ""
-        return _join_parts(main_parts, separator), _join_parts(static_parts, "\n")
+            return _join_parts(main_parts, ""), _join_parts(static_parts, "\n")
+
+        gap = _style_int(style, "gap")
+        built_main: list[str] = []
+        emitted_main = False
+        for child in children:
+            main_part, _ = _split_static_output(child)
+            if not main_part:
+                continue
+            child_style = getattr(child, "attributes", {}).get("style", {})
+            prefix = ""
+            if emitted_main and gap > 0:
+                prefix += "\n" * gap
+            margin_top = _style_int(child_style, "marginTop", "margin_top")
+            if margin_top > 0:
+                prefix += "\n" * margin_top
+            built_main.append(prefix + main_part)
+            emitted_main = True
+
+        return "".join(built_main), _join_parts(static_parts, "\n")
 
     if not main_parts:
         return "", _join_parts(static_parts, "\n")
@@ -56,9 +91,12 @@ def render_dom(node, is_screen_reader_enabled: bool) -> RenderResult:
         output = renderNodeToScreenReaderOutput(node)
         static_output = ""
     else:
-        output, static_output = _split_static_output(node)
-    output = sanitizeAnsi(output)
-    static_output = sanitizeAnsi(static_output)
+        compute_layout(node)
+        if _has_static_subtree(node):
+            output, static_output = _split_static_output(node)
+        else:
+            output = renderNodeToOutput(node)
+            static_output = ""
     output_height = 0 if output == "" else output.count("\n") + 1
     return RenderResult(output=output, outputHeight=output_height, staticOutput=static_output)
 

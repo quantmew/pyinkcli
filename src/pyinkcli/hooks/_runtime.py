@@ -24,6 +24,7 @@ class _EffectRecord:
     deps: tuple[Any, ...] | None
     cleanup: Any = None
     needs_run: bool = True
+    queued: bool = False
 
 
 @dataclass
@@ -82,15 +83,17 @@ _auto_batch_timer: threading.Timer | None = None
 _active_component_ids: set[str] = set()
 _dirty_components: set[str] = set()
 _render_phase_rerender_count = 0
+_running_effect_kind: str | None = None
 _runtime = SimpleNamespace(
     fibers={},
     pending_passive_unmount_fibers=[],
+    pending_passive_mount_effects=[],
 )
 
 
 def _clear_hook_state() -> None:
-    global _hook_state, _render_phase_rerender_count, _pending_rerender_priority, _auto_batch_timer
-    for state in _hook_state.values():
+    global _hook_state, _render_phase_rerender_count, _pending_rerender_priority, _auto_batch_timer, _running_effect_kind
+    for state in list(_hook_state.values()):
         for hook in state.hooks:
             if isinstance(hook, _EffectRecord) and hook.cleanup:
                 hook.cleanup()
@@ -104,6 +107,8 @@ def _clear_hook_state() -> None:
         _auto_batch_timer = None
     _runtime.fibers = {}
     _runtime.pending_passive_unmount_fibers = []
+    _runtime.pending_passive_mount_effects = []
+    _running_effect_kind = None
 
 
 def _reset_hook_state() -> None:
@@ -134,7 +139,7 @@ def _end_component_render() -> None:
 
 
 def _finish_hook_state() -> None:
-    global _render_phase_rerender_count
+    global _render_phase_rerender_count, _running_effect_kind
     unseen = [instance_id for instance_id, state in _hook_state.items() if not state.seen]
     for instance_id in unseen:
         state = _hook_state.pop(instance_id)
@@ -147,18 +152,42 @@ def _finish_hook_state() -> None:
                         hook_head=HookNode(index=0, kind="Effect", cleanup=hook.cleanup),
                     )
                 )
-    for state in _hook_state.values():
-        for hook in state.hooks:
-            if isinstance(hook, _EffectRecord) and hook.needs_run:
-                if hook.cleanup:
-                    hook.cleanup()
-                hook.cleanup = hook.callback() if callable(hook.callback) else None
-                hook.needs_run = False
+    passive_hooks: list[_EffectRecord] = []
+    for kind in ("insertion", "layout"):
+        _running_effect_kind = kind
+        try:
+            for state in _hook_state.values():
+                for hook in state.hooks:
+                    if not isinstance(hook, _EffectRecord) or not hook.needs_run:
+                        continue
+                    if hook.kind == "effect":
+                        passive_hooks.append(hook)
+                        continue
+                    if hook.kind != kind:
+                        continue
+                    if hook.cleanup:
+                        hook.cleanup()
+                    hook.cleanup = hook.callback() if callable(hook.callback) else None
+                    hook.needs_run = False
+        finally:
+            _running_effect_kind = None
+
     if _render_phase_rerender_count and _rerender_callback:
         count = _render_phase_rerender_count
         _render_phase_rerender_count = 0
         for _ in range(count):
             _rerender_callback()
+        return
+
+    _running_effect_kind = "effect"
+    try:
+        for hook in passive_hooks:
+            if hook.queued:
+                continue
+            hook.queued = True
+            _runtime.pending_passive_mount_effects.append(hook)
+    finally:
+        _running_effect_kind = None
 
 
 def _set_rerender_callback(callback) -> None:
@@ -257,9 +286,13 @@ def useState(initial):
     component_id = _current_component_id
 
     def set_value(next_value):
+        global _render_phase_rerender_count
         state.hooks[index] = next_value(state.hooks[index]) if callable(next_value) else next_value
         if component_id is not None:
             _dirty_components.add(component_id)
+        if _running_effect_kind in {"layout", "insertion"}:
+            _render_phase_rerender_count += 1
+            return
         _schedule_rerender("render_phase" if _rendering else "default")
 
     return slot, set_value
@@ -400,6 +433,7 @@ def _get_passive_queue_state():
     return {
         "has_deferred_passive_work": bool(_runtime.fibers),
         "pending_passive_unmount_fibers": len(_runtime.pending_passive_unmount_fibers),
+        "pending_passive_mount_effects": len(_runtime.pending_passive_mount_effects),
     }
 
 

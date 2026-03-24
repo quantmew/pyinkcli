@@ -37,9 +37,6 @@ def concurrent_suspense_example():
     show_more, set_show_more = useState(False)
 
     def schedule_more():
-        if show_more:
-            return None
-
         cancelled = False
 
         def worker():
@@ -56,29 +53,29 @@ def concurrent_suspense_example():
 
         return cleanup
 
-    useEffect(schedule_more, (show_more,))
+    useEffect(schedule_more, ())
 
     children = [
         Text("Concurrent Suspense Demo", bold=True, underline=True),
         Text(
-            "(With concurrent=True, async data re-renders through the suspense runtime)",
+            "(With concurrent: true, Suspense re-renders automatically)",
             dimColor=True,
         ),
-        Box(),
+        Box(marginTop=1),
         Text("Fast data (200ms):"),
         createElement(
             Suspense,
             createElement(DataItem, name="fast", delay=0.2),
             fallback=createElement(Loading, message="Loading fast data..."),
         ),
-        Box(),
+        Box(marginTop=1),
         Text("Medium data (800ms):"),
         createElement(
             Suspense,
-            createElement(DataItem, name="medium", delay=0.8),
+            createElement(DataItem, name="medium", delay=1.0),
             fallback=createElement(Loading, message="Loading medium data..."),
         ),
-        Box(),
+        Box(marginTop=1),
         Text("Slow data (1500ms):"),
         createElement(
             Suspense,
@@ -90,7 +87,7 @@ def concurrent_suspense_example():
     if show_more:
         children.extend(
             [
-                Box(),
+                Box(marginTop=1),
                 Text("Dynamically added (500ms):"),
                 createElement(
                     Suspense,

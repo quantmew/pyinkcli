@@ -18,7 +18,7 @@ class RenderScheduler:
         loop_thread: AsyncLoopThread | None,
         render_callback: Callable[[str], None],
         *,
-        max_fps: int = 30,
+        max_fps: int = 60,
     ) -> None:
         self._loop_thread = loop_thread
         self._render_callback = render_callback

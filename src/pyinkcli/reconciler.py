@@ -105,6 +105,7 @@ class _Reconciler:
         self._pending_class_mounts = []
         self._pending_class_updates = []
         self._pending_errors = []
+        self._owner_source_cache = {}
 
     def create_container(self, root_node, tag: int = 0):
         container = _Container(root=root_node, tag=tag)
@@ -304,6 +305,21 @@ class _Reconciler:
             return host
         if not isinstance(vnode, RenderableNode):
             return createTextNode(str(vnode))
+        if getattr(vnode.type, "__ink_react_provider__", False):
+            value = vnode.props.get("value", vnode.type._context.default_value)
+            with hooks_runtime._push_context(vnode.type._context, value):
+                if not vnode.children:
+                    return None
+                if len(vnode.children) == 1:
+                    return self._reconcile_node(existing, vnode.children[0], f"{instance_id}:provider")
+                return self._reconcile_node(existing, list(vnode.children), f"{instance_id}:provider")
+        if vnode.type == "__router_provider__":
+            with react_router.push_router_context(vnode.props["internal_router_context"]):
+                if not vnode.children:
+                    return None
+                if len(vnode.children) == 1:
+                    return self._reconcile_node(existing, vnode.children[0], f"{instance_id}:router")
+                return self._reconcile_node(existing, list(vnode.children), f"{instance_id}:router")
         if vnode.type == "__ink-suspense__":
             if instance_id in self._forced_suspense_ids or getattr(vnode, "_devtools_owner_id", None) in self._forced_suspense_ids:
                 result = self._reconcile_node(existing, vnode.props.get("fallback"), f"{instance_id}:suspense")
@@ -377,6 +393,11 @@ class _Reconciler:
                 if getattr(rendered, "_suspended_by", None):
                     result._suspended_by = rendered._suspended_by
             return result
+        if isinstance(vnode.type, str):
+            parent = getattr(existing, "parentNode", None)
+            parent_name = getattr(parent, "nodeName", None)
+            if vnode.type == "ink-text" and parent_name in {"ink-text", "ink-virtual-text"}:
+                vnode = RenderableNode(type="ink-virtual-text", props=vnode.props, children=vnode.children, key=vnode.key)
         if existing and getattr(existing, "nodeName", None) == vnode.type:
             node = existing
         else:
@@ -385,6 +406,12 @@ class _Reconciler:
             node = createNode(vnode.type)
         node.key = vnode.key
         previous_ref = getattr(node, "ref", None)
+        removed_keys = set(getattr(node, "attributes", {})) - set(vnode.props)
+        for key in removed_keys:
+            node.attributes.pop(key, None)
+            if hasattr(node, key):
+                setattr(node, key, None)
+        node.style = {}
         for key, value in vnode.props.items():
             setAttribute(node, key, value)
         if "style" in vnode.props:
@@ -415,6 +442,12 @@ class _Reconciler:
         next_children = []
         deletions = []
         for index, child in enumerate(normalized):
+            if (
+                isinstance(child, RenderableNode)
+                and child.type == "ink-text"
+                and getattr(parent, "nodeName", None) in {"ink-text", "ink-virtual-text"}
+            ):
+                child = RenderableNode(type="ink-virtual-text", props=child.props, children=child.children, key=child.key)
             existing = None
             key = child.key if isinstance(child, RenderableNode) else None
             if key is not None:
@@ -494,12 +527,18 @@ class _Reconciler:
 
     def _make_owner_info(self, component_type, component_id, props, class_instance=None):
         display_name = getattr(component_type, "__name__", str(component_type))
-        try:
-            source_file = inspect.getsourcefile(component_type) or ""
-            source_line = inspect.getsourcelines(component_type)[1]
-        except (OSError, TypeError):
-            source_file = ""
-            source_line = 0
+        cached_source = self._owner_source_cache.get(component_type)
+        if cached_source is None:
+            try:
+                source_file = inspect.getsourcefile(component_type) or ""
+                source_line = inspect.getsourcelines(component_type)[1]
+            except (OSError, TypeError):
+                source_file = ""
+                source_line = 0
+            cached_source = (source_file, source_line)
+            self._owner_source_cache[component_type] = cached_source
+        else:
+            source_file, source_line = cached_source
         state = None
         if class_instance is not None:
             state = _safe_copy(self._devtools_state_overrides.get(component_id, getattr(class_instance, "state", {})))

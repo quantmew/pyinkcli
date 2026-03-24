@@ -3,10 +3,13 @@ from __future__ import annotations
 from ..component import createElement
 
 ANSI_OPEN = {
+    "black": "\x1b[30m",
     "red": "\x1b[31m",
     "green": "\x1b[32m",
+    "yellow": "\x1b[33m",
     "blue": "\x1b[34m",
     "magenta": "\x1b[35m",
+    "cyan": "\x1b[36m",
     "white": "\x1b[37m",
     "gray": "\x1b[90m",
 }
@@ -47,11 +50,17 @@ def _transform_text(text: str, props: dict) -> str:
 def Text(*children, **props):
     if not children:
         return None
-    style = {}
+    style = {
+        "flexGrow": 0,
+        "flexShrink": 1,
+        "flexDirection": "row",
+    }
     if "background_color" in props and "backgroundColor" not in props:
         props["backgroundColor"] = props["background_color"]
     if "wrap" in props:
         style["textWrap"] = props["wrap"]
+    else:
+        style["textWrap"] = "wrap"
     props = dict(props)
     props["style"] = style
     props["internal_transform"] = lambda text: _transform_text(text, props)

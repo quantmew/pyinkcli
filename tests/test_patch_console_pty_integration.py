@@ -692,7 +692,7 @@ def test_incremental_rendering_example_preserves_selected_label_and_service_copy
         from pathlib import Path
 
         runpy.run_path(
-            str(Path("examples/incremental-rendering/incremental-rendering.py")),
+            str(Path("examples/incremental-rendering/index.py")),
             run_name="__main__",
         )
         """
@@ -708,8 +708,29 @@ def test_incremental_rendering_example_preserves_selected_label_and_service_copy
     )
 
     assert "Incremental Rendering Demo - incrementalRendering=true" in output
-    assert "Selected:" in output
+    assert "System Services Monitor (17 of 30 services):" in output
     assert "Server Authentication Module" in output
+    assert "Selected:" in output
+
+
+def test_use_window_size_reads_real_pty_dimensions() -> None:
+    source = textwrap.dedent(
+        """
+        from pyinkcli import Text, render, useWindowSize
+        from pyinkcli.component import component
+
+        @component
+        def Example():
+            columns, rows = useWindowSize()
+            return Text(f"size={columns}x{rows}")
+
+        app = render(Example, patch_console=False, interactive=True)
+        app.unmount()
+        """
+    )
+    output = _run_python_in_pty(source, rows=40, cols=180)
+
+    assert "size=180x40" in output
 
 
 def test_use_input_discrete_updates_bypass_normal_throttle_in_real_pty() -> None:

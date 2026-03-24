@@ -6,38 +6,45 @@ Appends completed tests to Static output and keeps a live counter below.
 """
 
 import threading
-import time
 
-from pyinkcli import Box, Static, Text, render
+from pyinkcli import Box, Static, Text
+from pyinkcli.example_runner import run_example
 from pyinkcli.hooks import useEffect, useState
 
 
 def static_example():
     """Render incrementally completed tests using Static."""
-    tests, set_tests = useState([{"id": index, "title": f"Test #{index + 1}"} for index in range(10)])
+    tests, set_tests = useState([])
 
     def setup_runner():
         running = True
+        timer = None
+        completed_tests = 0
 
-        def run_tests():
-            completed = len(tests)
-            while running and completed < 10:
-                time.sleep(0.1)
-                completed += 1
-                test_id = completed - 1
-                set_tests(
-                    lambda previous, index=test_id: [
-                        *previous,
-                        {"id": index, "title": f"Test #{index + 1}"},
-                    ]
-                )
+        def run():
+            nonlocal timer, completed_tests
+            if not running or completed_tests >= 10:
+                return
+            test_id = completed_tests
+            completed_tests += 1
+            set_tests(
+                lambda previous, index=test_id: [
+                    *previous,
+                    {"id": index, "title": f"Test #{index + 1}"},
+                ]
+            )
+            if running and completed_tests < 10:
+                timer = threading.Timer(0.24, run)
+                timer.daemon = True
+                timer.start()
 
-        thread = threading.Thread(target=run_tests, daemon=True)
-        thread.start()
+        run()
 
         def cleanup():
-            nonlocal running
+            nonlocal running, timer
             running = False
+            if timer is not None:
+                timer.cancel()
 
         return cleanup
 
@@ -58,4 +65,4 @@ def static_example():
 
 
 if __name__ == "__main__":
-    render(static_example, interactive=True, patch_console=False).wait_until_exit()
+    run_example(static_example, patch_console=False)

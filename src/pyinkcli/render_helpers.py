@@ -21,12 +21,20 @@ def create_ink_options(resolved_options: dict) -> Options:
     stream = resolved_options.get("stdout", sys.stdout)
     input_stream = resolved_options.get("stdin", sys.stdin)
     error_stream = resolved_options.get("stderr", sys.stderr)
+    interactive = resolved_options.get("interactive")
+    if interactive is None:
+        interactive = bool(
+            callable(getattr(stream, "isatty", None))
+            and stream.isatty()
+            and callable(getattr(input_stream, "isatty", None))
+            and input_stream.isatty()
+        )
     return Options(
         stdout=stream,
         stdin=input_stream,
         stderr=error_stream,
         debug=resolved_options.get("debug", False),
-        interactive=resolved_options.get("interactive", False),
+        interactive=interactive,
         patch_console=resolved_options.get("patch_console", resolved_options.get("patchConsole", True)),
         concurrent=resolved_options.get("concurrent", False),
         alternate_screen=resolved_options.get("alternate_screen", resolved_options.get("alternateScreen", False)),

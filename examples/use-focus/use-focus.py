@@ -14,8 +14,8 @@ def focus_example():
     return Box(
         Box(
             Text(
-                "Press Tab to focus next element, Shift+Tab to focus previous element, "
-                "Esc to reset focus."
+                "Press Tab to focus next element, Shift+Tab to focus previous element, Esc to\n"
+                "reset focus."
             ),
             marginBottom=1,
         ),

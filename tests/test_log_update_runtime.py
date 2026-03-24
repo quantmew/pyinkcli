@@ -2,10 +2,12 @@
 
 from pyinkcli.log_update import LogUpdate
 from pyinkcli.utils.ansi_escapes import (
+    cursor_left,
     cursor_down,
     cursor_next_line,
     cursor_to,
     cursor_up,
+    erase_line,
     erase_lines,
     hide_cursor_escape,
     show_cursor_escape,
@@ -26,6 +28,8 @@ class FakeStream:
 class FakeTTYStream(FakeStream):
     def isatty(self) -> bool:
         return True
+
+    columns = 80
 
 
 def test_standard_log_update_skips_identical_output():
@@ -152,7 +156,10 @@ def test_incremental_log_update_clears_extra_lines_when_output_shrinks():
     log("Line 1\nLine 2\nLine 3\n")
     log("Line 1\n")
 
-    assert erase_lines(2) in stream.writes[1]
+    second_write = stream.writes[1]
+    assert second_write.startswith(cursor_up(3) + cursor_left())
+    assert second_write.count(erase_line()) == 3
+    assert second_write.count(cursor_next_line()) == 3
 
 
 def test_incremental_log_update_handles_no_trailing_newline_shrink():
@@ -162,7 +169,9 @@ def test_incremental_log_update_handles_no_trailing_newline_shrink():
     log("A\nB")
     log("A")
 
-    assert erase_lines(1) in stream.writes[1]
+    second_write = stream.writes[1]
+    assert second_write.startswith(cursor_up(1) + cursor_left())
+    assert second_write.endswith(erase_line())
     assert not stream.writes[1].endswith("\n")
 
 
@@ -226,7 +235,20 @@ def test_incremental_log_update_renders_empty_string_as_full_clear():
     log("Line 1\nLine 2\nLine 3\n")
     log("\n")
 
-    assert stream.writes[1] == erase_lines(4) + "\n"
+    second_write = stream.writes[1]
+    assert second_write.startswith(cursor_up(3) + cursor_left())
+    assert second_write.count(erase_line()) == 4
+
+
+def test_log_update_counts_wrapped_tty_rows_when_rewriting() -> None:
+    stream = FakeTTYStream()
+    stream.columns = 10
+    log = LogUpdate(stream)
+
+    log("12345678901\n")
+    log("short\n")
+
+    assert erase_lines(2) in stream.writes[1]
 
 
 def test_incremental_log_update_shrinking_output_keeps_screen_tight():
@@ -237,7 +259,25 @@ def test_incremental_log_update_shrinking_output_keeps_screen_tight():
     log("Line 1\nLine 2\n")
     log("Line 1\n")
 
-    assert stream.writes[2] == erase_lines(2) + cursor_up(1) + cursor_next_line()
+    third_write = stream.writes[2]
+    assert third_write.startswith(cursor_up(2) + cursor_left())
+    assert third_write.count(erase_line()) == 2
+    assert third_write.count(cursor_next_line()) == 2
+
+
+def test_incremental_log_update_diffs_wrapped_visual_rows_without_full_redraw() -> None:
+    stream = FakeTTYStream()
+    stream.columns = 10
+    log = LogUpdate(stream, incremental=True)
+
+    log("1234567890AB\nalpha\n")
+    log("1234567890XY\nalpha\n")
+
+    second_write = stream.writes[1]
+    assert second_write.startswith(cursor_up(3) + cursor_left())
+    assert "alpha" not in second_write
+    assert erase_lines(4) not in second_write
+    assert second_write.count(erase_line()) == 1
 
 
 def test_incremental_log_update_clear_resets_state_for_fresh_render():

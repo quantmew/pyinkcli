@@ -5,7 +5,8 @@ Demonstrates a selectable list with keyboard navigation.
 Port of js_source/ink/examples/select-input/select-input.tsx
 """
 
-from pyinkcli import Box, Text, render, useInput, useIsScreenReaderEnabled
+from pyinkcli import Box, Text, useInput, useIsScreenReaderEnabled
+from pyinkcli.example_runner import run_example
 
 ITEMS = ["Red", "Green", "Blue", "Yellow", "Magenta", "Cyan"]
 
@@ -58,4 +59,4 @@ def select_input_example():
 
 
 if __name__ == "__main__":
-    render(select_input_example).wait_until_exit()
+    run_example(select_input_example)

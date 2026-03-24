@@ -61,6 +61,13 @@ def flushPendingEffects() -> None:
         if hook and callable(getattr(hook, "cleanup", None)):
             hook.cleanup()
     getattr(hooks_runtime._runtime, "pending_passive_unmount_fibers", []).clear()
+    for hook in list(getattr(hooks_runtime._runtime, "pending_passive_mount_effects", [])):
+        if callable(getattr(hook, "cleanup", None)):
+            hook.cleanup()
+        hook.cleanup = hook.callback() if callable(hook.callback) else None
+        hook.needs_run = False
+        hook.queued = False
+    getattr(hooks_runtime._runtime, "pending_passive_mount_effects", []).clear()
     for fiber in getattr(hooks_runtime._runtime, "fibers", {}).values():
         queue = getattr(fiber, "update_queue", None)
         effect = getattr(queue, "last_effect", None)

@@ -103,17 +103,29 @@ class Node:
     ) -> None:
         yoga.YGNodeCalculateLayout(self._node, float("nan") if width is None else width, float("nan") if height is None else height, direction)
 
+    def mark_dirty(self) -> None:
+        yoga.YGNodeMarkDirty(self._node)
+
     def set_width(self, value: float) -> None:
         yoga.YGNodeStyleSetWidth(self._node, float(value))
 
+    def set_width_percent(self, value: float) -> None:
+        yoga.YGNodeStyleSetWidthPercent(self._node, float(value))
+
     def set_height(self, value: float) -> None:
         yoga.YGNodeStyleSetHeight(self._node, float(value))
+
+    def set_height_percent(self, value: float) -> None:
+        yoga.YGNodeStyleSetHeightPercent(self._node, float(value))
 
     def set_flex_direction(self, value) -> None:
         yoga.YGNodeStyleSetFlexDirection(self._node, value)
 
     def set_align_items(self, value) -> None:
         yoga.YGNodeStyleSetAlignItems(self._node, value)
+
+    def set_align_self(self, value) -> None:
+        yoga.YGNodeStyleSetAlignSelf(self._node, value)
 
     def set_justify_content(self, value) -> None:
         yoga.YGNodeStyleSetJustifyContent(self._node, value)
@@ -151,8 +163,14 @@ class Node:
     def set_min_width(self, value: float) -> None:
         yoga.YGNodeStyleSetMinWidth(self._node, float(value))
 
+    def set_min_width_percent(self, value: float) -> None:
+        yoga.YGNodeStyleSetMinWidthPercent(self._node, float(value))
+
     def set_max_width(self, value: float) -> None:
         yoga.YGNodeStyleSetMaxWidth(self._node, float(value))
+
+    def set_max_width_percent(self, value: float) -> None:
+        yoga.YGNodeStyleSetMaxWidthPercent(self._node, float(value))
 
     def get_computed_width(self) -> float:
         return float(yoga.YGNodeLayoutGetWidth(self._node))

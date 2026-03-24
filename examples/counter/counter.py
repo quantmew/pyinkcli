@@ -22,7 +22,7 @@ def counter_example():
 
         def tick():
             while running:
-                time.sleep(0.1)
+                time.sleep(0.29)
                 set_counter(lambda value: value + 1)
 
         thread = threading.Thread(target=tick, daemon=True)

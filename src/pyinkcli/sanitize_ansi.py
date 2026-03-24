@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 import re
 
 from .ansi_tokenizer import hasAnsiControlCharacters, tokenizeAnsi
@@ -7,6 +8,7 @@ from .ansi_tokenizer import hasAnsiControlCharacters, tokenizeAnsi
 sgrParametersRegex = re.compile(r"^[\d:;]*$")
 
 
+@lru_cache(maxsize=4096)
 def sanitizeAnsi(text: str) -> str:
     if not hasAnsiControlCharacters(text):
         return text
@@ -26,4 +28,3 @@ def sanitizeAnsi(text: str) -> str:
 
 
 __all__ = ["sanitizeAnsi"]
-

@@ -1,6 +1,6 @@
 """use-focus-with-id example for pyinkcli."""
 
-from pyinkcli import Box, Text, render, useApp, useFocus, useFocusManager, useInput
+from pyinkcli import Box, Text, render, useFocus, useFocusManager, useInput
 from pyinkcli.component import createElement
 
 
@@ -13,13 +13,10 @@ def Item(*, label: str, element_id: str):
 
 
 def focus_with_id_example():
-    app = useApp()
     focus_manager = useFocusManager()
 
     def on_input(char, key):
-        if char == "q" or (key.ctrl and char == "c"):
-            app.exit()
-        elif char in {"1", "2", "3"}:
+        if char in {"1", "2", "3"}:
             focus_manager.focus(char)
 
     useInput(on_input)
@@ -27,7 +24,8 @@ def focus_with_id_example():
     return Box(
         Box(
             Text(
-                "Press 1, 2 or 3 to focus an item. Tab and Shift+Tab also work.",
+                "Press Tab to focus next element, Shift+Tab to focus previous element, Esc to\n"
+                "reset focus.",
             ),
             marginBottom=1,
         ),

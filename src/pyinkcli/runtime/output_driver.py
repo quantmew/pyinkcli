@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 
+from ..log_update import LogUpdate
 from ..sanitize_ansi import sanitizeAnsi
 from ..log_update import logUpdate
 from ..utils.ansi_escapes import clear_terminal, hide_cursor_escape
@@ -34,12 +35,45 @@ class OutputDriver:
     def set_cursor_position(self, position) -> None:
         self.log.set_cursor_position(position)
 
+    def _viewport_rows(self) -> int:
+        rows = getattr(self.stream, "rows", None)
+        if rows is None and hasattr(self.stream, "fileno"):
+            try:
+                rows = os.get_terminal_size(self.stream.fileno()).lines
+            except OSError:
+                rows = 24
+        return rows or 24
+
+    def _should_clear_terminal_for_frame(
+        self,
+        *,
+        previous_output_height: int,
+        next_output_height: int,
+    ) -> bool:
+        if not hasattr(self.stream, "isatty") or not self.stream.isatty():
+            return False
+
+        viewport_rows = self._viewport_rows()
+        was_fullscreen = previous_output_height >= viewport_rows
+        is_leaving_fullscreen = was_fullscreen and next_output_height < viewport_rows
+
+        had_previous_frame = previous_output_height > 0
+        is_overflowing = next_output_height > viewport_rows
+
+        # Ink's real-world behavior for oversized live frames is closer to a
+        # full clear/home redraw than to our surgical per-row diff path.
+        # The incremental path leaves mixed old/new rows visible while a tall
+        # frame is being updated, which is especially obvious in the
+        # incremental-rendering example.
+        return (self.incremental and is_overflowing and had_previous_frame) or is_leaving_fullscreen
+
     def render_frame(self, output: str, *, static_output: str = "", force_clear: bool = False) -> bool:
-        output_height = 0 if output == "" else output.count("\n") + 1
+        output_height = self.log._visible_line_count(output)
         has_static_output = bool(static_output and static_output != "\n")
         sync = shouldSynchronize(self.stream, self.interactive)
         was_fullscreen = self._is_fullscreen(self.last_output_height)
         is_fullscreen = self._is_fullscreen(output_height)
+        self.log.incremental = self.incremental
 
         if self.debug:
             if has_static_output:
@@ -77,6 +111,25 @@ class OutputDriver:
         if force_clear or (was_fullscreen and not is_fullscreen):
             prepend_clear = True
             self.log.reset()
+
+        should_clear_terminal = force_clear or self._should_clear_terminal_for_frame(
+            previous_output_height=self.last_output_height,
+            next_output_height=output_height,
+        )
+
+        if should_clear_terminal:
+            if sync:
+                self.stream.write(bsu)
+            payload = clear_terminal() + self.full_static_output + output
+            self.stream.write(self.log._normalize(payload))
+            self.last_output = output
+            self.last_output_to_render = output_to_render
+            self.last_output_height = output_height
+            self.log.sync(output_to_render)
+            if sync:
+                self.stream.write(esu)
+            return True
+
         if has_static_output:
             if sync:
                 self.stream.write(bsu)
@@ -133,10 +186,4 @@ class OutputDriver:
     def _is_fullscreen(self, output_height: int) -> bool:
         if not hasattr(self.stream, "isatty") or not self.stream.isatty():
             return False
-        rows = getattr(self.stream, "rows", None)
-        if rows is None and hasattr(self.stream, "fileno"):
-            try:
-                rows = os.get_terminal_size(self.stream.fileno()).lines
-            except OSError:
-                rows = 24
-        return output_height >= (rows or 24)
+        return output_height >= self._viewport_rows()

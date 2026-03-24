@@ -4,19 +4,11 @@ Justify content example for pyinkcli.
 Demonstrates different justifyContent values in flexbox layout.
 """
 
-from pyinkcli import Box, Text, render, useApp, useInput
+from pyinkcli import Box, Text, render
 
 
 def justify_content_example():
     """Render boxes with different justifyContent values."""
-    app = useApp()
-
-    def on_input(input_char, key):
-        if input_char == "q" or (key.ctrl and input_char == "c"):
-            app.exit()
-
-    useInput(on_input)
-
     return Box(
         Box(
             Box(
@@ -87,8 +79,6 @@ def justify_content_example():
             ),
             flexDirection="column",
         ),
-        Text("\nPress 'q' to exit", dimColor=True),
-        flexDirection="column",
     )
 
 

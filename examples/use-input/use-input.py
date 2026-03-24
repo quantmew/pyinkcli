@@ -31,7 +31,7 @@ def robot_example():
     useInput(handle_input)
 
     return Box(
-        Text('Use arrow keys to move the face. Press "q" to exit.'),
+        Text("Use arrow keys to move the face. Press “q” to exit."),
         Box(
             Text("^_^"),
             height=12,

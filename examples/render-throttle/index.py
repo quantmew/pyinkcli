@@ -2,6 +2,14 @@
 
 import threading
 import time
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+SRC = ROOT / "src"
+if str(SRC) in sys.path:
+    sys.path.remove(str(SRC))
+sys.path.insert(0, str(SRC))
 
 from pyinkcli import Box, Text, render
 from pyinkcli.hooks import useEffect, useState
@@ -15,7 +23,7 @@ def app():
 
         def tick():
             while running:
-                time.sleep(0.01)
+                time.sleep(0.0229)
                 set_count(lambda value: value + 1)
 
         thread = threading.Thread(target=tick, daemon=True)
@@ -31,8 +39,8 @@ def app():
 
     return Box(
         Text(f"Counter: {count}"),
-        Text("This updates every 10ms but renders are throttled."),
-        Text("Press Ctrl+C to exit.", dimColor=True),
+        Text("This updates every 10ms but renders are throttled"),
+        Text("Press Ctrl+C to exit"),
         flexDirection="column",
         padding=1,
     )

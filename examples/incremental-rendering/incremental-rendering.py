@@ -1,4 +1,4 @@
-"""incremental-rendering example aligned with JS Ink."""
+"""incremental-rendering example aligned with the original JS Ink example."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ import threading
 import time
 from datetime import datetime
 
-from pyinkcli import Box, Text, render, useApp, useInput, useWindowSize
+from pyinkcli import Box, Text, useApp, useInput, useWindowSize
+from pyinkcli.example_runner import run_example
 from pyinkcli.hooks import useEffect, useState
 
 ROWS = [
@@ -76,7 +77,7 @@ def progress_bar(value: int) -> str:
 
 def incremental_rendering_example():
     app = useApp()
-    _, terminal_height = useWindowSize()
+    _terminal_width, terminal_height = useWindowSize()
 
     available_lines = max(terminal_height - 15, 10)
     log_line_count = max(int(available_lines * 0.3), 3)
@@ -97,7 +98,6 @@ def incremental_rendering_example():
     def sync_log_lines():
         if len(log_lines) == log_line_count:
             return None
-
         set_log_lines(
             log_lines[:log_line_count]
             if len(log_lines) >= log_line_count
@@ -155,7 +155,6 @@ def incremental_rendering_example():
                 def update_logs(previous):
                     if not previous:
                         return previous
-
                     new_lines = list(previous)
                     update_index = random.randrange(len(new_lines))
                     new_lines[update_index] = generate_log_line(
@@ -190,13 +189,11 @@ def incremental_rendering_example():
                 lambda previous: service_count - 1 if previous == 0 else previous - 1
             )
             return
-
         if key.down_arrow:
             set_selected_index(
                 lambda previous: 0 if previous == service_count - 1 else previous + 1
             )
             return
-
         if input_char == "q":
             app.exit()
 
@@ -299,8 +296,7 @@ def incremental_rendering_example():
 
 
 if __name__ == "__main__":
-    render(
+    run_example(
         incremental_rendering_example,
         incremental_rendering=True,
-        interactive=True,
-    ).wait_until_exit()
+    )

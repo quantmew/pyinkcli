@@ -145,6 +145,8 @@ def test_suspense_resolution_without_active_renderer_does_not_leak_rerender() ->
 def test_suspense_reveals_each_boundary_as_its_resource_resolves() -> None:
     stdout = FakeStdout()
     stdin = FakeStdin()
+    fast_delay = 0.05
+    slow_delay = 0.12
 
     def Child(name: str, delay: float):
         return Text(readResource(name, lambda: (time.sleep(delay), name.upper())[1]))
@@ -153,12 +155,12 @@ def test_suspense_reveals_each_boundary_as_its_resource_resolves() -> None:
         "ink-box",
         createElement(
             Suspense,
-            createElement(Child, name="a", delay=0.02),
+            createElement(Child, name="a", delay=fast_delay),
             fallback=createElement(Text, "A..."),
         ),
         createElement(
             Suspense,
-            createElement(Child, name="b", delay=0.08),
+            createElement(Child, name="b", delay=slow_delay),
             fallback=createElement(Text, "B..."),
         ),
     )
@@ -170,12 +172,12 @@ def test_suspense_reveals_each_boundary_as_its_resource_resolves() -> None:
         assert stdout.getvalue().splitlines()[-2:] == ["A...", "B..."]
 
         _clear_stream(stdout)
-        time.sleep(0.04)
+        time.sleep(fast_delay + 0.01)
         app.wait_until_render_flush(timeout=0.3)
         assert stdout.getvalue().splitlines()[-2:] == ["A", "B..."]
 
         _clear_stream(stdout)
-        time.sleep(0.08)
+        time.sleep((slow_delay - fast_delay) + 0.02)
         app.wait_until_render_flush(timeout=0.3)
         assert stdout.getvalue().splitlines()[-2:] == ["A", "B"]
     finally:
