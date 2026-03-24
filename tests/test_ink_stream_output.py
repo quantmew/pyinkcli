@@ -220,6 +220,26 @@ def test_output_driver_full_clears_incremental_overflowing_frames() -> None:
     assert clear_terminal() in second_payload
 
 
+def test_output_driver_full_clears_standard_overflowing_frames() -> None:
+    stdout = ResizableTTY(columns=20, rows=3)
+    driver = OutputDriver(stdout, interactive=True, incremental=False)
+
+    first = "line1\nline2\nline3\nline4"
+    second = "line1\nline2\nline3\nchanged"
+
+    assert driver.render_frame(first) is True
+    first_payload = stdout.getvalue()
+    assert clear_terminal() not in first_payload
+
+    stdout.seek(0)
+    stdout.truncate(0)
+
+    assert driver.render_frame(second) is True
+    second_payload = stdout.getvalue()
+
+    assert clear_terminal() in second_payload
+
+
 def test_output_driver_normalizes_newlines_in_full_clear_path_for_tty() -> None:
     stdout = ResizableTTY(columns=20, rows=3)
     driver = OutputDriver(stdout, interactive=True, incremental=True)

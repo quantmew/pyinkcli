@@ -59,12 +59,14 @@ class OutputDriver:
         had_previous_frame = previous_output_height > 0
         is_overflowing = next_output_height > viewport_rows
 
-        # Ink's real-world behavior for oversized live frames is closer to a
-        # full clear/home redraw than to our surgical per-row diff path.
-        # The incremental path leaves mixed old/new rows visible while a tall
-        # frame is being updated, which is especially obvious in the
-        # incremental-rendering example.
-        return (self.incremental and is_overflowing and had_previous_frame) or is_leaving_fullscreen
+        # Once a live frame grows beyond the viewport, relying on cursor-up +
+        # line erases is no longer reliable: the terminal may already have
+        # scrolled, so the top of the previous frame is outside the rewrite
+        # region and can remain visible as "ghost" output above the next frame.
+        #
+        # Full clear/home redraw matches how Ink behaves for oversized frames
+        # and avoids stale content for both standard and incremental rendering.
+        return (is_overflowing and had_previous_frame) or is_leaving_fullscreen
 
     def render_frame(self, output: str, *, static_output: str = "", force_clear: bool = False) -> bool:
         output_height = self.log._visible_line_count(output)
