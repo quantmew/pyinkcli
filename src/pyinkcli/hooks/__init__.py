@@ -1,5 +1,6 @@
 from ._runtime import (
     useCallback,
+    useDeferredValue,
     useEffect,
     useInsertionEffect,
     useLayoutEffect,
@@ -14,6 +15,7 @@ __all__ = [
     "useApp",
     "useCallback",
     "useCursor",
+    "useDeferredValue",
     "useEffect",
     "useFocus",
     "useFocusManager",

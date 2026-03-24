@@ -385,6 +385,72 @@ def useTransition():
     return bool(getattr(app, "_transition_pending", False)), start_transition
 
 
+def useDeferredValue(value, initial_value=None):
+    """
+    React useDeferredValue 实现
+
+    延迟返回值的更新，优先渲染其他内容。
+    用于延迟更新非关键的 UI 部分，让关键更新先完成。
+
+    Args:
+        value: 当前值
+        initial_value: 可选的初始值（用于 SSR  hydration）
+
+    Returns:
+        延迟后的值
+
+    使用场景:
+        - 大型列表渲染时，延迟过滤条件的更新
+        - 文本搜索时，延迟搜索结果的更新
+        - 图片处理时，延迟处理参数的更新
+
+    示例:
+        def SearchResults(query):
+            deferred_query = useDeferredValue(query)
+            # 使用 deferred_query 进行搜索，而不是直接使用 query
+            return <List items={search(deferred_query)} />
+    """
+    from .use_app import useApp
+
+    # 如果未提供初始值，使用当前值
+    if initial_value is None:
+        initial_value = value
+
+    # 获取当前组件状态
+    slot, index, state = _get_slot(lambda: {"value": initial_value, "prev_value": None})
+
+    # 检查值是否变化
+    if slot["prev_value"] != value:
+        slot["prev_value"] = value
+
+        # 检查是否是首次渲染
+        if slot["value"] == initial_value and initial_value == value:
+            # 首次渲染，直接返回
+            slot["value"] = value
+        else:
+            # 值变化了，检查是否需要延迟
+            app = useApp()
+
+            # 如果不是并发模式，直接更新
+            if app is None or not getattr(getattr(app, "options", None), "concurrent", False):
+                slot["value"] = value
+            else:
+                # 并发模式：延迟更新
+                # 先保持旧值，调度一个过渡更新
+                _schedule_rerender("transition")
+
+                def update_deferred():
+                    slot["value"] = value
+                    # 触发重新渲染
+                    if _rerender_callback:
+                        _rerender_callback()
+
+                # 使用过渡优先级调度更新
+                app._schedule_transition(update_deferred, delay=0.08)
+
+    return slot["value"]
+
+
 def useContext(context):
     if _current_component_id is not None:
         state = _hook_state.get(_current_component_id)
@@ -430,6 +496,7 @@ __all__ = [
     "_set_schedule_update_callback",
     "useCallback",
     "useContext",
+    "useDeferredValue",
     "useEffect",
     "useInsertionEffect",
     "useLayoutEffect",

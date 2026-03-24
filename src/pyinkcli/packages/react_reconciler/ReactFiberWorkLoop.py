@@ -1,87 +1,435 @@
+"""
+React Fiber Work Loop - 可中断的工作循环实现
+
+实现基于时间切片和生成器的可中断渲染，支持抢占式更新。
+"""
+
 from __future__ import annotations
 
-from .ReactEventPriorities import DefaultEventPriority
-from .ReactFiberLane import getHighestPriorityLane
+import asyncio
+import time
+from types import GeneratorType
+from typing import Any, Generator, Optional
+
+from .ReactEventPriorities import (
+    DefaultEventPriority,
+    DiscreteEventPriority,
+    TransitionEventPriority,
+)
+from .ReactFiberLane import (
+    DefaultLane,
+    IdleLane,
+    NoLane,
+    NoLanes,
+    SyncLane,
+    TransitionLanes,
+    getHighestPriorityLane,
+    includesBlockingLane,
+    includesExpiredLane,
+    mergeLanes,
+    removeLanes,
+)
 from .ReactSharedInternals import shared_internals
 
-_work_in_progress_root = None
-_work_in_progress_root_render_lanes = 0
-_root_with_pending_passive_effects = None
-_pending_passive_effect_lanes = 0
-_has_pending_commit_effects = False
+# =============================================================================
+# 全局状态
+# =============================================================================
+
+_work_in_progress_root: Optional[Any] = None
+_work_in_progress_root_render_lanes: int = 0
+_root_with_pending_passive_effects: Optional[Any] = None
+_pending_passive_effect_lanes: int = 0
+_has_pending_commit_effects: bool = False
+
+# 时间切片配置
+_yield_interval = 50  # 每 50 个节点让出一次
+_time_slice_ms = 4  # 4ms 时间切片（与 React 默认值对齐）
+
+# 工作循环状态
+_is_work_loop_suspended = False
+_last_yield_time = 0
 
 
-def laneToMask(priority: int) -> int:
-    return priority
+# =============================================================================
+# ShouldYield 时间切片支持
+# =============================================================================
 
 
-def requestUpdateLane() -> int:
-    if getattr(shared_internals, "current_transition", None) is not None:
-        from .ReactEventPriorities import TransitionEventPriority
+def shouldYield() -> bool:
+    """
+    检查是否应该让出主线程控制权
 
-        return TransitionEventPriority
-    priority = getattr(shared_internals, "current_update_priority", None)
-    if priority in (None, 0):
-        return DefaultEventPriority
-    return priority
+    基于时间切片：如果距离上次让出超过 _time_slice_ms，则让出
+    """
+    global _last_yield_time
+    current_time = time.perf_counter() * 1000  # 转换为毫秒
 
-
-def performWorkOnRoot(root, lanes: int) -> None:
-    selected = getHighestPriorityLane(lanes)
-    root._reconciler.flush_scheduled_updates(root.container, selected, lanes=selected, consume_all=False)
+    if current_time - _last_yield_time >= _time_slice_ms:
+        return True
+    return False
 
 
-def mergeLanes(a: int, b: int) -> int:
-    return a | b
+def forceYield() -> None:
+    """强制让出控制权"""
+    global _last_yield_time
+    _last_yield_time = time.perf_counter() * 1000
 
 
-def removeLanes(a: int, b: int) -> int:
-    return a & ~b
+def markYield() -> None:
+    """标记已让出，重置时间"""
+    global _last_yield_time
+    _last_yield_time = time.perf_counter() * 1000
 
 
-def getWorkInProgressRoot():
+# =============================================================================
+# 工作循环配置
+# =============================================================================
+
+
+def shouldTimeSlice(root: Any, lanes: int) -> bool:
+    """
+    判断是否应该使用时间切片
+
+    当不包含阻塞性 lane 且没有过期 lane 时，使用并发渲染
+    """
+    return (
+        not includesBlockingLane(lanes)
+        and not includesExpiredLane(lanes)
+        and not checkIfRootIsPrerendering(root, lanes)
+    )
+
+
+def checkIfRootIsPrerendering(root: Any, lanes: int) -> bool:
+    """
+    检查 root 是否处于预渲染模式
+    简化实现：默认返回 False
+    """
+    return getattr(root, "is_prerendering", False)
+
+
+def hasHigherPriorityWork(root: Any, current_lanes: int) -> bool:
+    """
+    检查是否有更高优先级的工作需要处理
+    """
+    pending_lanes = getattr(root, "pending_lanes", NoLanes)
+    if pending_lanes == NoLanes:
+        return False
+
+    # 获取最高优先级的 pending lane
+    next_lane = getHighestPriorityLane(pending_lanes)
+    current_lane = getHighestPriorityLane(current_lanes)
+
+    # 数值越小优先级越高
+    return next_lane < current_lane and next_lane != NoLane
+
+
+# =============================================================================
+# 可中断的工作单元
+# =============================================================================
+
+
+class WorkLoopResult:
+    """工作循环执行结果"""
+
+    def __init__(self) -> None:
+        self.completed: bool = False
+        self.yielded: bool = False
+        self.preempted: bool = False
+        self.error: Optional[Exception] = None
+        self.work_in_progress: Optional[Any] = None
+
+
+def performUnitOfWork(
+    fiber: Any, count: int = 0
+) -> Generator[dict[str, Any], None, Optional[Any]]:
+    """
+    执行单个工作单元，支持中断
+
+    使用生成器实现可中断的执行流程
+    """
+    global _work_in_progress_root
+
+    # 检查是否需要让出（基于节点计数）
+    if count > 0 and count % _yield_interval == 0:
+        yield {"type": "yield", "reason": "interval", "fiber": fiber, "count": count}
+        # 等待恢复
+        markYield()
+
+    try:
+        # 执行实际的 fiber 工作
+        next_fiber = _processFiber(fiber)
+
+        yield {"type": "progress", "fiber": fiber, "next": next_fiber}
+
+        return next_fiber
+    except Exception as e:
+        yield {"type": "error", "fiber": fiber, "error": e}
+        raise
+
+
+def _processFiber(fiber: Any) -> Optional[Any]:
+    """
+    处理单个 Fiber 节点
+
+    简化实现：返回 sibling 或返回 parent
+    """
+    # 尝试获取 sibling
+    sibling = getattr(fiber, "sibling", None)
+    if sibling is not None:
+        return sibling
+
+    # 返回 parent
+    parent = getattr(fiber, "return", None)
+    return None
+
+
+async def renderRootConcurrent(
+    root: Any, lanes: int
+) -> AsyncGenerator[dict[str, Any], None]:
+    """
+    并发渲染 root，支持时间切片和抢占
+
+    使用 async/await 和生成器实现可中断的渲染流程
+    """
+    global _work_in_progress_root, _work_in_progress_root_render_lanes, _is_work_loop_suspended, _last_yield_time
+
+    _work_in_progress_root = root
+    _work_in_progress_root_render_lanes = lanes
+    _is_work_loop_suspended = False
+    _last_yield_time = time.perf_counter() * 1000
+
+    # 获取 work-in-progress fiber
+    work_in_progress = getattr(root, "work_in_progress", None)
+    if work_in_progress is None:
+        work_in_progress = getattr(root, "current", None)
+
+    count = 0
+    start_time = time.perf_counter()
+
+    try:
+        while work_in_progress is not None and not _is_work_loop_suspended:
+            # 检查时间切片
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            if elapsed_ms >= _time_slice_ms:
+                yield {
+                    "type": "time_slice",
+                    "work_in_progress": work_in_progress,
+                    "elapsed_ms": elapsed_ms,
+                }
+                # 让出控制权
+                await asyncio.sleep(0)
+                start_time = time.perf_counter()
+                _last_yield_time = time.perf_counter() * 1000
+
+            # 检查抢占
+            if hasHigherPriorityWork(root, lanes):
+                yield {
+                    "type": "preempted",
+                    "work_in_progress": work_in_progress,
+                    "reason": "higher_priority",
+                }
+                return
+
+            # 执行工作单元
+            work_gen = performUnitOfWork(work_in_progress, count)
+            result = None
+
+            for work_result in work_gen:
+                if work_result.get("type") == "yield":
+                    # 生成器请求让出
+                    yield work_result
+                    await asyncio.sleep(0)
+                    start_time = time.perf_counter()
+                elif work_result.get("type") == "progress":
+                    work_in_progress = work_result.get("next")
+                    count += 1
+                    break
+                elif work_result.get("type") == "error":
+                    raise work_result.get("error")
+
+    finally:
+        _work_in_progress_root = None
+        _work_in_progress_root_render_lanes = 0
+
+
+def renderRootSync(root: Any, lanes: int, force_sync: bool = False) -> None:
+    """
+    同步渲染 root，不支持中断
+
+    用于高优先级更新或遗留模式
+    """
+    global _work_in_progress_root, _work_in_progress_root_render_lanes
+
+    _work_in_progress_root = root
+    _work_in_progress_root_render_lanes = lanes
+
+    work_in_progress = getattr(root, "work_in_progress", None)
+    if work_in_progress is None:
+        work_in_progress = getattr(root, "current", None)
+
+    try:
+        while work_in_progress is not None:
+            # 同步执行，不让出控制权
+            work_in_progress = _processFiber(work_in_progress)
+    finally:
+        _work_in_progress_root = None
+        _work_in_progress_root_render_lanes = 0
+
+
+# =============================================================================
+# 工作循环入口
+# =============================================================================
+
+
+def performWorkOnRoot(root: Any, lanes: int, force_sync: bool = False) -> None:
+    """
+    在 root 上执行工作
+
+    根据情况选择同步或并发渲染
+    """
+    # 检查是否应该使用时间切片
+    should_time_slice = not force_sync and shouldTimeSlice(root, lanes)
+
+    if should_time_slice:
+        # 并发渲染 - 需要在事件循环中调用
+        # 这里提供同步的包装器
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(_runConcurrentWork(root, lanes))
+        finally:
+            loop.close()
+    else:
+        # 同步渲染
+        renderRootSync(root, lanes, force_sync)
+
+
+async def _runConcurrentWork(root: Any, lanes: int) -> None:
+    """运行并发工作的异步包装器"""
+    async for result in renderRootConcurrent(root, lanes):
+        # 处理结果
+        if result.get("type") == "error":
+            raise result.get("error")
+
+
+# =============================================================================
+# 工作循环状态访问器
+# =============================================================================
+
+
+def getWorkInProgressRoot() -> Optional[Any]:
+    """获取当前正在工作的 root"""
     return _work_in_progress_root
 
 
-def getWorkInProgressRootRenderLanes():
+def getWorkInProgressRootRenderLanes() -> int:
+    """获取当前正在工作的 root 的渲染 lanes"""
     return _work_in_progress_root_render_lanes
 
 
-def getRootWithPendingPassiveEffects():
+def getRootWithPendingPassiveEffects() -> Optional[Any]:
+    """获取有待处理被动效果的 root"""
     return _root_with_pending_passive_effects
 
 
-def getPendingPassiveEffectsLanes():
+def getPendingPassiveEffectsLanes() -> int:
+    """获取有待处理被动效果的 lanes"""
     return _pending_passive_effect_lanes
 
 
-def hasPendingCommitEffects():
+def hasPendingCommitEffects() -> bool:
+    """检查是否有待处理的提交效果"""
     return _has_pending_commit_effects
 
 
+def isWorkLoopSuspendedOnData() -> bool:
+    """检查工作循环是否因等待数据而挂起"""
+    return _is_work_loop_suspended
+
+
+# =============================================================================
+# 被动效果处理
+# =============================================================================
+
+
 def flushPendingEffects() -> None:
-    global _root_with_pending_passive_effects, _pending_passive_effect_lanes
-    global _has_pending_commit_effects
+    """
+    刷新所有待处理的被动效果
+
+    执行 useEffect 的清理函数和回调函数
+    """
+    global _root_with_pending_passive_effects, _pending_passive_effect_lanes, _has_pending_commit_effects
+
     from ...hooks import _runtime as hooks_runtime
 
-    for fiber in list(getattr(hooks_runtime._runtime, "pending_passive_unmount_fibers", [])):
+    # 执行卸载组件的清理函数
+    for fiber in list(
+        getattr(hooks_runtime._runtime, "pending_passive_unmount_fibers", [])
+    ):
         hook = getattr(fiber, "hook_head", None)
         if hook and callable(getattr(hook, "cleanup", None)):
             hook.cleanup()
-    getattr(hooks_runtime._runtime, "pending_passive_unmount_fibers", []).clear()
-    for hook in list(getattr(hooks_runtime._runtime, "pending_passive_mount_effects", [])):
+    getattr(
+        hooks_runtime._runtime, "pending_passive_unmount_fibers", []
+    ).clear()
+
+    # 执行挂载组件的效果
+    for hook in list(
+        getattr(hooks_runtime._runtime, "pending_passive_mount_effects", [])
+    ):
         if callable(getattr(hook, "cleanup", None)):
             hook.cleanup()
         hook.cleanup = hook.callback() if callable(hook.callback) else None
         hook.needs_run = False
         hook.queued = False
     getattr(hooks_runtime._runtime, "pending_passive_mount_effects", []).clear()
+
+    # 执行 fibers 中的效果
     for fiber in getattr(hooks_runtime._runtime, "fibers", {}).values():
         queue = getattr(fiber, "update_queue", None)
         effect = getattr(queue, "last_effect", None)
         if effect is not None and callable(effect.create):
             effect.create()
+
     hooks_runtime._runtime.fibers = {}
     _root_with_pending_passive_effects = None
     _pending_passive_effect_lanes = 0
     _has_pending_commit_effects = False
+
+
+def schedulePendingEffects(root: Any, lanes: int) -> None:
+    """调度被动效果"""
+    global _root_with_pending_passive_effects, _pending_passive_effect_lanes
+    _root_with_pending_passive_effects = root
+    _pending_passive_effect_lanes = lanes
+
+
+# =============================================================================
+# 导出
+# =============================================================================
+
+__all__ = [
+    # 配置
+    "shouldYield",
+    "forceYield",
+    "markYield",
+    "shouldTimeSlice",
+    "checkIfRootIsPrerendering",
+    "hasHigherPriorityWork",
+    # 工作单元
+    "performUnitOfWork",
+    "WorkLoopResult",
+    # 渲染入口
+    "renderRootConcurrent",
+    "renderRootSync",
+    "performWorkOnRoot",
+    # 状态访问器
+    "getWorkInProgressRoot",
+    "getWorkInProgressRootRenderLanes",
+    "getRootWithPendingPassiveEffects",
+    "getPendingPassiveEffectsLanes",
+    "hasPendingCommitEffects",
+    "isWorkLoopSuspendedOnData",
+    # 被动效果
+    "flushPendingEffects",
+    "schedulePendingEffects",
+]

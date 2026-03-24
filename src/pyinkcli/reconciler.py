@@ -117,14 +117,20 @@ class _Reconciler:
 
     def update_container(self, vnode, container) -> None:
         if container.tag == 1:
+            # 并发模式：使用 RenderScheduler 调度，而不是固定 50ms Timer
+            # 优先级由上层 _schedule_render 决定，这里不再延迟
             container.pending_vnode = vnode
             container.render_state = SimpleNamespace(status="pending", abort_reason=None)
             if getattr(self, "_force_rerender", False):
                 container.force_rerender = True
                 container.root.force_rerender = True
-            if container.scheduled_timer is None:
-                container.scheduled_timer = threading.Timer(0.05, lambda: self._flush_pending(container))
-                container.scheduled_timer.start()
+            # 不再使用固定 50ms Timer，让 RenderScheduler 根据优先级调度
+            # 离散更新立即执行，普通更新被 max_fps 节流，transition 可延后
+            if container.scheduled_timer is not None:
+                container.scheduled_timer.cancel()
+                container.scheduled_timer = None
+            # 立即 flush，调度由上层控制
+            self._flush_pending(container)
             return
         self.update_container_sync(vnode, container)
 
