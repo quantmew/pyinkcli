@@ -13,44 +13,53 @@ from __future__ import annotations
 # 无副作用
 NoFlags = 0b00000000000000000000000000000000
 
+# 表示 Fiber 已经被处理过（用于标记已执行的工作）
+PerformedWork = 1 << 0
+
 # 表示 Fiber 需要被创建或更新
-Update = 1 << 0
+Update = 1 << 1
 
 # 表示 Fiber 需要被放置到 DOM 中 (插入)
-Placement = 1 << 1
+Placement = 1 << 2
 
 # 表示 Fiber 需要被删除
-Deletion = 1 << 2
+Deletion = 1 << 3
 
 # 表示 Fiber 的内容需要更新 (仅 HostText)
-ContentReset = 1 << 3
+ContentReset = 1 << 4
 
 # 表示 Fiber 的 callback 需要被执行
-Callback = 1 << 4
+Callback = 1 << 5
 
 # 表示 Ref 需要被更新
-Ref = 1 << 5
+Ref = 1 << 6
 
 # 表示 Ref 需要被清理 (仅 ClassComponent)
-Snapshot = 1 << 6
+Snapshot = 1 << 7
 
 # 表示子树需要被动效果 (仅 HostRoot, ClassComponent)
-Passive = 1 << 7
+Passive = 1 << 8
 
 # 表示子树有副作用 (用于优化遍历)
-HasEffects = 1 << 8
+HasEffects = 1 << 9
 
 # 表示生命周期需要被更新
-UpdateLifeCycle = 1 << 9
+UpdateLifeCycle = 1 << 10
 
 # 表示 Fiber 有 snapshot
-HasSnapshot = 1 << 10
+HasSnapshot = 1 << 11
 
 # 表示 Fiber 有副作用
-AlwaysShouldBeClaimed = 1 << 11
+AlwaysShouldBeClaimed = 1 << 12
 
 # 表示 Suspense 边界需要重新显示
-DidCapture = 1 << 12
+DidCapture = 1 << 13
+
+# 表示需要捕获错误（错误边界/Suspense）
+ShouldCapture = 1 << 13
+
+# 表示 Fiber 未完成渲染（错误、suspended 等情况）
+Incomplete = 1 << 14
 
 # 表示 Ref 需要被清理
 InEffect = Ref
@@ -59,30 +68,63 @@ InEffect = Ref
 # React 18 新增标志
 # =============================================================================
 
-# 表示需要插入或更新子节点
-ChildDeletion = 1 << 3
+# 表示需要插入或更新子节点（与 Deletion 不同的概念）
+ChildDeletion = 1 << 15
 
 # 表示需要强制重新计算布局
-ForceUpdateForLegacySubtree = 1 << 13
+ForceUpdateForLegacySubtree = 1 << 16
+
+# 表示需要强制更新 Legacy Suspense (用于 Suspense 的旧版本兼容)
+ForceUpdateForLegacySuspense = 1 << 17
+
+# 表示需要强制客户端渲染（用于 Suspense fallback）
+ForceClientRender = 1 << 18
+
+# 表示正在水合（hydration）
+Hydrating = 1 << 19
+
+# 表示提交可能会被挂起
+MaySuspendCommit = 1 << 20
+
+# 表示提交应该被挂起
+ShouldSuspendCommit = 1 << 21
+
+# 表示静态掩码（用于 bailout 优化）
+StaticMask = 1 << 22
+
+# 表示可见性变化（用于 Offscreen/Visibility）
+Visibility = 1 << 23
 
 # 表示需要更新 React Offscreen 组件
-OffscreenRef = 1 << 14
+OffscreenRef = 1 << 24
 
-# 表示 Suspense 边界已捕获错误
-SuspenseDidCapture = 1 << 12
+# 表示 Suspense 边界已捕获错误（与 DidCapture 相同）
+SuspenseDidCapture = DidCapture
 
 # 表示需要执行 passive destroy
-PassiveDestroy = 1 << 15
+PassiveDestroy = 1 << 25
 
 # 表示需要执行 passive unmount
-PassiveUnmount = 1 << 16
+PassiveUnmount = 1 << 26
 
 # 表示需要执行 passive update
-PassiveUpdate = 1 << 17
+PassiveUpdate = 1 << 27
 
 # =============================================================================
-# 组合标志
+# 组合标志（ masks ）
 # =============================================================================
+
+# 布局效果掩码
+LayoutMask = Update | Callback | Ref | HasSnapshot
+
+# 变异效果掩码
+MutationMask = Placement | Update | Deletion | ContentReset | Ref
+
+# 被动效果掩码
+PassiveMask = Passive | PassiveUpdate
+
+# 所有可能触发 bailout 的静态标志
+StaticMask = OffscreenRef
 
 # 所有副作用标志 (用于检查是否有任何副作用)
 AllEffects = (
@@ -101,6 +143,12 @@ AllEffects = (
     | DidCapture
     | ChildDeletion
     | ForceUpdateForLegacySubtree
+    | ForceUpdateForLegacySuspense
+    | ForceClientRender
+    | Hydrating
+    | MaySuspendCommit
+    | ShouldSuspendCommit
+    | Visibility
     | OffscreenRef
     | SuspenseDidCapture
     | PassiveDestroy
@@ -192,6 +240,11 @@ def includesDidCapture(flags: int) -> bool:
     return (flags & DidCapture) != NoFlags
 
 
+def includesIncomplete(flags: int) -> bool:
+    """检查是否包含 Incomplete 标志 (Fiber 未完成)"""
+    return (flags & Incomplete) != NoFlags
+
+
 def includesAnyEffects(flags: int) -> bool:
     """检查是否包含任何副作用"""
     return (flags & AllEffects) != NoFlags
@@ -214,6 +267,7 @@ def removeFlags(flags: int, to_remove: int) -> int:
 __all__ = [
     # 常量
     "NoFlags",
+    "PerformedWork",
     "Update",
     "Placement",
     "Deletion",
@@ -227,8 +281,17 @@ __all__ = [
     "HasSnapshot",
     "AlwaysShouldBeClaimed",
     "DidCapture",
+    "ShouldCapture",
+    "Incomplete",
     "ChildDeletion",
     "ForceUpdateForLegacySubtree",
+    "ForceUpdateForLegacySuspense",
+    "ForceClientRender",
+    "Hydrating",
+    "MaySuspendCommit",
+    "ShouldSuspendCommit",
+    "StaticMask",
+    "Visibility",
     "OffscreenRef",
     "SuspenseDidCapture",
     "PassiveDestroy",
@@ -238,6 +301,9 @@ __all__ = [
     "AllEffects",
     "LayoutEffects",
     "CommitEffects",
+    "LayoutMask",
+    "MutationMask",
+    "PassiveMask",
     # 子树标志
     "HasPassiveEffects",
     "HasUpdate",
@@ -255,6 +321,7 @@ __all__ = [
     "includesRef",
     "includesPassive",
     "includesDidCapture",
+    "includesIncomplete",
     "includesAnyEffects",
     "mergeFlags",
     "removeFlags",

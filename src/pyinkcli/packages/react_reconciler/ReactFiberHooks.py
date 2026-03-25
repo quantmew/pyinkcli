@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ...hooks import _runtime as hooks_runtime
 from . import ReactFiberNewContext as new_context
-from .ReactFiberBeginWork import _mark_received_update
+from .ReactFiberBeginWork import _mark_did_receive_update
 from .ReactSharedInternals import shared_internals
 
 HooksDispatcherOnMount = object()
@@ -17,7 +17,7 @@ def renderWithHooks(fiber, component, *args, **kwargs):
     shared_internals.H = HooksDispatcherOnUpdate if is_update else HooksDispatcherOnMount
     changed = getattr(fiber, "pending_props", None) != getattr(fiber, "memoized_props", None)
     changed = changed or new_context.checkIfContextChanged(getattr(getattr(fiber, "alternate", None), "dependencies", []))
-    _mark_received_update(changed)
+    _mark_did_receive_update(changed)
     new_context.prepareToReadContext(fiber)
     previous_use_context = hooks_runtime.useContext
     hooks_runtime.useContext = new_context.readContext

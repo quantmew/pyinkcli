@@ -7,6 +7,12 @@ Lane 使用 31 位二进制数表示优先级，每个 bit 代表一个优先级
 
 from __future__ import annotations
 
+from typing import Union
+
+# Lane 类型别名
+Lane = int
+Lanes = int
+
 # =============================================================================
 # Lane 常量定义 (31 位模型，与 React 18 对齐)
 # =============================================================================
@@ -135,6 +141,22 @@ def getHighestPriorityLane(lanes: int) -> int:
     if lanes == NoLanes:
         return NoLane
     return lanes & -lanes
+
+
+def pick_arbitrary_lane(lanes: int) -> int:
+    """
+    从 lanes 中选择一个任意的 lane
+
+    通常用于从一组 lanes 中选择一个来表示优先级。
+    这里选择最高优先级的 lane（最低位的 1）。
+
+    Args:
+        lanes: lanes 位掩码
+
+    Returns:
+        单个 lane 或 NoLane
+    """
+    return getHighestPriorityLane(lanes)
 
 
 def getLowestPriorityLane(lanes: int) -> int:
@@ -393,6 +415,7 @@ __all__ = [
     "mergeLanes",
     "removeLanes",
     "getHighestPriorityLane",
+    "pick_arbitrary_lane",
     "getLowestPriorityLane",
     "includesSomeLane",
     "isSubsetOfLanes",

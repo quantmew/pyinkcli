@@ -16,6 +16,13 @@ from .ReactEventPriorities import (
     DiscreteEventPriority,
     TransitionEventPriority,
 )
+from .ReactFiberBeginWork import begin_work, reset_did_receive_update
+from .ReactFiberCommitWork import CommitList, PreparedCommit, commit_root, prepare_passive_effects, run_prepared_commit_effects
+from .ReactFiberCompleteWork import complete_work, complete_tree
+from .ReactFiberConcurrentUpdates import (
+    finish_queueing_concurrent_updates,
+    get_concurrently_updated_lanes,
+)
 from .ReactFiberLane import (
     DefaultLane,
     IdleLane,
@@ -84,6 +91,16 @@ def markYield() -> None:
 # =============================================================================
 # 工作循环配置
 # =============================================================================
+
+
+def get_work_in_progress_root() -> Optional[Any]:
+    """
+    获取当前正在工作的 root
+
+    Returns:
+        当前的 FiberRoot 或 None
+    """
+    return _work_in_progress_root
 
 
 def shouldTimeSlice(root: Any, lanes: int) -> bool:
@@ -171,15 +188,37 @@ def _processFiber(fiber: Any) -> Optional[Any]:
     """
     处理单个 Fiber 节点
 
-    简化实现：返回 sibling 或返回 parent
+    执行 beginWork 和 completeWork 阶段，返回下一个要处理的 Fiber。
     """
-    # 尝试获取 sibling
-    sibling = getattr(fiber, "sibling", None)
-    if sibling is not None:
-        return sibling
+    global _work_in_progress_root_render_lanes
 
-    # 返回 parent
-    parent = getattr(fiber, "return", None)
+    # 获取 alternate fiber（current）
+    current = getattr(fiber, "alternate", None)
+
+    # Begin 阶段：处理 Fiber 并返回第一个子节点
+    try:
+        child = begin_work(current, fiber, _work_in_progress_root_render_lanes)
+        if child is not None:
+            return child
+    except Exception as e:
+        # TODO: 完善的错误边界处理
+        raise
+
+    # Complete 阶段：完成 Fiber 并返回 sibling 或父节点的 sibling
+    node = fiber
+    while node is not None:
+        current_node = getattr(node, "alternate", None)
+        sibling = getattr(node, "sibling", None)
+
+        # 调用 completeWork
+        next_fiber = complete_work(current_node, node, _work_in_progress_root_render_lanes)
+
+        if next_fiber is not None:
+            return next_fiber
+
+        # 没有 sibling，返回到父节点
+        node = getattr(node, "return_fiber", getattr(node, "return", None))
+
     return None
 
 
@@ -252,11 +291,14 @@ async def renderRootConcurrent(
         _work_in_progress_root_render_lanes = 0
 
 
-def renderRootSync(root: Any, lanes: int, force_sync: bool = False) -> None:
+def renderRootSync(root: Any, lanes: int, force_sync: bool = False) -> Optional[PreparedCommit]:
     """
     同步渲染 root，不支持中断
 
     用于高优先级更新或遗留模式
+
+    Returns:
+        PreparedCommit 或 None
     """
     global _work_in_progress_root, _work_in_progress_root_render_lanes
 
@@ -267,13 +309,25 @@ def renderRootSync(root: Any, lanes: int, force_sync: bool = False) -> None:
     if work_in_progress is None:
         work_in_progress = getattr(root, "current", None)
 
+    prepared_commit: Optional[PreparedCommit] = None
+
     try:
+        # Render 阶段：开始工作循环
         while work_in_progress is not None:
             # 同步执行，不让出控制权
             work_in_progress = _processFiber(work_in_progress)
+
+        # Render 阶段完成，处理并发队列
+        finish_queueing_concurrent_updates()
+
+        # Commit 阶段
+        prepared_commit = commit_root(root, lanes)
+
     finally:
         _work_in_progress_root = None
         _work_in_progress_root_render_lanes = 0
+
+    return prepared_commit
 
 
 # =============================================================================
@@ -281,11 +335,14 @@ def renderRootSync(root: Any, lanes: int, force_sync: bool = False) -> None:
 # =============================================================================
 
 
-def performWorkOnRoot(root: Any, lanes: int, force_sync: bool = False) -> None:
+def performWorkOnRoot(root: Any, lanes: int, force_sync: bool = False) -> Optional[PreparedCommit]:
     """
     在 root 上执行工作
 
     根据情况选择同步或并发渲染
+
+    Returns:
+        PreparedCommit 或 None
     """
     # 检查是否应该使用时间切片
     should_time_slice = not force_sync and shouldTimeSlice(root, lanes)
@@ -295,20 +352,30 @@ def performWorkOnRoot(root: Any, lanes: int, force_sync: bool = False) -> None:
         # 这里提供同步的包装器
         loop = asyncio.new_event_loop()
         try:
-            loop.run_until_complete(_runConcurrentWork(root, lanes))
+            return loop.run_until_complete(_runConcurrentWork(root, lanes))
         finally:
             loop.close()
     else:
         # 同步渲染
-        renderRootSync(root, lanes, force_sync)
+        return renderRootSync(root, lanes, force_sync)
 
 
-async def _runConcurrentWork(root: Any, lanes: int) -> None:
+async def _runConcurrentWork(root: Any, lanes: int) -> Optional[PreparedCommit]:
     """运行并发工作的异步包装器"""
+    prepared_commit: Optional[PreparedCommit] = None
+
     async for result in renderRootConcurrent(root, lanes):
         # 处理结果
         if result.get("type") == "error":
             raise result.get("error")
+
+    # 渲染完成后，处理并发队列
+    finish_queueing_concurrent_updates()
+
+    # Commit 阶段
+    prepared_commit = commit_root(root, lanes)
+
+    return prepared_commit
 
 
 # =============================================================================
