@@ -6,6 +6,7 @@ import json
 import math
 import re
 import threading
+import time
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any, cast
@@ -29,6 +30,30 @@ def _safe_copy(value):
         return copy.deepcopy(value)
     except Exception:  # noqa: BLE001
         return value
+
+
+_trace_callback = None
+
+
+def _set_trace_callback(callback) -> None:
+    global _trace_callback
+    _trace_callback = callback
+
+
+def _trace(event: str, **fields) -> None:
+    if not _trace_callback:
+        return
+    try:
+        _trace_callback(
+            {
+                "source": "reconciler",
+                "event": event,
+                "ts": time.perf_counter_ns(),
+                **fields,
+            }
+        )
+    except Exception:
+        pass
 
 
 def batchedUpdates(callback):
@@ -67,21 +92,27 @@ class _ClassComponentUpdater:
         if isinstance(partial_state, dict):
             public_instance.state.update(partial_state)
         self._reconciler._class_dirty.add(self._component_id)
+        _trace(
+            "reconciler.class_set_state",
+            component_id=self._component_id,
+            state_type=type(partial_state).__name__,
+        )
         from .hooks.use_app import useApp
 
         app = useApp()
         if app is not None:
-            app._schedule_render("default")
+            app._schedule_render(hooks_runtime._current_render_priority("default"))
         if callback:
             callback()
 
     def enqueueForceUpdate(self, public_instance, callback=None, callerName=None):
         self._reconciler._class_dirty.add(self._component_id)
+        _trace("reconciler.class_force_update", component_id=self._component_id)
         from .hooks.use_app import useApp
 
         app = useApp()
         if app is not None:
-            app._schedule_render("default")
+            app._schedule_render(hooks_runtime._current_render_priority("default"))
         if callback:
             callback()
 
@@ -116,36 +147,40 @@ class _Reconciler:
         self._commit_handlers["on_immediate_commit"] = on_immediate_commit
 
     def update_container(self, vnode, container) -> None:
+        _trace(
+            "reconciler.update_container",
+            tag=container.tag,
+            force_rerender=bool(getattr(self, "_force_rerender", False)),
+        )
         if container.tag == 1:
-            # 并发模式：使用 RenderScheduler 调度，而不是固定 50ms Timer
-            # 优先级由上层 _schedule_render 决定，这里不再延迟
+            _trace("reconciler.update_container_queued", tag=1)
             container.pending_vnode = vnode
             container.render_state = SimpleNamespace(status="pending", abort_reason=None)
             if getattr(self, "_force_rerender", False):
                 container.force_rerender = True
                 container.root.force_rerender = True
-            # 不再使用固定 50ms Timer，让 RenderScheduler 根据优先级调度
-            # 离散更新立即执行，普通更新被 max_fps 节流，transition 可延后
             if container.scheduled_timer is not None:
                 container.scheduled_timer.cancel()
                 container.scheduled_timer = None
-            # 立即 flush，调度由上层控制
-            self._flush_pending(container)
             return
         self.update_container_sync(vnode, container)
 
     def _flush_pending(self, container) -> None:
+        _trace("reconciler.flush_pending_begin", has_pending=container.pending_vnode is not None)
         vnode = container.pending_vnode
         container.pending_vnode = None
         container.scheduled_timer = None
         if vnode is not None:
             self.update_container_sync(vnode, container)
+        _trace("reconciler.flush_pending_end", has_pending=container.pending_vnode is not None)
 
     def flush_sync_work(self, container) -> None:
         if container.pending_vnode is not None:
             self._flush_pending(container)
 
     def update_container_sync(self, vnode, container) -> None:
+        start = time.perf_counter_ns()
+        _trace("reconciler.update_container_sync_begin", tag=container.tag)
         previous_suppress = hooks_runtime._suppress_immediate_passive_flush
         hooks_runtime._suppress_immediate_passive_flush = True
         hooks_runtime._reset_hook_state()
@@ -175,6 +210,11 @@ class _Reconciler:
             if self._pending_errors:
                 raise self._pending_errors.pop(0)
         finally:
+            _trace(
+                "reconciler.update_container_sync_end",
+                tag=container.tag,
+                duration_ns=time.perf_counter_ns() - start,
+            )
             hooks_runtime._suppress_immediate_passive_flush = previous_suppress
 
     def _render_component(self, vnode: RenderableNode, instance_id: str):

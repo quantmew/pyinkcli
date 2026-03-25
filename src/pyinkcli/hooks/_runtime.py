@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -85,12 +86,36 @@ _active_component_ids: set[str] = set()
 _dirty_components: set[str] = set()
 _render_phase_rerender_count = 0
 _running_effect_kind: str | None = None
+_trace_callback = None
 _runtime = SimpleNamespace(
     fibers={},
     pending_passive_unmount_fibers=[],
     pending_passive_mount_effects=[],
 )
 _suppress_immediate_passive_flush = False
+_PRIORITY_ORDER = {"transition": 0, "default": 1, "discrete": 2}
+_KNOWN_PRIORITIES = {"default", "discrete", "transition", "continuous", "render_phase"}
+
+
+def _coerce_priority(priority: str | None) -> str:
+    if priority in _KNOWN_PRIORITIES:
+        return "default" if priority == "continuous" else priority
+    return "default"
+
+
+def _merge_priority(current: str | None, incoming: str) -> str:
+    if not current:
+        return incoming
+    current_rank = _PRIORITY_ORDER.get(current, 1)
+    incoming_rank = _PRIORITY_ORDER.get(incoming, 1)
+    return current if current_rank >= incoming_rank else incoming
+
+
+def _priority_from_mode(mode: str | None, requested: str) -> str:
+    normalized = _coerce_priority(requested)
+    if normalized == "default" and mode in _PRIORITY_ORDER:
+        return mode
+    return normalized
 
 
 def _clear_hook_state() -> None:
@@ -113,6 +138,27 @@ def _clear_hook_state() -> None:
     _running_effect_kind = None
 
 
+def _set_trace_callback(callback) -> None:
+    global _trace_callback
+    _trace_callback = callback
+
+
+def _trace(event: str, **fields) -> None:
+    if not _trace_callback:
+        return
+    try:
+        _trace_callback(
+            {
+                "source": "hooks",
+                "event": event,
+                "ts": time.perf_counter_ns(),
+                **fields,
+            }
+        )
+    except Exception:
+        pass
+
+
 def _reset_hook_state() -> None:
     for state in _hook_state.values():
         state.seen = False
@@ -123,6 +169,7 @@ def _begin_component_render(instance_id: str, component_type: Any = None) -> Non
     _current_component_id = instance_id
     _current_hook_index = 0
     _rendering = True
+    _trace("hooks.begin_component_render", component_id=instance_id, hook_count=len(_hook_state.get(instance_id, _ComponentState([])).hooks))
     state = _hook_state.setdefault(instance_id, _ComponentState(hooks=[]))
     if component_type is not None and state.component_type is not None and state.component_type is not component_type:
         state.hooks = []
@@ -137,6 +184,7 @@ def _begin_component_render(instance_id: str, component_type: Any = None) -> Non
 
 def _end_component_render() -> None:
     global _current_component_id, _rendering
+    _trace("hooks.end_component_render", component_id=_current_component_id)
     _current_component_id = None
     _rendering = False
 
@@ -215,33 +263,71 @@ def _consume_pending_rerender_priority() -> str | None:
     return value
 
 
+def _current_render_priority(default: str = "default") -> str:
+    return _priority_from_mode(_batched_mode, default)
+
+
 def _schedule_rerender(priority: str) -> None:
     global _pending_rerender_priority, _batched_pending, _auto_batch_timer, _render_phase_rerender_count
-    _pending_rerender_priority = priority
+    resolved_priority = _priority_from_mode(_batched_mode, priority)
+    _trace(
+        "hooks.schedule_rerender",
+        requested_priority=priority,
+        resolved_priority=resolved_priority,
+        rendering=_rendering,
+        batched=_batched_mode is not None,
+        current_component=_current_component_id,
+    )
+    _pending_rerender_priority = _merge_priority(_pending_rerender_priority, resolved_priority)
     if _rendering:
         if _batched_mode is not None:
+            _trace("hooks.rerender_batched", deferred=True, mode=_batched_mode)
             _batched_pending = True
             return
         _render_phase_rerender_count += 1
         return
     if _batched_mode is not None:
+        _trace("hooks.rerender_batched", deferred=True, mode=_batched_mode)
         _batched_pending = True
         return
     if _schedule_update_callback:
         if _auto_batch_timer is None:
             scheduled_callback = _schedule_update_callback
-            component_id = _current_component_id
+
+            def _flush():
+                _trace(
+                    "hooks.auto_batch_flush",
+                    reason="callback",
+                    fiber=_current_component_id,
+                    priority=resolved_priority,
+                )
+                if callable(scheduled_callback):
+                    scheduled_callback(
+                        _current_component_id,
+                        _consume_pending_rerender_priority() or _coerce_priority(priority),
+                    )
+                _clear_auto_batch()
+
             _auto_batch_timer = threading.Timer(
-                0.001,
-                lambda: ((scheduled_callback(component_id, priority) if callable(scheduled_callback) else None), _clear_auto_batch()),
+                0,
+                _flush,
             )
             _auto_batch_timer.start()
         return
     if _auto_batch_timer is None:
         rerender_callback = _rerender_callback
+
+        def _flush() -> None:
+            _trace(
+                "hooks.rerender_direct_flush",
+                priority=resolved_priority,
+                component=_current_component_id,
+            )
+            ((rerender_callback() if callable(rerender_callback) else None), _clear_auto_batch())
+
         _auto_batch_timer = threading.Timer(
-            0.001,
-            lambda: ((rerender_callback() if callable(rerender_callback) else None), _clear_auto_batch()),
+            0,
+            _flush,
         )
         _auto_batch_timer.start()
 
@@ -257,14 +343,28 @@ def _with_batch(priority: str):
     previous = _batched_mode
     _batched_mode = priority
     _batched_pending = False
+    _trace("hooks.batch_enter", priority=priority, fiber=_current_component_id)
     try:
         yield
     finally:
         _batched_mode = previous
+        _trace("hooks.batch_exit", priority=priority, pending=_batched_pending, next_mode=previous)
         if _batched_pending:
-            _pending_rerender_priority = priority
-            if _rerender_callback:
+            _pending_rerender_priority = _merge_priority(_pending_rerender_priority, _coerce_priority(priority))
+            if _schedule_update_callback:
+                callback = _schedule_update_callback
+                _trace("hooks.batch_flush", mode=priority)
+                (
+                    callback(
+                        _current_component_id,
+                        _consume_pending_rerender_priority() or _coerce_priority(priority),
+                    )
+                    if callable(callback)
+                    else None
+                )
+            elif _rerender_callback:
                 _rerender_callback()
+        _batched_pending = False
 
 
 def _batched_updates_runtime(callback):
@@ -295,9 +395,19 @@ def useState(initial):
 
     def set_value(next_value):
         global _render_phase_rerender_count
-        state.hooks[index] = next_value(state.hooks[index]) if callable(next_value) else next_value
+        previous = state.hooks[index]
+        value = next_value(previous) if callable(next_value) else next_value
+        state.hooks[index] = value
         if component_id is not None:
             _dirty_components.add(component_id)
+            _trace(
+                "hooks.state_set",
+                component_id=component_id,
+                index=index,
+                has_functional=callable(next_value),
+                old_type=type(previous).__name__,
+                new_type=type(state.hooks[index]).__name__,
+            )
         if _running_effect_kind in {"layout", "insertion"}:
             _render_phase_rerender_count += 1
             return

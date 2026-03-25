@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ._runtime import useLayoutEffect, useRef
+from ._runtime import _trace, useLayoutEffect, useRef
 from .use_app import useApp
 from .use_stdin import useStdinContext
 
@@ -40,9 +40,12 @@ def usePaste(handler=None, *, is_active: bool = True, isActive: bool | None = No
             return None
 
         def handle_paste(value: str) -> None:
+            _trace("hooks.paste.raw", bytes=len(value), value=value[:20])
             if app is not None:
+                _trace("hooks.paste.discrete_begin")
                 app._run_discrete(lambda: handler_ref.current(value))
             else:
+                _trace("hooks.paste.invoke_sync")
                 handler_ref.current(value)
 
         stdin.internal_eventEmitter.on("paste", handle_paste)

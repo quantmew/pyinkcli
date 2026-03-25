@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ..parse_keypress import Key, parseKeypress
-from ._runtime import useLayoutEffect, useRef
+from ._runtime import _trace, useLayoutEffect, useRef
 from .use_app import useApp
 from .use_stdin import useStdinContext
 
@@ -42,9 +42,17 @@ def useInput(handler, *, is_active: bool = True, isActive: bool | None = None) -
             input_value = keypress.name if keypress.ctrl else keypress.sequence
             if input_value == "c" and key.ctrl and stdin.internal_exitOnCtrlC:
                 return
+            _trace(
+                "hooks.input.raw",
+                key=key.name,
+                input=input_value,
+                raw=value,
+            )
             if app is not None:
+                _trace("hooks.input.discrete_begin")
                 app._run_discrete(lambda: handler_ref.current(input_value, key))
             else:
+                _trace("hooks.input.invoke_sync")
                 handler_ref.current(input_value, key)
 
         stdin.internal_eventEmitter.on("input", handle_data)
