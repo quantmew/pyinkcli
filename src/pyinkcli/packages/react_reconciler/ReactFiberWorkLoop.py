@@ -33,6 +33,7 @@ from .ReactFiberLane import (
     getHighestPriorityLane,
     includesBlockingLane,
     includesExpiredLane,
+    laneToMask,
     mergeLanes,
     removeLanes,
 )
@@ -499,4 +500,9 @@ __all__ = [
     # 被动效果
     "flushPendingEffects",
     "schedulePendingEffects",
+    # Lane 函数（从 ReactFiberLane 重新导出）
+    "laneToMask",
+    "mergeLanes",
+    "removeLanes",
+    "getHighestPriorityLane",
 ]

@@ -115,6 +115,22 @@ TotalLanes = 28  # 使用的总位数
 # =============================================================================
 
 
+def laneToMask(lane: int) -> int:
+    """
+    将单个 lane 转换为位掩码
+
+    在这个实现中，lane 本身就是位掩码形式，所以直接返回。
+    这个函数存在是为了与 React API 保持一致。
+
+    Args:
+        lane: 单个 lane 优先级
+
+    Returns:
+        对应的位掩码
+    """
+    return lane
+
+
 def mergeLanes(a: int, b: int) -> int:
     """
     合并两个 lanes
@@ -412,6 +428,7 @@ __all__ = [
     "NonIdleLanes",
     "TotalLanes",
     # 核心函数
+    "laneToMask",
     "mergeLanes",
     "removeLanes",
     "getHighestPriorityLane",
