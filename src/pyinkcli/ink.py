@@ -110,9 +110,8 @@ class Ink:
             None,
         )
         self._root_node.onComputeLayout = lambda: None
-        self._root_node.onRender = lambda: self._request_commit_render("default")
-        self._root_node.onImmediateRender = lambda: self._request_commit_render(
-            "discrete",
+        self._root_node.onRender = lambda: self._render_frame(immediate=False)
+        self._root_node.onImmediateRender = lambda: self._render_frame(
             immediate=True,
         )
         self._reconciler = createReconciler(self._root_node)
@@ -308,6 +307,10 @@ class Ink:
         self._trace("ink.wait_until_render_flush", timeout=timeout)
         if self._scheduler is not None:
             self._scheduler.wait_for_idle(timeout or 0.1)
+        scheduled_timer = getattr(self._container, "scheduled_timer", None)
+        if scheduled_timer is not None:
+            with contextlib.suppress(RuntimeError):
+                scheduled_timer.join(timeout or 0.1)
         remaining_timers = []
         for timer in self._transition_threads:
             if self._current_node is None:
@@ -317,6 +320,13 @@ class Ink:
                 remaining_timers.append(timer)
         self._transition_threads = remaining_timers
         flushPendingEffects()
+        if getattr(self._reconciler, "_needs_class_lifecycle_rerender", False):
+            self._reconciler._needs_class_lifecycle_rerender = False
+            self._reconciler._force_rerender = True
+            try:
+                self._perform_render(self._current_node)
+            finally:
+                self._reconciler._force_rerender = False
         if getattr(hooks_runtime, "_dirty_components", None):
             self._reconciler._force_rerender = True
             try:
@@ -324,6 +334,10 @@ class Ink:
             finally:
                 self._reconciler._force_rerender = False
             hooks_runtime._dirty_components.clear()
+        scheduled_timer = getattr(self._container, "scheduled_timer", None)
+        if scheduled_timer is not None:
+            with contextlib.suppress(RuntimeError):
+                scheduled_timer.join(timeout or 0.1)
         self._trace("ink.wait_until_render_flush_end", dirty_components=bool(hooks_runtime._dirty_components))
         hooks_runtime._dirty_components.clear()
         self._container.render_state = None
@@ -416,12 +430,19 @@ class Ink:
         record.update(fields)
         self._trace_events.append(record)
 
+    def _on_render_callback(self) -> None:
+        self._request_commit_render("default")
+
     def _request_commit_render(self, priority: str = "default", immediate: bool = False) -> None:
         self._trace(
             "ink.commit_request",
             priority=priority,
             immediate=immediate,
         )
+        callback = self._root_node.onImmediateRender if immediate else self._root_node.onRender
+        if callable(callback):
+            callback()
+            return
         self._render_frame(immediate=immediate)
 
     def _prepare_stream_payload(self, stream, text: str) -> str:

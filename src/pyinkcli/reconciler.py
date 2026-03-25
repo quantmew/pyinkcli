@@ -28,8 +28,26 @@ from .suspense_runtime import SuspendSignal
 def _safe_copy(value):
     try:
         return copy.deepcopy(value)
+    except (RecursionError, RuntimeError):
+        pass
     except Exception:  # noqa: BLE001
         return value
+
+    if isinstance(value, dict):
+        copied = value.__class__()
+        for key, item in value.items():
+            if isinstance(item, (dict, list, tuple, set)):
+                copied[key] = _safe_copy(item)
+            else:
+                copied[key] = item
+        return copied
+    if isinstance(value, list):
+        return [_safe_copy(item) if isinstance(item, (dict, list, tuple, set)) else item for item in value]
+    if isinstance(value, tuple):
+        return tuple(_safe_copy(item) if isinstance(item, (dict, list, tuple, set)) else item for item in value)
+    if isinstance(value, set):
+        return {_safe_copy(item) if isinstance(item, (dict, list, tuple, set)) else item for item in value}
+    return value
 
 
 _trace_callback = None
@@ -101,7 +119,10 @@ class _ClassComponentUpdater:
 
         app = useApp()
         if app is not None:
-            app._schedule_render(hooks_runtime._current_render_priority("default"))
+            if self._reconciler._flushing_class_lifecycles:
+                self._reconciler._needs_class_lifecycle_rerender = True
+            else:
+                app._schedule_render(hooks_runtime._current_render_priority("default"))
         if callback:
             callback()
 
@@ -112,7 +133,10 @@ class _ClassComponentUpdater:
 
         app = useApp()
         if app is not None:
-            app._schedule_render(hooks_runtime._current_render_priority("default"))
+            if self._reconciler._flushing_class_lifecycles:
+                self._reconciler._needs_class_lifecycle_rerender = True
+            else:
+                app._schedule_render(hooks_runtime._current_render_priority("default"))
         if callback:
             callback()
 
@@ -135,6 +159,8 @@ class _Reconciler:
         self._pending_class_mounts: list[Any] = []
         self._pending_class_updates: list[Any] = []
         self._pending_errors: list[Exception] = []
+        self._flushing_class_lifecycles = False
+        self._needs_class_lifecycle_rerender = False
         self._owner_source_cache: dict[str, Any] = {}
 
     def create_container(self, root_node, tag: int = 0) -> _Container:
@@ -161,7 +187,8 @@ class _Reconciler:
                 container.root.force_rerender = True
             if container.scheduled_timer is not None:
                 container.scheduled_timer.cancel()
-                container.scheduled_timer = None
+            container.scheduled_timer = threading.Timer(0.001, lambda: self._flush_pending(container))
+            container.scheduled_timer.start()
             return
         self.update_container_sync(vnode, container)
 
@@ -273,6 +300,7 @@ class _Reconciler:
             effective_props.setdefault("children", vnode.children if len(vnode.children) != 1 else vnode.children[0])
             instance = self._class_instances.get(owner_id)
             is_new = True if instance is None else not isinstance(instance, vnode.type)
+            # DEBUG: print(f"DEBUG _render_component: owner_id={owner_id}, instance={instance}, is_new={is_new}")
             prev_props = {}
             prev_state = {}
             if is_new:
@@ -431,8 +459,11 @@ class _Reconciler:
                 component_props_id = component_id if component_id is not None else ""
                 component_props = self._devtools_prop_overrides.get(component_props_id, vnode.props)
                 result._component_props = _safe_copy(component_props)
-            if getattr(result, "_component_props", None) is None:
-                result._component_props = _safe_copy(vnode.props)
+                result._component_instance_id = component_id
+            component_props = getattr(result, "_component_props", None)
+            if component_props is None:
+                component_props = _safe_copy(vnode.props)
+                result._component_props = component_props
             if getattr(result, "_component_instance_id", None) is None:
                 result._component_instance_id = component_id
             if getattr(result, "_class_instance", None) is None and getattr(rendered, "_class_instance", None) is not None:
@@ -443,7 +474,7 @@ class _Reconciler:
                 self._make_owner_info(
                     vnode.type,
                     component_id,
-                    result._component_props,
+                    component_props,
                     class_instance=getattr(rendered, "_class_instance", None),
                 ),
             )
@@ -561,20 +592,24 @@ class _Reconciler:
         updates = list(self._pending_class_updates)
         self._pending_class_mounts.clear()
         self._pending_class_updates.clear()
-        for _component_id, instance in mounts:
-            instance._committed_props = _safe_copy(instance.props)
-            instance._committed_state = _safe_copy(instance.state)
-            try:
-                instance.componentDidMount()
-            except Exception as error:  # noqa: BLE001
-                self._pending_errors.append(error)
-        for _component_id, instance, prev_props, prev_state in updates:
-            try:
-                instance.componentDidUpdate(prev_props, prev_state)
-            except Exception as error:  # noqa: BLE001
-                self._pending_errors.append(error)
-            instance._committed_props = _safe_copy(instance.props)
-            instance._committed_state = _safe_copy(instance.state)
+        self._flushing_class_lifecycles = True
+        try:
+            for _component_id, instance in mounts:
+                instance._committed_props = _safe_copy(instance.props)
+                instance._committed_state = _safe_copy(instance.state)
+                try:
+                    instance.componentDidMount()
+                except Exception as error:  # noqa: BLE001
+                    self._pending_errors.append(error)
+            for _component_id, instance, prev_props, prev_state in updates:
+                try:
+                    instance.componentDidUpdate(prev_props, prev_state)
+                except Exception as error:  # noqa: BLE001
+                    self._pending_errors.append(error)
+                instance._committed_props = _safe_copy(instance.props)
+                instance._committed_state = _safe_copy(instance.state)
+        finally:
+            self._flushing_class_lifecycles = False
 
     def _abort_container_render(self, container, reason="aborted") -> None:
         state = container.render_state

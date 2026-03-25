@@ -22,4 +22,4 @@ def set_stdout_context_value(*, stdout=sys.stdout, write=lambda data: None):
     return value
 
 
-__all__ = ["StdoutContext", "create_stdout_context_value", "set_stdout_context_value"]
+__all__ = ["StdoutContext"]

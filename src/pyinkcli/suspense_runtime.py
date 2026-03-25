@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 
-DefaultEventPriority = 4
+DefaultEventPriority = 32
 
 
 class SuspendSignal(Exception):

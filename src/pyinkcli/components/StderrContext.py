@@ -22,4 +22,4 @@ def set_stderr_context_value(*, stderr=sys.stderr, write=lambda data: None):
     return value
 
 
-__all__ = ["StderrContext", "create_stderr_context_value", "set_stderr_context_value"]
+__all__ = ["StderrContext"]

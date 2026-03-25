@@ -59,7 +59,7 @@ from .ReactWorkTags import (
 def complete_work(
     current: Optional[Any],
     work_in_progress: Any,
-    render_lanes: int,
+    render_lanes: int = NoLanes,
 ) -> Optional[Any]:
     """
     completeWork - 完成 Fiber 节点的处理
@@ -165,10 +165,10 @@ def complete_host_component(
 
     负责创建/更新 DOM 节点。
     """
-    from ..dom import createNode, setAttribute, setStyle, appendChildNode
+    from ...dom import createNode, setAttribute, setStyle, appendChildNode
 
-    # 获取 props
     pending_props = getattr(work_in_progress, "pending_props", None) or {}
+    current_props = getattr(current, "memoized_props", None) if current is not None else None
 
     if current is None:
         # 首次挂载：创建新节点
@@ -190,33 +190,30 @@ def complete_host_component(
 
         # 存储实例
         work_in_progress.state_node = instance
-        work_in_progress.flags |= Placement
     else:
         # 更新：检查 props 是否变化
-        current_props = getattr(current, "memoized_props", {})
-
         if current_props != pending_props:
             work_in_progress.flags |= Update
 
-            # 更新实例
-            instance = getattr(work_in_progress, "state_node", None)
-            if instance is None:
-                instance = getattr(current, "state_node", None)
-                work_in_progress.state_node = instance
+        # 更新实例
+        instance = getattr(work_in_progress, "state_node", None)
+        if instance is None:
+            instance = getattr(current, "state_node", None)
+            work_in_progress.state_node = instance
 
-            if instance is not None:
-                # 更新属性
-                for key, value in pending_props.items():
-                    if key == "children" or key == "style":
-                        continue
-                    if key not in current_props or current_props[key] != value:
-                        setAttribute(instance, key, value)
+        if instance is not None and hasattr(instance, "attributes") and current_props != pending_props:
+            # 更新属性
+            for key, value in pending_props.items():
+                if key == "children" or key == "style":
+                    continue
+                if key not in (current_props or {}) or current_props[key] != value:
+                    setAttribute(instance, key, value)
 
-                # 更新样式
-                current_style = current_props.get("style", {})
-                new_style = pending_props.get("style", {})
-                if current_style != new_style:
-                    setStyle(instance, new_style)
+            # 更新样式
+            current_style = (current_props or {}).get("style", {})
+            new_style = pending_props.get("style", {})
+            if current_style != new_style:
+                setStyle(instance, new_style)
 
 
 def complete_host_text(
@@ -229,27 +226,27 @@ def complete_host_text(
 
     负责创建/更新文本节点。
     """
-    from ..dom import createTextNode, setTextNodeValue
+    from ...dom import createTextNode, setTextNodeValue
 
     pending_props = getattr(work_in_progress, "pending_props", None)
+    current_props = getattr(current, "memoized_props", None) if current is not None else None
 
     if current is None:
         # 首次挂载
-        text_content = pending_props if isinstance(pending_props, str) else str(pending_props or "")
+        text_content = pending_props.get("nodeValue", "") if isinstance(pending_props, dict) else (pending_props if isinstance(pending_props, str) else str(pending_props or ""))
         instance = createTextNode(text_content)
         work_in_progress.state_node = instance
-        work_in_progress.flags |= Placement
     else:
         # 更新
-        current_text = getattr(current, "memoized_props", "")
-        if current_text != pending_props:
+        if current_props != pending_props:
             work_in_progress.flags |= Update
-            instance = getattr(work_in_progress, "state_node", None)
-            if instance is None:
-                instance = getattr(current, "state_node", None)
-                work_in_progress.state_node = instance
-            if instance is not None:
-                setTextNodeValue(instance, pending_props or "")
+        instance = getattr(work_in_progress, "state_node", None)
+        if instance is None:
+            instance = getattr(current, "state_node", None)
+            work_in_progress.state_node = instance
+        if instance is not None and hasattr(instance, "nodeValue") and current_props != pending_props:
+            next_text = pending_props.get("nodeValue", "") if isinstance(pending_props, dict) else (pending_props or "")
+            setTextNodeValue(instance, next_text)
 
 
 def complete_function_component(
@@ -313,6 +310,17 @@ def complete_forward_ref(
     complete_function_component(current, work_in_progress, render_lanes)
 
 
+def _subtree_contains_text(node: Optional[Any]) -> bool:
+    while node is not None:
+        if getattr(node, "tag", None) == HostText:
+            return True
+        child = getattr(node, "child", None)
+        if child is not None and _subtree_contains_text(child):
+            return True
+        node = getattr(node, "sibling", None)
+    return False
+
+
 def complete_fragment(
     current: Optional[Any],
     work_in_progress: Any,
@@ -323,8 +331,8 @@ def complete_fragment(
 
     Fragment 不创建任何实例，只需处理子节点。
     """
-    # Fragment 不需要特殊处理
-    pass
+    if current is not None and getattr(current, "memoized_props", None) != getattr(work_in_progress, "pending_props", None):
+        work_in_progress.flags |= Update
 
 
 def complete_class_component(
@@ -337,6 +345,9 @@ def complete_class_component(
 
     处理类组件的生命周期和副作用。
     """
+    if current is not None and getattr(current, "memoized_props", None) != getattr(work_in_progress, "pending_props", None):
+        work_in_progress.flags |= Update
+
     # 检查是否有 Ref
     ref = getattr(work_in_progress, "ref", None)
     if ref is not None:
@@ -356,6 +367,9 @@ def complete_suspense_component(
 
     Suspense 用于处理异步加载和 fallback。
     """
+    if current is not None and getattr(current, "memoized_props", None) != getattr(work_in_progress, "pending_props", None):
+        work_in_progress.flags |= Update
+
     # 检查是否捕获了 suspended 状态
     did_capture = (getattr(work_in_progress, "flags", 0) & DidCapture) != NoFlags
 
@@ -375,6 +389,8 @@ def complete_suspense_component(
 
     if memoized_state is not None:
         is_suspended = memoized_state.get("is_suspended", False)
+    elif fallback is not None and _subtree_contains_text(work_in_progress.child):
+        is_suspended = True
 
     if is_suspended and fallback is not None:
         # 显示 fallback
@@ -383,10 +399,11 @@ def complete_suspense_component(
         if child is not None:
             child.flags |= Placement
 
+    work_in_progress.is_suspended = is_suspended
+
     # 设置 memoized_state
     work_in_progress.memoized_state = {
         "is_suspended": is_suspended,
-        "did_capture": did_capture,
     }
 
 
@@ -599,7 +616,7 @@ def bubble_properties_with_parent_check(
 # =============================================================================
 
 
-def complete_tree(current: Optional[Any], root: Any, render_lanes: int) -> dict[str, Any]:
+def complete_tree(current: Optional[Any], root: Any, render_lanes: int = NoLanes) -> dict[str, Any]:
     """
     完成整棵 Fiber 树的处理
 
@@ -630,6 +647,11 @@ def complete_tree(current: Optional[Any], root: Any, render_lanes: int) -> dict[
         # 调用 completeWork
         current_fiber = getattr(node, "alternate", None)
         complete_work(current_fiber, node, render_lanes)
+
+        if getattr(node, "tag", None) == SuspenseComponent:
+            memoized_state = getattr(node, "memoized_state", None)
+            if memoized_state is not None and memoized_state.get("is_suspended", False):
+                contains_suspended = True
 
         # 清除工作标志
         if hasattr(node, "is_work_in_progress"):
@@ -701,7 +723,14 @@ __all__ = [
 # 兼容性别名（驼峰命名，用于向后兼容）
 # =============================================================================
 
-# 驼峰命名别名，用于与旧代码和测试兼容
-completeWork = complete_work
-completeTree = complete_tree
+# 兼容包装，允许测试以两个参数调用
+
+def completeWork(current: Optional[Any], work_in_progress: Any, render_lanes: int = NoLanes) -> Optional[Any]:
+    return complete_work(current, work_in_progress, render_lanes)
+
+
+def completeTree(current: Optional[Any], root: Any, render_lanes: int = NoLanes) -> dict[str, Any]:
+    return complete_tree(current, root, render_lanes)
+
+
 bubbleProperties = bubble_properties

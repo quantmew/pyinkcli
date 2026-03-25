@@ -12,6 +12,7 @@ import sys
 import termios
 import textwrap
 import time
+from pathlib import Path
 
 
 def _run_python_in_pty(
@@ -31,6 +32,11 @@ def _run_python_in_pty(
 
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    existing_pythonpath = env.get("PYTHONPATH")
+    project_src = str((Path(__file__).resolve().parents[1] / "src"))
+    env["PYTHONPATH"] = (
+        project_src if not existing_pythonpath else f"{project_src}{os.pathsep}{existing_pythonpath}"
+    )
 
     process = subprocess.Popen(
         [sys.executable, "-c", source],

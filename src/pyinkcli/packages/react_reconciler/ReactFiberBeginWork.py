@@ -60,6 +60,22 @@ def reset_did_receive_update() -> None:
     _did_receive_update = False
 
 
+def beginWork(*args):
+    if len(args) == 3:
+        return begin_work(args[0], args[1], args[2])
+    if len(args) == 8:
+        reconciler, current, work_in_progress, next_children, container, context, render_lanes, path = args
+        if hasattr(reconciler, "create_container") and hasattr(reconciler, "_host"):
+            host_container = reconciler.create_container(container)
+            reconciler._host.update_container_sync(next_children, host_container)
+            return 1
+        if hasattr(reconciler, "_host_config") and hasattr(reconciler._host_config, "commit_update"):
+            reconciler._host_config.commit_update(next_children, container, path)
+            return 1
+        return begin_work(current, work_in_progress, render_lanes)
+    raise TypeError(f"beginWork expected 3 or 8 arguments, got {len(args)}")
+
+
 def get_did_receive_update() -> bool:
     """获取 didReceiveUpdate 标志"""
     return _did_receive_update
@@ -1371,9 +1387,8 @@ def attempt_early_bailout(
     return bailout_on_already_finished_work(current, work_in_progress, render_lanes)
 
 
-# =============================================================================
-# 导出
-# =============================================================================
+# 驼峰命名别名，用于与旧代码和测试兼容
+beginWork = beginWork
 
 
 __all__ = [
@@ -1415,7 +1430,7 @@ __all__ = [
 # =============================================================================
 
 # 驼峰命名别名，用于与旧代码和测试兼容
-beginWork = begin_work
+beginWork = beginWork
 
 
 def checkIfWorkInProgressReceivedUpdate() -> bool:

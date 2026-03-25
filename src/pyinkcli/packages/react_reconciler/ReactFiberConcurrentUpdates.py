@@ -333,7 +333,7 @@ def _mark_update_lane_from_fiber_to_root(
     source_fiber: Any,
     update: Optional[ConcurrentUpdate],
     lane: int,
-) -> None:
+) -> Optional[Any]:
     """
     从 Fiber 向上标记到 Root 的 lane 路径
 
@@ -357,12 +357,16 @@ def _mark_update_lane_from_fiber_to_root(
         # 更新 child_lanes
         node.child_lanes = mergeLanes(getattr(node, "child_lanes", NoLanes), lane)
 
+        alternate = getattr(node, "alternate", None)
+        if alternate is not None:
+            alternate.child_lanes = mergeLanes(getattr(alternate, "child_lanes", NoLanes), lane)
+
         # 检查是否是 HostRoot
         tag = getattr(node, "tag", None)
-        if tag == HostRoot:
+        if tag == HostRoot or getattr(node, "pending_lanes", None) is not None:
             # 更新 root 的 pending_lanes
             node.pending_lanes = mergeLanes(getattr(node, "pending_lanes", NoLanes), lane)
-            return
+            return node
 
         # 向上遍历
         parent = getattr(node, "return_fiber", None)
@@ -373,9 +377,11 @@ def _mark_update_lane_from_fiber_to_root(
                 container.pending_lanes = mergeLanes(
                     getattr(container, "pending_lanes", NoLanes), lane
                 )
+                return container
             break
         node = parent
 
+    return None
 
 def unsafe_mark_update_lane_from_fiber_to_root(
     source_fiber: Any,

@@ -141,6 +141,16 @@ def hasHigherPriorityWork(root: Any, current_lanes: int) -> bool:
     return next_lane < current_lane and next_lane != NoLane
 
 
+def requestUpdateLane() -> int:
+    current_transition = getattr(shared_internals, "current_transition", None)
+    if current_transition is not None:
+        return TransitionEventPriority
+    current_priority = getattr(shared_internals, "current_update_priority", NoLane)
+    if current_priority and current_priority != NoLane:
+        return current_priority
+    return DefaultEventPriority
+
+
 # =============================================================================
 # 可中断的工作单元
 # =============================================================================
@@ -345,20 +355,27 @@ def performWorkOnRoot(root: Any, lanes: int, force_sync: bool = False) -> Option
     Returns:
         PreparedCommit 或 None
     """
-    # 检查是否应该使用时间切片
-    should_time_slice = not force_sync and shouldTimeSlice(root, lanes)
+    selected_lanes = getHighestPriorityLane(lanes) if lanes else lanes
+    reconciler = getattr(root, "_reconciler", None)
+    container = getattr(root, "container", root)
+    if reconciler is not None and hasattr(reconciler, "flush_scheduled_updates"):
+        reconciler.flush_scheduled_updates(
+            container,
+            selected_lanes,
+            lanes=selected_lanes,
+            consume_all=False,
+        )
+        return None
+
+    should_time_slice = not force_sync and shouldTimeSlice(root, selected_lanes)
 
     if should_time_slice:
-        # 并发渲染 - 需要在事件循环中调用
-        # 这里提供同步的包装器
         loop = asyncio.new_event_loop()
         try:
-            return loop.run_until_complete(_runConcurrentWork(root, lanes))
+            return loop.run_until_complete(_runConcurrentWork(root, selected_lanes))
         finally:
             loop.close()
-    else:
-        # 同步渲染
-        return renderRootSync(root, lanes, force_sync)
+    return renderRootSync(root, selected_lanes, force_sync)
 
 
 async def _runConcurrentWork(root: Any, lanes: int) -> Optional[PreparedCommit]:
@@ -483,6 +500,7 @@ __all__ = [
     "shouldTimeSlice",
     "checkIfRootIsPrerendering",
     "hasHigherPriorityWork",
+    "requestUpdateLane",
     # 工作单元
     "performUnitOfWork",
     "WorkLoopResult",

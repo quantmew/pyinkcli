@@ -290,46 +290,48 @@ def _schedule_rerender(priority: str) -> None:
         _trace("hooks.rerender_batched", deferred=True, mode=_batched_mode)
         _batched_pending = True
         return
+    if _auto_batch_timer is not None:
+        return
     if _schedule_update_callback:
-        if _auto_batch_timer is None:
-            scheduled_callback = _schedule_update_callback
+        scheduled_callback = _schedule_update_callback
 
-            def _flush():
-                _trace(
-                    "hooks.auto_batch_flush",
-                    reason="callback",
-                    fiber=_current_component_id,
-                    priority=resolved_priority,
-                )
+        def _flush():
+            priority_to_flush = _consume_pending_rerender_priority() or resolved_priority
+            _trace(
+                "hooks.auto_batch_flush",
+                reason="callback",
+                fiber=_current_component_id,
+                priority=priority_to_flush,
+            )
+            try:
                 if callable(scheduled_callback):
                     scheduled_callback(
                         _current_component_id,
-                        _consume_pending_rerender_priority() or _coerce_priority(priority),
+                        priority_to_flush,
                     )
+            finally:
                 _clear_auto_batch()
 
-            _auto_batch_timer = threading.Timer(
-                0,
-                _flush,
-            )
-            _auto_batch_timer.start()
-        return
-    if _auto_batch_timer is None:
-        rerender_callback = _rerender_callback
-
-        def _flush() -> None:
-            _trace(
-                "hooks.rerender_direct_flush",
-                priority=resolved_priority,
-                component=_current_component_id,
-            )
-            ((rerender_callback() if callable(rerender_callback) else None), _clear_auto_batch())
-
-        _auto_batch_timer = threading.Timer(
-            0,
-            _flush,
-        )
+        _auto_batch_timer = threading.Timer(0.001, _flush)
         _auto_batch_timer.start()
+        return
+    rerender_callback = _rerender_callback
+
+    def _flush() -> None:
+        priority_to_flush = _consume_pending_rerender_priority() or resolved_priority
+        _trace(
+            "hooks.rerender_direct_flush",
+            priority=priority_to_flush,
+            component=_current_component_id,
+        )
+        try:
+            if callable(rerender_callback):
+                rerender_callback()
+        finally:
+            _clear_auto_batch()
+
+    _auto_batch_timer = threading.Timer(0.001, _flush)
+    _auto_batch_timer.start()
 
 
 def _clear_auto_batch() -> None:

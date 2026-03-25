@@ -13,7 +13,7 @@ def prepareToReadContext(fiber, render_lanes=None) -> None:
     """
     global _currently_reading_fiber
     _currently_reading_fiber = fiber
-    fiber.dependencies = getattr(fiber, "dependencies", []) or []
+    fiber.dependencies = []
 
 
 def finishReadingContext() -> None:
@@ -61,7 +61,7 @@ def prepare_to_read_context(fiber, render_lanes: int) -> None:
     """
     global _currently_reading_fiber
     _currently_reading_fiber = fiber
-    fiber.dependencies = getattr(fiber, "dependencies", []) or []
+    fiber.dependencies = []
 
 
 def finish_reading_context() -> None:

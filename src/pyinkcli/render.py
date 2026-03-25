@@ -24,8 +24,8 @@ def render(node, stdout=None, stdin=None, stderr=None, **options):
         lambda: Ink(ink_options),
         warning_stream=error_stream,
     )
-    ink.render(createElement(node) if callable(node) else node)
     _set_current_app(ink)
+    ink.render(createElement(node) if callable(node) else node)
     return ink
 
 

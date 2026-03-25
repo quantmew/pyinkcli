@@ -743,8 +743,10 @@ def run_prepared_commit_effects(
 
     # 执行布局效果
     for effect in prepared.commit_list.layout_effects:
-        if effect.get("tag") == "request_render":
-            immediate = effect.get("payload", {}).get("immediate", False)
+        tag = effect.get("tag") if hasattr(effect, "get") else getattr(effect, "tag", None)
+        payload = effect.get("payload", {}) if hasattr(effect, "get") else getattr(effect, "payload", {})
+        if tag == "request_render":
+            immediate = payload.get("immediate", False)
             if prepared.root_completion_state and prepared.root_completion_state.get(
                 "containsSuspendedFibers"
             ):
@@ -752,16 +754,24 @@ def run_prepared_commit_effects(
             reconciler._host_config.request_render(
                 getattr(container, "current_update_priority", 0), immediate
             )
-        elif "create" in effect:
-            # 执行效果创建函数
-            create_fn = effect["create"]
+        elif tag == "calculate_layout":
+            calculate_layout = getattr(reconciler, "_calculate_layout", None)
+            if callable(calculate_layout):
+                calculate_layout(getattr(container, "container", container))
+        elif (hasattr(effect, "__contains__") and "create" in effect) or hasattr(effect, "create"):
+            create_fn = effect["create"] if hasattr(effect, "__getitem__") and not hasattr(effect, "create") else getattr(effect, "create", None)
             if callable(create_fn):
                 try:
                     cleanup = create_fn()
-                    # 保存清理函数
-                    effect["cleanup"] = cleanup
+                    if hasattr(effect, "__setitem__") and not hasattr(effect, "cleanup"):
+                        effect["cleanup"] = cleanup
+                    else:
+                        setattr(effect, "cleanup", cleanup)
                 except Exception:
                     pass
+
+
+runPreparedCommitEffects = run_prepared_commit_effects
 
 
 # =============================================================================
@@ -828,6 +838,7 @@ __all__ = [
     # 主入口
     "commit_root",
     "run_prepared_commit_effects",
+    "runPreparedCommitEffects",
     # 各阶段函数
     "commit_before_mutation_effects",
     "commit_mutation_effects",

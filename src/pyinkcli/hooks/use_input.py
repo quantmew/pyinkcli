@@ -48,7 +48,8 @@ def useInput(handler, *, is_active: bool = True, isActive: bool | None = None) -
                 input=input_value,
                 raw=value,
             )
-            if app is not None:
+            runtime_app = getattr(app, "_app", app)
+            if runtime_app is not None and type(runtime_app).__name__ != "_NullApp":
                 _trace("hooks.input.discrete_begin")
                 app._run_discrete(lambda: handler_ref.current(input_value, key))
             else:
@@ -66,3 +67,4 @@ def useInput(handler, *, is_active: bool = True, isActive: bool | None = None) -
 
 
 __all__ = ["Key", "useInput", "_clear_input_handlers", "_dispatch_input"]
+

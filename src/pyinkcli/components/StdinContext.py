@@ -48,4 +48,4 @@ def set_stdin_context_value(
     StdinContext.current_value = value
     return value
 
-__all__ = ["StdinContext", "create_stdin_context_value", "set_stdin_context_value"]
+__all__ = ["StdinContext"]
